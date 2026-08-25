@@ -79,6 +79,29 @@
     border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:18px;
     font-size:13px;font-weight:600;line-height:1.5;
   }
+  .storage-warning.read-only-notice{
+    background:var(--primary-soft);border-color:var(--ring);color:var(--primary);
+  }
+  .read-only-badge{
+    font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;
+    background:var(--primary-soft);color:var(--primary);padding:3px 8px;border-radius:999px;
+  }
+
+  /* Modo somente leitura: some com tudo que edita/apaga e trava os campos */
+  .read-only-mode .btn-add,
+  .read-only-mode .action-btn,
+  .read-only-mode .admin-only-btn,
+  .read-only-mode .year-add{
+    display:none !important;
+  }
+  .read-only-mode tbody td input,
+  .read-only-mode tbody td select,
+  .read-only-mode .meta-input-wrap input{
+    pointer-events:none;background:var(--border-soft);color:var(--ink-soft);
+  }
+  .read-only-mode tbody td input[type="checkbox"]{
+    pointer-events:none;opacity:.55;
+  }
 
   .metas-panel{
     background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
@@ -555,6 +578,20 @@ let authRecoverEmailDraft = '';
 let authNewPwdDraft = '';
 let authRecoveryToken = null;
 let initialDataLoaded = false;
+let isAdmin = false;
+let currentPersonName = null;
+async function loadCurrentUserAccess(){
+  try{
+    const rows = await sbSelect('app_user_access', 'select=full_access,person_name');
+    const row = rows && rows[0];
+    isAdmin = !!(row && row.full_access);
+    currentPersonName = row ? row.person_name : null;
+  } catch(e){
+    console.error('Falha ao carregar permissões do usuário', e);
+    isAdmin = false;
+    currentPersonName = null;
+  }
+}
 
 function loadStoredAuthSession(){
   try{
@@ -2403,7 +2440,7 @@ function renderParceirosSection(){
 
   const isMonthClosedNow = partnerMonthFilter !== "Todos" && isMonthClosed(yearFilter, partnerMonthFilter);
   const closeButtonHtml = partnerMonthFilter === "Todos" ? '' : `
-    <button class="eye-toggle${isMonthClosedNow?' danger-toggle':''}" onclick="toggleMonthClosed(${yearFilter}, '${partnerMonthFilter}')">
+    <button class="eye-toggle admin-only-btn${isMonthClosedNow?' danger-toggle':''}" onclick="toggleMonthClosed(${yearFilter}, '${partnerMonthFilter}')">
       ${isMonthClosedNow ? '🔓 Reabrir ' + esc(partnerMonthFilter) : '🔒 Fechar ' + esc(partnerMonthFilter)}
     </button>
   `;
@@ -2755,7 +2792,14 @@ function wipeAllData(){
 function setFilter(m){ filter = m; render(); }
 function setSellerFilter(key){ sellerFilter = key; render(); }
 function getVisibleSellers(){
-  return sellerFilter === "Todas" ? SELLERS : SELLERS.filter(s => s.key === sellerFilter);
+  let list = sellerFilter === "Todas" ? SELLERS : SELLERS.filter(s => s.key === sellerFilter);
+  if(!isAdmin && currentPersonName){
+    list = list.filter(s => name_matches_client(s.label, currentPersonName));
+  }
+  return list;
+}
+function name_matches_client(a, b){
+  return !!a && !!b && String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
 }
 function getVisible(){
   let list = rows.filter(r => (r.ano||2026) === yearFilter);
@@ -2856,7 +2900,8 @@ function renderVendasSection(){
 
   const visibleSellers = getVisibleSellers();
 
-  const sellerPillsHtml = ['Todas', ...SELLERS.map(s=>s.key)].map(key => {
+  const sellersForPills = isAdmin ? SELLERS : SELLERS.filter(s => name_matches_client(s.label, currentPersonName));
+  const sellerPillsHtml = ['Todas', ...sellersForPills.map(s=>s.key)].map(key => {
     const label = key === 'Todas' ? 'Todas' : SELLERS.find(s=>s.key===key).label;
     const active = key === sellerFilter ? ' active' : '';
     return `<button class="pill seller-pill${active}" onclick="setSellerFilter('${key}')">${esc(label)}</button>`;
@@ -3502,7 +3547,7 @@ function render(){
   }).join('') + `<button class="pill year-pill year-add" onclick="addYear()">+ Ano</button>`;
 
   root.innerHTML = `
-    <div class="wrap">
+    <div class="wrap${isAdmin ? '' : ' read-only-mode'}">
       <div class="topbar">
         <div class="title-block">
           <div class="company-name">Open Soluções Tributárias</div>
@@ -3511,19 +3556,26 @@ function render(){
         </div>
         <div class="topbar-actions">
           <button class="eye-toggle" onclick="showExport()" title="Copia todos os dados em texto, pra guardar ou levar pra outro navegador">⬇ Exportar dados</button>
-          <button class="eye-toggle" onclick="showImport()" title="Cola um texto exportado antes e restaura os dados">⬆ Importar dados</button>
-          <button class="eye-toggle" onclick="normalizeAllText()" title="Coloca Primeira Letra Maiúscula em todos os textos já lançados">Aa Normalizar textos</button>
-          <button class="eye-toggle danger-toggle" onclick="wipeAllData()" title="Apaga todos os lançamentos das três abas, mantendo produtos/vendedores/parceiros cadastrados">🗑 Zerar tudo</button>
+          <button class="eye-toggle admin-only-btn" onclick="showImport()" title="Cola um texto exportado antes e restaura os dados">⬆ Importar dados</button>
+          <button class="eye-toggle admin-only-btn" onclick="normalizeAllText()" title="Coloca Primeira Letra Maiúscula em todos os textos já lançados">Aa Normalizar textos</button>
+          <button class="eye-toggle danger-toggle admin-only-btn" onclick="wipeAllData()" title="Apaga todos os lançamentos das três abas, mantendo produtos/vendedores/parceiros cadastrados">🗑 Zerar tudo</button>
           <div class="save-chip">
             <span id="save-dot" class="dot${saveError?' error':(saving?' saving':'')}"></span>
             <span id="save-label">${saveError?'erro ao salvar':(saving?'salvando':'salvo')}</span>
           </div>
           <div class="user-chip">
             <span title="Conectado como">${esc((authSession.user && authSession.user.email) || '')}</span>
+            ${!isAdmin ? '<span class="read-only-badge" title="Você só vê e não edita os próprios lançamentos">somente leitura</span>' : ''}
             <button class="logout-btn" onclick="logout()" title="Sair da conta">Sair</button>
           </div>
         </div>
       </div>
+
+      ${!isAdmin ? `
+        <div class="storage-warning read-only-notice">
+          👁 Modo somente leitura — você só vê os lançamentos relacionados a você${currentPersonName ? ` (<b>${esc(currentPersonName)}</b>)` : ''} e não pode editar. Pra lançar ou alterar algo, peça pra Soraya, Deborah ou Open.
+        </div>
+      ` : ''}
 
       ${storageAvailable === false ? `
         <div class="storage-warning">
@@ -3542,12 +3594,16 @@ function render(){
     </div>
     ${renderModal()}
   `;
+  if(!isAdmin){
+    root.querySelectorAll('tbody td input, tbody td select, .meta-input-wrap input').forEach(function(el){ el.disabled = true; });
+  }
 }
 
 function boot(){
   loadDataSync();
   checkStorageAvailability();
   const loaders = [
+    loadCurrentUserAccess(),
     tryLoadFromStorageAsync(),
     tryLoadVendaProductsFromStorageAsync(),
     tryLoadSistemaSellersFromStorageAsync(),
