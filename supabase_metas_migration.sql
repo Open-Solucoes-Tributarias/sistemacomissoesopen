@@ -12,11 +12,14 @@
 -- onde o prêmio é um valor fixo em R$ ou uma % sobre o total
 -- faturado (sobre o total inteiro, não sobre o que passou do alvo).
 --
--- Exemplos reais que motivaram o formato:
---   • Soraya  → empresa fatura 200 mil em Cursos → 1% do total
+-- A regra real que motivou o formato (uma pessoa pode ter mais de uma
+-- regra para o mesmo gatilho, e elas se somam):
+--   • Soraya  → Cursos ≥ 200 mil no mês → 1% do TOTAL vendido
 --               (faturou 400 mil? o prêmio é 1% de 400 mil = 4.000)
---   • Angela  → mesmo gatilho → R$ 500 fixos
---   • Rios    → mesmo gatilho → R$ 750 fixos
+--   • Soraya  → mesmo gatilho          → + R$ 750
+--   • Angela  → mesmo gatilho          → R$ 500
+-- A % é sempre sobre o total faturado, independente de quanto passou do
+-- alvo; o prêmio fixo é somado uma única vez (não multiplica por faixa).
 --
 -- O prêmio NÃO é lançado sozinho: ao bater, o painel mostra o botão
 -- "Lançar bônus de R$ X" e alguém confirma. A linha criada guarda o

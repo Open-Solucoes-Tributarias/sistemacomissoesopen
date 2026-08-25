@@ -138,9 +138,19 @@ Cada meta tem quatro partes, configuráveis por regra (em **Resumo Geral → Met
 | Alvo | quanto a empresa precisa faturar no mês (valor cheio dos contratos, antes de comissões e parceiros) |
 | Prêmio | um valor fixo em R$, ou uma % **sobre o total faturado** |
 
-A porcentagem incide sobre o total inteiro, não sobre o excedente: alvo de R$ 200.000 com 1%, faturando R$ 400.000, paga R$ 4.000.
+A porcentagem incide sobre o **total faturado**, independente de quanto passou do alvo, e o prêmio fixo é somado **uma única vez** (não multiplica se o faturamento for o dobro do alvo).
 
-Várias pessoas podem ter regras diferentes para o mesmo gatilho — uma ganha 1% do total, outra R$ 500 fixos, outra R$ 750.
+A mesma pessoa pode ter mais de uma regra para o mesmo gatilho, e elas se somam. A regra em vigor hoje, por exemplo:
+
+| Quem | Gatilho | Prêmio |
+|---|---|---|
+| Soraya | Cursos ≥ R$ 200.000 no mês | 1% do total vendido |
+| Soraya | Cursos ≥ R$ 200.000 no mês | + R$ 750 |
+| Angela | Cursos ≥ R$ 200.000 no mês | R$ 500 |
+
+Faturando R$ 400.000 em Cursos: Soraya recebe R$ 4.000 (1% de 400 mil) **mais** R$ 750, e Angela recebe R$ 500.
+
+Como as metas são mensais mas as regras costumam valer o ano todo, o botão 🔁 no card repete a mesma regra nos meses seguintes do ano, pulando os que já tiverem uma regra igual.
 
 **Como o prêmio vira bônus:** ao bater, o card fica verde e aparece o botão *"Lançar bônus de R$ X"*. Alguém confirma e a linha vai para a aba **Bônus e Metas**, onde pode ser editada como qualquer outra. A linha guarda de qual meta veio, então a mesma meta nunca paga duas vezes — depois de lançada, o card passa a mostrar *"✓ bônus lançado"*.
 

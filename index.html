@@ -488,6 +488,8 @@
   .meta-card-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;}
   .meta-card-quem{display:flex;align-items:center;gap:8px;font-size:14px;}
   .meta-card-acoes{display:flex;gap:2px;}
+  .meta-card-acoes .action-btn{opacity:.55;}
+  .meta-card-acoes .action-btn:hover{opacity:1;}
   .meta-tag{
     font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;
     background:var(--border-soft);color:var(--ink-soft);padding:3px 8px;border-radius:999px;
@@ -2421,6 +2423,42 @@ function salvarMeta(){
   render();
 }
 
+/* Regras costumam valer o ano inteiro; isso evita recadastrar toda virada
+   de mês. Pula meses que já tiverem uma regra idêntica. */
+function mesmaRegra(a, b){
+  return a.vendedor === b.vendedor && a.origem === b.origem
+      && Number(a.alvo) === Number(b.alvo)
+      && a.premioTipo === b.premioTipo
+      && Number(a.premioValor) === Number(b.premioValor);
+}
+function repetirMetaNoAno(id){
+  const m = metas.find(x => x.id === id);
+  if(!m) return;
+  const idx = MONTHS.indexOf(m.mes);
+  const restantes = MONTHS.slice(idx + 1);
+  if(restantes.length === 0){
+    showAlert("Dezembro é o último mês do ano — não há meses seguintes para repetir.");
+    return;
+  }
+  const alvos = restantes.filter(mes =>
+    !metas.some(x => x.ano === m.ano && x.mes === mes && mesmaRegra(x, m)));
+  if(alvos.length === 0){
+    showAlert("Todos os meses seguintes de " + m.ano + " já têm essa mesma regra.");
+    return;
+  }
+  showConfirm(
+    `Repetir esta regra de ${m.vendedor} (${metaDescricaoRegra(m)}) em ${alvos.join(', ')} de ${m.ano}? Meses que já tiverem uma regra igual serão pulados.`,
+    () => {
+      alvos.forEach(mes => {
+        metas.push(Object.assign({}, m, {id: metasNextId++, mes: mes}));
+      });
+      persistMetas();
+      render();
+    },
+    "Repetir"
+  );
+}
+
 /* ---- lançar o bônus da meta batida (com confirmação) ---- */
 function lancarBonusDaMeta(id){
   const m = metas.find(x => x.id === id);
@@ -2812,6 +2850,7 @@ function renderMetasPanel(){
               </div>
               <div class="meta-card-acoes">
                 <button class="action-btn" title="Editar meta" onclick="editarMeta(${m.id})">✎</button>
+                <button class="action-btn" title="Repetir esta regra nos meses seguintes do ano" onclick="repetirMetaNoAno(${m.id})">🔁</button>
                 <button class="action-btn danger" title="Excluir meta" onclick="excluirMeta(${m.id})">✕</button>
               </div>
             </div>
