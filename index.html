@@ -1,0 +1,3588 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://ogkrrlssdrtctdyyvkql.supabase.co; base-uri 'none'; object-src 'none'; form-action 'none';">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Comissões — Equipe Comercial</title>
+</head>
+<body>
+<div id="root"></div>
+<style>
+  :root{
+    --bg:#F6F7FB;
+    --surface:#FFFFFF;
+    --ink:#14162B;
+    --ink-soft:#6B7280;
+    --ink-faint:#9CA3AF;
+    --border:#E7E9F3;
+    --border-soft:#F0F1F8;
+    --primary:#5046E5;
+    --primary-hover:#4038CC;
+    --primary-soft:#EEECFE;
+    --ring:#C7C2FB;
+    --danger:#EF4444;
+    --danger-soft:#FEECEC;
+    --shadow-sm:0 1px 2px rgba(20,22,43,.04), 0 1px 1px rgba(20,22,43,.03);
+    --shadow-md:0 4px 14px rgba(20,22,43,.06), 0 1px 3px rgba(20,22,43,.04);
+    --radius-lg:18px;
+    --radius-md:12px;
+    --radius-sm:8px;
+    --font: -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body,#root{margin:0;padding:0;}
+  #root{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font);
+    min-height:100vh;
+    padding:24px 16px 60px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:100%;margin:0 auto;}
+
+  /* Header */
+  .topbar{
+    display:flex;justify-content:space-between;align-items:center;
+    flex-wrap:wrap;gap:16px;margin-bottom:22px;
+  }
+  .company-name{
+    font-size:12.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--primary);margin-bottom:4px;
+  }
+  .title-block h1{
+    font-size:24px;font-weight:800;letter-spacing:-0.02em;
+    margin:0 0 4px;color:var(--ink);
+  }
+  .title-block .sub{font-size:14px;color:var(--ink-soft);font-weight:500;}
+  .topbar-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .year-row{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;}
+  .year-row-label{font-size:12.5px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
+  .year-pill{font-weight:800;}
+  .year-pill.year-add{color:var(--primary);}
+  .year-pill.year-add:hover{background:var(--primary-soft);}
+  .save-chip{
+    display:flex;align-items:center;gap:7px;
+    font-size:12.5px;font-weight:600;color:var(--ink-soft);
+    background:var(--surface);border:1px solid var(--border);
+    padding:7px 13px 7px 10px;border-radius:999px;box-shadow:var(--shadow-sm);
+  }
+  .dot{width:7px;height:7px;border-radius:50%;background:#22C55E;transition:background .25s;}
+  .dot.saving{background:var(--primary);animation:pulse 1s infinite;}
+  .dot.error{background:var(--danger);animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+
+  .storage-warning{
+    background:var(--danger-soft);border:1px solid #F5B5B5;color:#9A2E2E;
+    border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:18px;
+    font-size:13px;font-weight:600;line-height:1.5;
+  }
+
+  .metas-panel{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-sm);padding:16px 18px;margin-bottom:26px;
+  }
+  .meta-row{display:flex;align-items:center;gap:14px;padding:9px 0;border-bottom:1px solid var(--border-soft);}
+  .meta-row:last-child{border-bottom:none;}
+  .meta-name{display:flex;align-items:center;gap:7px;font-weight:700;font-size:13.5px;width:110px;flex:none;}
+  .meta-input-wrap{display:flex;align-items:center;border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 10px;width:140px;flex:none;}
+  .meta-input-wrap input{border:none;background:transparent;width:100%;font-size:13px;padding:3px 0;outline:none;}
+  .meta-bar-track{flex:1;height:10px;background:var(--border-soft);border-radius:999px;overflow:hidden;}
+  .meta-bar-fill{height:100%;background:var(--primary);border-radius:999px;transition:width .3s;}
+  .meta-bar-fill.complete{background:#22C55E;}
+  .meta-pct{width:44px;text-align:right;font-weight:800;font-size:13px;flex:none;}
+
+  .chart-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-sm);padding:18px 18px 10px;margin-bottom:26px;
+  }
+
+  tr.row-pending{background:#FFF8E8;}
+  tr.row-pending:hover{background:#FFF2D6;}
+  tr.row-locked{background:#F3F3F6;}
+  tr.aging-yellow{background:#FFF8E1;}
+  tr.aging-orange{background:#FFEDD5;}
+  tr.aging-red{background:#FEE2E2;}
+  tr.aging-red td{color:#991B1B;}
+  tr.row-locked input, tr.row-locked select{color:var(--ink-faint);}
+  .pending-badge{margin-left:4px;font-size:11px;vertical-align:middle;}
+  .parcela-badge{
+    display:inline-block;margin-left:4px;font-size:10px;font-weight:700;
+    background:var(--primary-soft);color:var(--primary);padding:2px 6px;border-radius:999px;
+    vertical-align:middle;white-space:nowrap;
+  }
+  .dup-badge{
+    display:inline-block;margin-left:4px;font-size:10px;font-weight:700;
+    background:#EDE9FE;color:#6D28D9;padding:2px 6px;border-radius:999px;
+    vertical-align:middle;white-space:nowrap;
+  }
+  tr.row-duplicate{background:#F5F3FF;}
+  tr.row-duplicate:hover{background:#EDE9FE;}
+
+  .pagamento-cell{padding:8px 10px !important;}
+  .pay-toggle{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink-soft);cursor:pointer;white-space:nowrap;}
+  .pay-toggle input{width:15px;height:15px;accent-color:#22C55E;cursor:pointer;}
+  .pagamento-cell select{margin-top:4px;font-size:11.5px;padding:4px 6px !important;}
+
+  @media print{
+    .topbar-actions, .tabs-nav, .filters-row, .toolbar, .kpi-toggle-row, .row-actions, .del-cell, .search-row, .year-row{
+      display:none !important;
+    }
+    body, #root{ background:#fff; }
+    .table-card, .chart-card, .metas-panel{ box-shadow:none; border:1px solid #999; break-inside:avoid; }
+    input, select{ border:none !important; background:transparent !important; color:#000 !important; }
+    .kpi-value.masked{ display:none; }
+  }
+
+  /* Tabs nav */
+  .tabs-nav{
+    display:flex;gap:0;margin-bottom:24px;border-bottom:1px solid var(--border);
+  }
+  .tab-btn{
+    font-family:var(--font);font-weight:700;font-size:14.5px;
+    background:none;border:none;cursor:pointer;color:var(--ink-soft);
+    padding:11px 4px;margin-right:26px;border-bottom:2.5px solid transparent;
+    transition:all .15s;
+  }
+  .tab-btn:hover{color:var(--ink);}
+  .tab-btn.active{color:var(--primary);border-bottom-color:var(--primary);}
+
+  /* KPI cards */
+  .kpis{
+    display:grid;
+    grid-template-columns:repeat(6,1fr);
+    gap:12px;margin-bottom:26px;
+  }
+  .kpi-card{
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:var(--radius-md);padding:16px 16px 14px;
+    box-shadow:var(--shadow-sm);
+    border-left:3px solid var(--kc,var(--primary));
+    transition:transform .15s, box-shadow .15s;
+    min-width:0;
+  }
+  .kpi-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);}
+  .kpi-card .kpi-label{
+    font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--ink-faint);margin-bottom:8px;display:flex;align-items:center;gap:6px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .kpi-dot{width:8px;height:8px;border-radius:50%;background:var(--kc,var(--primary));flex:none;}
+  .kpi-card .kpi-value{
+    font-size:19px;font-weight:800;letter-spacing:-0.01em;color:var(--ink);
+    font-variant-numeric:tabular-nums;white-space:nowrap;
+  }
+  .kpi-card.total{
+    background:linear-gradient(135deg,var(--ink) 0%,#2A2D4F 100%);
+    border-left:none;
+  }
+  .kpi-card.total .kpi-label{color:rgba(255,255,255,.55);}
+  .kpi-card.total .kpi-value{color:#fff;font-size:20px;}
+
+  .kpi-toggle-row{display:flex;justify-content:flex-end;margin-bottom:10px;}
+  .resumo-section-title{
+    font-size:13px;font-weight:800;color:var(--ink-soft);text-transform:uppercase;
+    letter-spacing:.04em;margin:0 0 10px;
+  }
+  .eye-toggle{
+    font-family:var(--font);font-weight:700;font-size:12.5px;
+    background:var(--surface);border:1px solid var(--border);border-radius:999px;
+    padding:7px 14px;cursor:pointer;color:var(--ink-soft);box-shadow:var(--shadow-sm);
+    transition:all .15s;
+  }
+  .eye-toggle:hover{border-color:var(--primary);color:var(--primary);}
+  .danger-toggle:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-soft);}
+  .kpi-value.masked{letter-spacing:3px;color:var(--ink-faint);font-weight:800;}
+
+  /* Month / vendor pills */
+  .filters-row{
+    display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;align-items:center;
+  }
+  .months{
+    display:flex;gap:4px;flex-wrap:wrap;
+    background:var(--surface);border:1px solid var(--border);
+    padding:5px;border-radius:999px;
+    box-shadow:var(--shadow-sm);width:fit-content;max-width:100%;overflow-x:auto;
+  }
+  .months.seller-filter{background:var(--border-soft);border-color:var(--border);}
+  .seller-pill.active{
+    background:var(--ink);color:#fff;box-shadow:0 2px 8px rgba(20,22,43,.25);
+  }
+
+  .search-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+  .search-input{
+    font-family:var(--font);font-size:13px;font-weight:500;
+    padding:9px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);
+    background:var(--surface);color:var(--ink);outline:none;
+    min-width:190px;flex:1 1 190px;box-shadow:var(--shadow-sm);
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .search-input::placeholder{color:var(--ink-faint);font-weight:400;}
+  .search-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+  .pill{
+    font-size:13px;font-weight:600;letter-spacing:-0.005em;
+    padding:8px 15px;border-radius:999px;border:none;
+    background:transparent;color:var(--ink-soft);cursor:pointer;
+    transition:all .15s;white-space:nowrap;
+  }
+  .pill:hover{color:var(--ink);background:var(--border-soft);}
+  .pill.active{background:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(80,70,229,.35);}
+
+  /* Toolbar */
+  .toolbar{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:14px;flex-wrap:wrap;gap:10px;
+  }
+  .count{font-size:13.5px;color:var(--ink-soft);font-weight:500;}
+  .count b{color:var(--ink);font-weight:700;}
+  .btn-row{display:flex;gap:8px;}
+  .btn-add{
+    font-family:var(--font);font-weight:700;font-size:13.5px;
+    background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);
+    padding:10px 18px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;
+    box-shadow:0 2px 10px rgba(80,70,229,.30);
+    transition:background .15s, transform .1s;
+  }
+  .btn-add:hover{background:var(--primary-hover);}
+  .btn-add:active{transform:scale(.97);}
+  .btn-secondary{
+    background:var(--surface);color:var(--ink);border:1px solid var(--border);
+    box-shadow:none;
+  }
+  .btn-secondary:hover{background:var(--border-soft);}
+
+  /* Table */
+  .table-card{
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:var(--radius-lg);box-shadow:var(--shadow-md);
+    overflow:hidden;
+  }
+  .table-scroll{overflow-x:auto;}
+  table{border-collapse:collapse;width:100%;table-layout:auto;}
+  thead th{
+    background:var(--border-soft);color:var(--ink-soft);
+    font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.04em;
+    text-align:left;padding:9px 8px;white-space:nowrap;
+    border-bottom:1px solid var(--border);
+  }
+  thead th.num{text-align:right;}
+  thead th .th-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle;}
+  tbody td{padding:0;border-bottom:1px solid var(--border-soft);vertical-align:middle;}
+  tbody tr{transition:background .1s;}
+  tbody tr:hover{background:#FAFAFE;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody td input, tbody td select{
+    width:100%;border:none;background:transparent;
+    font-family:var(--font);font-size:12.5px;color:var(--ink);font-weight:500;
+    padding:8px 8px;outline:none;border-radius:0;
+  }
+  tbody td select{font-weight:600;cursor:pointer;color:var(--primary);}
+  tbody td input.num{text-align:right;font-variant-numeric:tabular-nums;}
+  tbody td input::placeholder{color:var(--ink-faint);font-weight:400;}
+  tbody td input:focus, tbody td select:focus{
+    background:var(--primary-soft);box-shadow:inset 0 0 0 2px var(--ring);border-radius:6px;
+  }
+  td.cliente input{min-width:230px;}
+  td.venda select{min-width:150px;}
+  .col-valor{width:105px;}
+  .currency-wrap{display:flex;align-items:center;}
+  .currency-wrap input{text-align:right;padding-left:2px;}
+  .currency-prefix{
+    display:inline-block;color:var(--ink-faint);font-size:12px;font-weight:600;
+    padding-left:8px;user-select:none;flex:none;
+  }
+  .pct-wrap{display:flex;align-items:center;justify-content:flex-end;}
+  .pct-wrap input{text-align:right;padding-right:2px;}
+  .pct-suffix{color:var(--ink-faint);font-size:12px;font-weight:600;padding-right:10px;user-select:none;}
+  .pct-disabled{display:block;text-align:right;padding-right:14px;color:var(--ink-faint);}
+  .col-pct{width:110px;}
+  .extra-vendedores-btn{
+    background:var(--primary-soft);border:1px solid var(--ring);color:var(--primary);
+    font-family:var(--font);font-weight:700;font-size:11.5px;
+    padding:6px 10px;border-radius:var(--radius-sm);cursor:pointer;white-space:nowrap;
+    transition:all .15s;
+  }
+  .extra-vendedores-btn:hover{background:var(--ring);}
+  .extra-vendedor-list{display:flex;flex-direction:column;gap:8px;margin-bottom:6px;}
+  .extra-vendedor-row{display:flex;align-items:center;gap:8px;}
+  .extra-vendedor-row select{
+    flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);
+    font-family:var(--font);font-size:13px;color:var(--ink);background:var(--surface);
+  }
+  .extra-vendedor-row .pct-wrap{width:100px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:2px 0;}
+  .calc-value{
+    text-align:right;padding:0 14px 8px;font-size:11px;color:var(--ink-faint);
+    font-variant-numeric:tabular-nums;font-weight:600;
+  }
+  .del-cell{width:96px;text-align:center;}
+  .row-actions{display:flex;gap:2px;justify-content:center;opacity:0;transition:opacity .15s;}
+  tr:hover .row-actions{opacity:1;}
+  .action-btn{
+    background:none;border:none;cursor:pointer;color:var(--ink-faint);font-size:13.5px;
+    width:26px;height:26px;border-radius:7px;
+    display:inline-flex;align-items:center;justify-content:center;transition:all .15s;
+  }
+  .action-btn:hover{background:var(--primary-soft);color:var(--primary);}
+  .action-btn.danger:hover{background:var(--danger-soft);color:var(--danger);}
+
+  .empty-row td{padding:48px 10px;text-align:center;color:var(--ink-soft);font-size:14px;}
+  .empty-row .empty-icon{font-size:26px;display:block;margin-bottom:8px;}
+
+  .footnote{margin-top:16px;text-align:right;}
+  .reset-link{
+    font-size:12px;color:var(--ink-faint);background:none;border:none;cursor:pointer;
+    font-family:var(--font);font-weight:600;padding:6px 10px;border-radius:6px;
+    transition:all .15s;
+  }
+  .reset-link:hover{color:var(--danger);background:var(--danger-soft);}
+
+  @media (max-width:980px){
+    .kpis{grid-template-columns:repeat(3,1fr);}
+  }
+  @media (max-width:560px){
+    .kpis{grid-template-columns:repeat(2,1fr);}
+    #root{padding:20px 14px 60px;}
+  }
+
+  /* Modal (replaces native confirm/prompt/alert, which can be blocked in sandboxed iframes) */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(20,22,43,.45);
+    display:flex;align-items:center;justify-content:center;
+    z-index:1000;padding:20px;
+  }
+  .modal-box{
+    background:var(--surface);border-radius:var(--radius-lg);
+    box-shadow:0 20px 50px rgba(20,22,43,.25);
+    padding:22px;max-width:380px;width:100%;
+  }
+  .modal-box.modal-box-wide{max-width:640px;}
+  .modal-textarea{
+    width:100%;min-height:220px;padding:12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);
+    font-family:'Courier New',Consolas,monospace;font-size:12px;color:var(--ink);outline:none;
+    margin-bottom:12px;resize:vertical;background:var(--border-soft);
+  }
+  .modal-textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+  .modal-error{
+    font-size:13px;color:var(--danger);font-weight:600;margin:-4px 0 12px;
+  }
+  .modal-msg{font-size:14.5px;color:var(--ink);font-weight:600;line-height:1.5;margin-bottom:14px;}
+  .modal-input{
+    width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);
+    font-family:var(--font);font-size:14px;color:var(--ink);outline:none;margin-bottom:16px;
+  }
+  .modal-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;}
+  .modal-btn{
+    font-family:var(--font);font-weight:700;font-size:13.5px;
+    border:none;border-radius:var(--radius-sm);padding:9px 16px;cursor:pointer;
+    transition:opacity .15s;
+  }
+  .modal-btn:hover{opacity:.88;}
+  .modal-btn-ghost{background:var(--border-soft);color:var(--ink-soft);}
+  .modal-btn-primary{background:var(--primary);color:#fff;}
+  .modal-btn-danger{background:var(--danger);color:#fff;}
+
+  /* Auth (login / recuperar senha) */
+  .auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);padding:34px 30px;max-width:380px;width:100%;}
+  .auth-logo{font-size:12.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--primary);margin-bottom:6px;}
+  .auth-card h1{font-size:20px;margin:0 0 4px;font-weight:800;color:var(--ink);}
+  .auth-card .auth-sub{font-size:13px;color:var(--ink-soft);margin:0 0 22px;font-weight:500;}
+  .auth-field{margin-bottom:14px;}
+  .auth-field label{display:block;font-size:12.5px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;}
+  .auth-input-wrap{position:relative;}
+  .auth-input{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:var(--font);font-size:14px;color:var(--ink);outline:none;}
+  .auth-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+  .auth-input-wrap .auth-input{padding-right:44px;}
+  .auth-toggle-pwd{position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--ink-faint);font-size:12.5px;font-weight:700;padding:6px 8px;border-radius:6px;}
+  .auth-toggle-pwd:hover{color:var(--primary);background:var(--primary-soft);}
+  .auth-error{background:var(--danger-soft);color:#9A2E2E;border:1px solid #F5B5B5;border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;font-weight:600;margin-bottom:14px;line-height:1.4;}
+  .auth-notice{background:var(--primary-soft);color:var(--primary);border:1px solid var(--ring);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;font-weight:600;margin-bottom:14px;line-height:1.4;}
+  .auth-submit{width:100%;padding:12px;background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);font-family:var(--font);font-weight:700;font-size:14px;cursor:pointer;margin-top:4px;transition:background .15s;}
+  .auth-submit:hover{background:var(--primary-hover);}
+  .auth-submit:disabled{opacity:.6;cursor:not-allowed;}
+  .auth-link{background:none;border:none;color:var(--primary);font-family:var(--font);font-weight:700;font-size:12.5px;cursor:pointer;padding:6px 0;}
+  .auth-link:hover{text-decoration:underline;}
+  .auth-foot{text-align:center;margin-top:16px;}
+
+  .user-chip{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--ink-soft);background:var(--surface);border:1px solid var(--border);padding:7px 12px;border-radius:999px;}
+  .user-chip .logout-btn{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-family:var(--font);font-weight:700;font-size:12px;padding:0;}
+  .user-chip .logout-btn:hover{color:var(--danger);}
+
+  .app-loading{min-height:70vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--ink-soft);font-weight:600;font-size:14px;}
+  .spinner{width:30px;height:30px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--primary);animation:auth-spin .8s linear infinite;}
+  @keyframes auth-spin{to{transform:rotate(360deg);}}
+</style>
+
+<script>
+const SEED_DATA = [];
+const NEXT_ID_START = 1;
+
+const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+function monthNumber(m){
+  const idx = MONTHS.indexOf(m);
+  return idx === -1 ? '—' : String(idx+1).padStart(2,'0');
+}
+let SELLERS = [
+  {key:"soraya", label:"Soraya", color:"#5046E5"},
+  {key:"angela", label:"Angela", color:"#0D9488"},
+  {key:"rios", label:"Rios", color:"#D97706"},
+  {key:"uilma", label:"Uilma", color:"#E11D48"},
+  {key:"luciana", label:"Luciana", color:"#9333EA"},
+];
+const STORAGE_KEY = "vendas";
+const VENDOR_PALETTE = ["#5046E5","#0D9488","#D97706","#E11D48","#9333EA","#2563EB","#059669","#DC2626","#7C3AED","#EA580C"];
+
+const ENTITIES = {
+  consultoria: {
+    tabLabel: "Consultoria",
+    itemLabel: "lançamento",
+    fields: [
+      {key:"empresa", label:"Empresa", type:"text"},
+      {key:"valorContrato", label:"Valor do Contrato", type:"number"},
+      {key:"tipo", label:"Recuperação / Mensal", type:"select", options:["Recuperação","Mensal"]},
+      {key:"parceiro", label:"Parceiro", type:"text"},
+      {key:"participacao", label:"Participação (%)", type:"text"},
+      {key:"formaPagamento", label:"Forma de Pagamento", type:"text"},
+      {key:"colaborador", label:"Colaborador Envolvido", type:"text"},
+      {key:"observacoes", label:"Observações", type:"text"},
+    ],
+    commissionLabel: "Valor da Comissão",
+    defaultVendors: ["Soraya","Angela","Rios","Uilma","Luciana"],
+    hasPagamento: true,
+  },
+  publicos: {
+    tabLabel: "Consultoria Órgãos Públicos",
+    itemLabel: "lançamento",
+    fields: [
+      {key:"orgao", label:"Órgão Público", type:"text"},
+      {key:"valorContrato", label:"Valor do Contrato", type:"number"},
+      {key:"tipo", label:"Recuperação / Mensal", type:"select", options:["Recuperação","Mensal"]},
+      {key:"parceiro", label:"Parceiro", type:"text"},
+      {key:"participacao", label:"Participação (%)", type:"text"},
+      {key:"formaPagamento", label:"Forma de Pagamento", type:"text"},
+      {key:"colaborador", label:"Colaborador Envolvido", type:"text"},
+      {key:"observacoes", label:"Observações", type:"text"},
+    ],
+    commissionLabel: "Valor da Comissão",
+    defaultVendors: ["Soraya","Angela","Rios","Uilma","Luciana"],
+    hasPagamento: true,
+  },
+  cursos: {
+    tabLabel: "Cursos",
+    itemLabel: "lançamento",
+    fields: [
+      {key:"curso", label:"Nome do Curso", type:"text"},
+      {key:"valorContrato", label:"Valor do Contrato", type:"number"},
+      {key:"parceiro", label:"Parceiro", type:"text"},
+      {key:"participacao", label:"Participação (%)", type:"text"},
+      {key:"formaPagamento", label:"Forma de Pagamento", type:"text"},
+      {key:"observacoes", label:"Observações", type:"text"},
+    ],
+    commissionLabel: "Valor da Comissão",
+    defaultVendors: ["Soraya","Angela","Rios","Uilma","Luciana"],
+  },
+};
+const ENTITY_KEYS = ["consultoria","publicos","cursos"];
+
+const TABS = [
+  {key:"vendas", label:"Sistema"},
+  {key:"consultoria", label:"Consultoria"},
+  {key:"publicos", label:"Consultoria Órgãos Públicos"},
+  {key:"cursos", label:"Cursos"},
+  {key:"bonus", label:"Bônus e Metas"},
+  {key:"parceiros", label:"Resumo Geral"},
+  {key:"pagamentos", label:"Pagamentos Realizados"},
+];
+
+let activeTab = "vendas";
+let rows = null;
+let filter = "Todos";
+let sellerFilter = "Todas";
+let searchCliente = "";
+let searchParceiro = "";
+let searchColaborador = "";
+let vendaProducts = [];
+let partners = [];
+let partnerMonthFilter = "Todos";
+let partnersValuesRevealed = false;
+let sellerValuesRevealed = false;
+let yearFilter = new Date().getFullYear();
+let extraYears = [];
+let storageAvailable = null;
+let saveError = false;
+let nextId = 1;
+let saveTimer = null;
+let saving = false;
+let modalState = null; // {type:'confirm'|'prompt'|'alert', message, value, onConfirm, onSubmit, confirmLabel}
+let bonusRows = [];
+let bonusNextId = 1;
+let bonusFilter = "Todos";
+let bonusValuesRevealed = false;
+let closedMonths = [];
+let metas = {};
+let pagamentosMonthFilter = "Todos";
+let agingThresholdMonths = 1;
+
+const state = {};
+ENTITY_KEYS.forEach(k => {
+  state[k] = {rows:[], vendors: ENTITIES[k].defaultVendors.slice(), filter:"Todos", vendorFilter:"Todos", nextId:1, search:{main:"", parceiro:"", colaborador:""}, valuesRevealed:false, fieldFilters:{}};
+});
+
+/* ================= Supabase persistence layer ================= */
+const SUPABASE_URL = "https://ogkrrlssdrtctdyyvkql.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9na3JybHNzZHJ0Y3RkeXl2a3FsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2MDAzNTUsImV4cCI6MjEwMzE3NjM1NX0.Jsgu02MUoYbFNPVilrdK0tbDDdRxRb9cPkGPWkg8lyA";
+
+/* ---------------- Autenticação (Supabase Auth) ----------------
+   O sistema agora exige login: o banco só aceita leitura/escrita de
+   usuários autenticados (ver supabase_security_migration.sql). O
+   token da sessão fica em localStorage e é renovado automaticamente
+   antes de expirar; se a renovação falhar, o usuário volta pra tela
+   de login. */
+const AUTH_STORAGE_KEY = 'comissoes_auth_session_v1';
+let authSession = null;
+let authScreen = 'login'; // 'login' | 'recover' | 'reset'
+let authError = '';
+let authNotice = '';
+let authLoading = false;
+let authShowPwd = false;
+let authRefreshPromise = null;
+let authEmailDraft = '';
+let authPwdDraft = '';
+let authRecoverEmailDraft = '';
+let authNewPwdDraft = '';
+let authRecoveryToken = null;
+let initialDataLoaded = false;
+
+function loadStoredAuthSession(){
+  try{
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    if(!parsed || !parsed.access_token || !parsed.refresh_token) return null;
+    return parsed;
+  } catch(e){ return null; }
+}
+function storeAuthSession(session){
+  authSession = session;
+  try{
+    if(session) localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+    else localStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch(e){ /* localStorage indisponível (ex: modo privado) — sessão fica só em memória */ }
+}
+function sessionFromAuthResponse(data){
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    expires_at: Date.now() + (Number(data.expires_in || 3600) * 1000),
+    user: data.user ? { id: data.user.id, email: data.user.email } : null,
+  };
+}
+async function authFetch(path, body, extraHeaders){
+  const res = await fetch(SUPABASE_URL + path, {
+    method: 'POST',
+    headers: Object.assign({ 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' }, extraHeaders || {}),
+    body: JSON.stringify(body || {}),
+  });
+  const data = await res.json().catch(function(){ return {}; });
+  if(!res.ok){
+    const err = new Error((data && (data.error_description || data.msg || data.message)) || 'Falha na autenticação.');
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+async function ensureFreshToken(){
+  if(!authSession) return null;
+  if(authSession.expires_at - Date.now() > 60000) return authSession.access_token;
+  if(!authRefreshPromise){
+    authRefreshPromise = authFetch('/auth/v1/token?grant_type=refresh_token', { refresh_token: authSession.refresh_token })
+      .then(function(data){ storeAuthSession(sessionFromAuthResponse(data)); return authSession.access_token; })
+      .catch(function(){ storeAuthSession(null); return null; })
+      .finally(function(){ authRefreshPromise = null; });
+  }
+  return authRefreshPromise;
+}
+
+async function login(email, password){
+  authLoading = true; authError = ''; renderAuthScreen();
+  try{
+    const data = await authFetch('/auth/v1/token?grant_type=password', { email: email, password: password });
+    storeAuthSession(sessionFromAuthResponse(data));
+    authLoading = false;
+    boot();
+  } catch(e){
+    authLoading = false;
+    authError = e.status === 400 ? 'E-mail ou senha incorretos.'
+      : e.status === 429 ? 'Muitas tentativas. Aguarde um pouco e tente de novo.'
+      : 'Não foi possível entrar. Verifique sua internet e tente novamente.';
+    renderAuthScreen();
+  }
+}
+function logout(){
+  const token = authSession && authSession.access_token;
+  storeAuthSession(null);
+  if(token){
+    fetch(SUPABASE_URL + '/auth/v1/logout', { method:'POST', headers:{ apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + token } }).catch(function(){});
+  }
+  location.reload();
+}
+async function requestPasswordRecovery(email){
+  authLoading = true; authError = ''; authNotice = ''; renderAuthScreen();
+  try{
+    await authFetch('/auth/v1/recover', { email: email, redirect_to: window.location.href.split('#')[0] });
+  } catch(e){ /* não revelamos se o e-mail existe ou não */ }
+  authLoading = false;
+  authNotice = 'Se esse e-mail estiver cadastrado, enviamos um link pra redefinir a senha. Confira sua caixa de entrada.';
+  renderAuthScreen();
+}
+async function submitNewPassword(newPassword){
+  authLoading = true; authError = ''; renderAuthScreen();
+  try{
+    if(!authRecoveryToken) throw new Error('Link inválido ou expirado.');
+    const res = await fetch(SUPABASE_URL + '/auth/v1/user', {
+      method: 'PUT',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + authRecoveryToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: newPassword }),
+    });
+    const data = await res.json().catch(function(){ return {}; });
+    if(!res.ok) throw new Error((data && (data.error_description || data.msg)) || 'Falha ao redefinir senha.');
+    authRecoveryToken = null;
+    authScreen = 'login';
+    authNotice = 'Senha alterada! Faça login com a nova senha.';
+    authLoading = false;
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    renderAuthScreen();
+  } catch(e){
+    authLoading = false;
+    authError = 'Não foi possível redefinir a senha. Peça um novo link em "Esqueci minha senha".';
+    renderAuthScreen();
+  }
+}
+
+function setAuthScreen(screen){ authScreen = screen; authError = ''; authNotice = ''; renderAuthScreen(); }
+function onAuthEmailInput(el){ authEmailDraft = el.value; }
+function onAuthPwdInput(el){ authPwdDraft = el.value; }
+function onAuthRecoverEmailInput(el){ authRecoverEmailDraft = el.value; }
+function onAuthNewPwdInput(el){ authNewPwdDraft = el.value; }
+function toggleAuthPwd(){
+  authShowPwd = !authShowPwd;
+  renderAuthScreen();
+  const id = authScreen === 'reset' ? 'auth-new-pwd' : 'auth-pwd';
+  const el = document.getElementById(id);
+  if(el){ el.focus(); const v = el.value; el.value = ''; el.value = v; }
+}
+function submitLoginForm(){
+  const email = (authEmailDraft||'').trim();
+  const pwd = authPwdDraft || '';
+  if(!email || !pwd){ authError = 'Preencha e-mail e senha.'; renderAuthScreen(); return; }
+  login(email, pwd);
+}
+function submitRecoverForm(){
+  const email = (authRecoverEmailDraft||'').trim();
+  if(!email){ authError = 'Informe seu e-mail.'; renderAuthScreen(); return; }
+  requestPasswordRecovery(email);
+}
+function submitResetForm(){
+  const pwd = authNewPwdDraft || '';
+  if(pwd.length < 6){ authError = 'A senha precisa ter pelo menos 6 caracteres.'; renderAuthScreen(); return; }
+  submitNewPassword(pwd);
+}
+
+function renderAuthScreen(){
+  const root = document.getElementById('root');
+  let bodyHtml = '';
+  if(authScreen === 'reset'){
+    bodyHtml = `
+      <div class="auth-logo">Open Soluções Tributárias</div>
+      <h1>Nova senha</h1>
+      <p class="auth-sub">Escolha uma nova senha para sua conta.</p>
+      ${authError ? `<div class="auth-error">${esc(authError)}</div>` : ''}
+      ${authNotice ? `<div class="auth-notice">${esc(authNotice)}</div>` : ''}
+      <div class="auth-field">
+        <label for="auth-new-pwd">Nova senha</label>
+        <div class="auth-input-wrap">
+          <input id="auth-new-pwd" class="auth-input" type="${authShowPwd?'text':'password'}" autocomplete="new-password" minlength="6" placeholder="Mínimo 6 caracteres" value="${esc(authNewPwdDraft)}" oninput="onAuthNewPwdInput(this)" onkeydown="if(event.key==='Enter') submitResetForm()" />
+          <button type="button" class="auth-toggle-pwd" onclick="toggleAuthPwd()">${authShowPwd?'Ocultar':'Mostrar'}</button>
+        </div>
+      </div>
+      <button class="auth-submit" ${authLoading?'disabled':''} onclick="submitResetForm()">${authLoading?'Salvando...':'Salvar nova senha'}</button>
+    `;
+  } else if(authScreen === 'recover'){
+    bodyHtml = `
+      <div class="auth-logo">Open Soluções Tributárias</div>
+      <h1>Recuperar senha</h1>
+      <p class="auth-sub">Informe seu e-mail cadastrado. Vamos te enviar um link para redefinir a senha.</p>
+      ${authError ? `<div class="auth-error">${esc(authError)}</div>` : ''}
+      ${authNotice ? `<div class="auth-notice">${esc(authNotice)}</div>` : ''}
+      <div class="auth-field">
+        <label for="auth-recover-email">E-mail</label>
+        <input id="auth-recover-email" class="auth-input" type="email" autocomplete="username" placeholder="voce@empresa.com" value="${esc(authRecoverEmailDraft)}" oninput="onAuthRecoverEmailInput(this)" onkeydown="if(event.key==='Enter') submitRecoverForm()" />
+      </div>
+      <button class="auth-submit" ${authLoading?'disabled':''} onclick="submitRecoverForm()">${authLoading?'Enviando...':'Enviar link'}</button>
+      <div class="auth-foot"><button type="button" class="auth-link" onclick="setAuthScreen('login')">← Voltar para o login</button></div>
+    `;
+  } else {
+    bodyHtml = `
+      <div class="auth-logo">Open Soluções Tributárias</div>
+      <h1>Comissões — Equipe Comercial</h1>
+      <p class="auth-sub">Entre com sua conta para acessar o sistema.</p>
+      ${authError ? `<div class="auth-error">${esc(authError)}</div>` : ''}
+      ${authNotice ? `<div class="auth-notice">${esc(authNotice)}</div>` : ''}
+      <div class="auth-field">
+        <label for="auth-email">E-mail</label>
+        <input id="auth-email" class="auth-input" type="email" autocomplete="username" placeholder="voce@empresa.com" value="${esc(authEmailDraft)}" oninput="onAuthEmailInput(this)" onkeydown="if(event.key==='Enter') document.getElementById('auth-pwd').focus()" />
+      </div>
+      <div class="auth-field">
+        <label for="auth-pwd">Senha</label>
+        <div class="auth-input-wrap">
+          <input id="auth-pwd" class="auth-input" type="${authShowPwd?'text':'password'}" autocomplete="current-password" placeholder="Sua senha" value="${esc(authPwdDraft)}" oninput="onAuthPwdInput(this)" onkeydown="if(event.key==='Enter') submitLoginForm()" />
+          <button type="button" class="auth-toggle-pwd" onclick="toggleAuthPwd()">${authShowPwd?'Ocultar':'Mostrar'}</button>
+        </div>
+      </div>
+      <button class="auth-submit" ${authLoading?'disabled':''} onclick="submitLoginForm()">${authLoading?'Entrando...':'Entrar'}</button>
+      <div class="auth-foot"><button type="button" class="auth-link" onclick="setAuthScreen('recover')">Esqueci minha senha</button></div>
+    `;
+  }
+  root.innerHTML = `<div class="auth-screen"><div class="auth-card">${bodyHtml}</div></div>`;
+}
+/* ---------------- fim da autenticação ---------------- */
+
+async function sb(path, opts){
+  opts = opts || {};
+  const token = await ensureFreshToken();
+  if(!token){
+    renderAuthScreen();
+    throw new Error('Sessão expirada. Faça login novamente.');
+  }
+  const headers = Object.assign({
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': 'Bearer ' + token,
+    'Content-Type': 'application/json',
+  }, opts.headers || {});
+  const res = await fetch(SUPABASE_URL + path, {
+    method: opts.method || 'GET',
+    headers: headers,
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if(res.status === 401){
+    storeAuthSession(null);
+    renderAuthScreen();
+    throw new Error('Sessão expirada. Faça login novamente.');
+  }
+  if(!res.ok){
+    const text = await res.text().catch(function(){ return ''; });
+    throw new Error('Supabase ' + res.status + ': ' + text);
+  }
+  if(res.status === 204) return null;
+  const ct = res.headers.get('content-type') || '';
+  if(ct.indexOf('application/json') !== -1) return res.json();
+  return null;
+}
+function sbSelect(table, query){
+  return sb('/rest/v1/' + table + (query ? '?' + query : ''), { method: 'GET' });
+}
+function sbUpsert(table, rows, onConflict){
+  if(!rows || rows.length === 0) return Promise.resolve();
+  return sb('/rest/v1/' + table + '?on_conflict=' + (onConflict||'id'), {
+    method: 'POST',
+    headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+    body: rows,
+  });
+}
+function sbDeleteIn(table, column, values){
+  if(!values || values.length === 0) return Promise.resolve();
+  const list = values.map(function(v){ return typeof v === 'string' ? '"'+v.replace(/"/g,'')+'"' : v; }).join(',');
+  return sb('/rest/v1/' + table + '?' + column + '=in.(' + list + ')', { method:'DELETE', headers:{'Prefer':'return=minimal'} });
+}
+function sbDeleteAll(table, filter){
+  return sb('/rest/v1/' + table + '?' + filter, { method:'DELETE', headers:{'Prefer':'return=minimal'} });
+}
+
+function checkStorageAvailability(){
+  sbSelect('extra_years','select=ano&limit=1')
+    .then(function(){ storageAvailable = true; render(); })
+    .catch(function(){ storageAvailable = false; render(); });
+}
+
+/* ---------- Sistema (vendas + vendas_comissoes) ---------- */
+const VENDA_NON_SELLER_FIELDS = new Set(['id','ano','mes','cliente','venda','valor','parceiro','participacao','formaPagamento','colaborador','observacoes','vendedor2','vendedor3','pago','mesPagamento','parcelaLabel']);
+
+function persist(){
+  saving = true; updateSaveStatus();
+  if(saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(function(){
+    (async function(){
+      try{
+        const dbRows = rows.map(function(r){
+          return {
+            id: r.id, ano: r.ano||2026, mes: r.mes, cliente: r.cliente||'', venda: r.venda||'',
+            valor: r.valor, parceiro: r.parceiro||'', participacao: r.participacao,
+            forma_pagamento: r.formaPagamento||'', colaborador: r.colaborador||'', observacoes: r.observacoes||'',
+            vendedor2: r.vendedor2||'', vendedor3: r.vendedor3||'', pago: !!r.pago, mes_pagamento: r.mesPagamento||null,
+            parcela_label: r.parcelaLabel || null,
+          };
+        });
+        await sbUpsert('vendas', dbRows, 'id');
+
+        const existing = (await sbSelect('vendas','select=id')) || [];
+        const localIds = rows.map(function(r){ return r.id; });
+        const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
+        if(toDelete.length) await sbDeleteIn('vendas','id', toDelete);
+
+        const comissaoRows = [];
+        rows.forEach(function(r){
+          Object.keys(r).forEach(function(k){
+            if(VENDA_NON_SELLER_FIELDS.has(k)) return;
+            comissaoRows.push({ venda_id: r.id, seller_key: k, valor: (r[k]===undefined?null:r[k]) });
+          });
+        });
+        if(comissaoRows.length) await sbUpsert('vendas_comissoes', comissaoRows, 'venda_id,seller_key');
+        saveError = false;
+      } catch(e){
+        console.error('Falha ao salvar vendas', e);
+        saveError = true;
+      } finally {
+        saving = false; updateSaveStatus();
+      }
+    })();
+  }, 450);
+}
+
+async function tryLoadFromStorageAsync(){
+  try{
+    const dbRows = await sbSelect('vendas', 'select=*&order=id.asc');
+    const comissoes = await sbSelect('vendas_comissoes', 'select=*');
+    if(dbRows && dbRows.length){
+      const bySellerByVenda = {};
+      (comissoes||[]).forEach(function(c){
+        if(!bySellerByVenda[c.venda_id]) bySellerByVenda[c.venda_id] = {};
+        bySellerByVenda[c.venda_id][c.seller_key] = c.valor;
+      });
+      rows = dbRows.map(function(d){
+        const r = {
+          id: d.id, ano: d.ano, mes: d.mes, cliente: d.cliente||'', venda: d.venda||'',
+          valor: d.valor, parceiro: d.parceiro||'', participacao: d.participacao,
+          formaPagamento: d.forma_pagamento||'', colaborador: d.colaborador||'', observacoes: d.observacoes||'',
+          vendedor2: d.vendedor2||'', vendedor3: d.vendedor3||'', pago: d.pago, mesPagamento: d.mes_pagamento,
+          parcelaLabel: d.parcela_label,
+        };
+        SELLERS.forEach(function(s){ r[s.key] = null; });
+        const sellerVals = bySellerByVenda[d.id] || {};
+        Object.keys(sellerVals).forEach(function(k){ r[k] = sellerVals[k]; });
+        return r;
+      });
+      migrateYear(rows, 2026);
+      nextId = rows.length ? Math.max.apply(null, rows.map(function(r){ return r.id||0; })) + 1 : 1;
+      render();
+    }
+  } catch(e){ console.error('Falha ao carregar vendas do Supabase', e); }
+}
+
+/* ---------- Consultoria / Órgãos Públicos / Cursos ---------- */
+const entityTimers = {};
+
+function persistEntityRows(key){
+  saving = true; updateSaveStatus();
+  const tk = key+'-rows';
+  if(entityTimers[tk]) clearTimeout(entityTimers[tk]);
+  entityTimers[tk] = setTimeout(function(){
+    (async function(){
+      try{
+        const cfg = ENTITIES[key];
+        const dbRows = state[key].rows.map(function(r){
+          const row = {
+            id: r.id, entidade: key, ano: r.ano||2026, mes: r.mes,
+            comissao_percent: r.comissaoPercent, vendedor: r.vendedor||'',
+            comissao_percent2: r.comissaoPercent2, vendedor2: r.vendedor2||'',
+            comissao_percent3: r.comissaoPercent3, vendedor3: r.vendedor3||'',
+            parcela_label: r.parcelaLabel || null,
+            nome:'', valor_contrato:null, tipo:null, parceiro:'', participacao:null,
+            forma_pagamento:'', colaborador:'', observacoes:'',
+            pago:false, mes_pagamento:null,
+          };
+          cfg.fields.forEach(function(f){
+            if(f.key === 'valorContrato') row.valor_contrato = r.valorContrato;
+            else if(f.key === 'tipo') row.tipo = r.tipo;
+            else if(f.key === 'parceiro') row.parceiro = r.parceiro||'';
+            else if(f.key === 'participacao') row.participacao = r.participacao;
+            else if(f.key === 'formaPagamento') row.forma_pagamento = r.formaPagamento||'';
+            else if(f.key === 'colaborador') row.colaborador = r.colaborador||'';
+            else if(f.key === 'observacoes') row.observacoes = r.observacoes||'';
+            else row.nome = r[f.key] || '';
+          });
+          if(cfg.hasPagamento){ row.pago = !!r.pago; row.mes_pagamento = r.mesPagamento||null; }
+          return row;
+        });
+        await sbUpsert('lancamentos', dbRows, 'id');
+
+        const existing = (await sbSelect('lancamentos','select=id&entidade=eq.'+key)) || [];
+        const localIds = state[key].rows.map(function(r){ return r.id; });
+        const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
+        if(toDelete.length) await sbDeleteIn('lancamentos','id', toDelete);
+
+        if(localIds.length){
+          await sbDeleteAll('lancamentos_extra_vendedores', 'lancamento_id=in.(' + localIds.join(',') + ')');
+        }
+        const extraRows = [];
+        state[key].rows.forEach(function(r){
+          (r.extraVendedores||[]).forEach(function(ev){
+            extraRows.push({ id: ev.id, lancamento_id: r.id, vendedor: ev.vendedor||'', percent: ev.percent });
+          });
+        });
+        if(extraRows.length) await sbUpsert('lancamentos_extra_vendedores', extraRows, 'id');
+
+        saveError = false;
+      } catch(e){
+        console.error('Falha ao salvar '+key, e);
+        saveError = true;
+      } finally {
+        saving = false; updateSaveStatus();
+      }
+    })();
+  }, 450);
+}
+
+function persistEntityVendors(key){
+  saving = true; updateSaveStatus();
+  const tk = key+'-vendors';
+  if(entityTimers[tk]) clearTimeout(entityTimers[tk]);
+  entityTimers[tk] = setTimeout(function(){
+    (async function(){
+      try{
+        await sbDeleteAll('entity_vendors', 'entidade=eq.'+key);
+        const rows2 = state[key].vendors.map(function(v){ return { entidade:key, vendor_name:v }; });
+        if(rows2.length) await sbUpsert('entity_vendors', rows2, 'entidade,vendor_name');
+        saveError = false;
+      } catch(e){ console.error(e); saveError = true; }
+      finally { saving = false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+
+async function tryLoadEntityFromStorageAsync(key){
+  try{
+    const cfg = ENTITIES[key];
+    const dbRows = await sbSelect('lancamentos', 'select=*&entidade=eq.'+key+'&order=id.asc');
+    const extras = await sbSelect('lancamentos_extra_vendedores', 'select=*');
+    const vendorsDb = await sbSelect('entity_vendors', 'select=vendor_name&entidade=eq.'+key+'&order=id.asc');
+    if(dbRows && dbRows.length){
+      const extrasByLanc = {};
+      (extras||[]).forEach(function(e){
+        if(!extrasByLanc[e.lancamento_id]) extrasByLanc[e.lancamento_id] = [];
+        extrasByLanc[e.lancamento_id].push({id: e.id, vendedor: e.vendedor||'', percent: e.percent});
+      });
+      state[key].rows = dbRows.map(function(d){
+        const r = {
+          id: d.id, mes: d.mes, ano: d.ano,
+          comissaoPercent: d.comissao_percent, vendedor: d.vendedor||'',
+          comissaoPercent2: d.comissao_percent2, vendedor2: d.vendedor2||'',
+          comissaoPercent3: d.comissao_percent3, vendedor3: d.vendedor3||'',
+          extraVendedores: extrasByLanc[d.id] || [],
+          parcelaLabel: d.parcela_label,
+        };
+        if(cfg.hasPagamento){ r.pago = d.pago; r.mesPagamento = d.mes_pagamento; }
+        cfg.fields.forEach(function(f){
+          if(f.key === 'valorContrato') r.valorContrato = d.valor_contrato;
+          else if(f.key === 'tipo') r.tipo = d.tipo;
+          else if(f.key === 'parceiro') r.parceiro = d.parceiro||'';
+          else if(f.key === 'participacao') r.participacao = d.participacao;
+          else if(f.key === 'formaPagamento') r.formaPagamento = d.forma_pagamento||'';
+          else if(f.key === 'colaborador') r.colaborador = d.colaborador||'';
+          else if(f.key === 'observacoes') r.observacoes = d.observacoes||'';
+          else r[f.key] = d.nome||'';
+        });
+        return r;
+      });
+      migrateYear(state[key].rows, 2026);
+      state[key].nextId = state[key].rows.length ? Math.max.apply(null, state[key].rows.map(function(r){ return r.id||0; })) + 1 : 1;
+    }
+    if(vendorsDb && vendorsDb.length){
+      state[key].vendors = vendorsDb.map(function(v){ return v.vendor_name; });
+    }
+    render();
+  } catch(e){ console.error('Falha ao carregar '+key+' do Supabase', e); }
+}
+
+/* ---------- Bônus e Metas ---------- */
+let bonusTimer = null;
+function persistBonus(){
+  saving = true; updateSaveStatus();
+  if(bonusTimer) clearTimeout(bonusTimer);
+  bonusTimer = setTimeout(function(){
+    (async function(){
+      try{
+        const dbRows = bonusRows.map(function(r){ return { id:r.id, ano:r.ano||2026, mes:r.mes, vendedor:r.vendedor||'', descricao:r.descricao||'', valor:r.valor }; });
+        await sbUpsert('bonus', dbRows, 'id');
+        const existing = (await sbSelect('bonus','select=id')) || [];
+        const localIds = bonusRows.map(function(r){ return r.id; });
+        const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
+        if(toDelete.length) await sbDeleteIn('bonus','id',toDelete);
+        saveError = false;
+      } catch(e){ console.error(e); saveError = true; }
+      finally { saving = false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+async function tryLoadBonusFromStorageAsync(){
+  try{
+    const dbRows = await sbSelect('bonus','select=*&order=id.asc');
+    if(dbRows && dbRows.length){
+      bonusRows = dbRows.map(function(d){ return { id:d.id, ano:d.ano, mes:d.mes, vendedor:d.vendedor||'', descricao:d.descricao||'', valor:d.valor }; });
+      migrateYear(bonusRows, 2026);
+      bonusNextId = bonusRows.length ? Math.max.apply(null, bonusRows.map(function(r){ return r.id||0; }))+1 : 1;
+      render();
+    }
+  } catch(e){ console.error(e); }
+}
+
+/* ---------- Catálogos simples (produtos, parceiros, vendedores do Sistema) ---------- */
+let vendaProductsTimer = null;
+function persistVendaProducts(){
+  saving = true; updateSaveStatus();
+  if(vendaProductsTimer) clearTimeout(vendaProductsTimer);
+  vendaProductsTimer = setTimeout(function(){
+    (async function(){
+      try{
+        if(vendaProducts.length) await sbUpsert('venda_products', vendaProducts.map(function(n){ return {name:n}; }), 'name');
+        const existing = (await sbSelect('venda_products','select=name')) || [];
+        const localSet = new Set(vendaProducts);
+        const toDelete = existing.map(function(x){ return x.name; }).filter(function(n){ return !localSet.has(n); });
+        if(toDelete.length) await sbDeleteIn('venda_products','name', toDelete);
+        saveError = false;
+      } catch(e){ console.error(e); saveError = true; }
+      finally { saving=false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+async function tryLoadVendaProductsFromStorageAsync(){
+  try{
+    const dbRows = await sbSelect('venda_products','select=name&order=name.asc');
+    if(dbRows && dbRows.length){ vendaProducts = dbRows.map(function(d){ return d.name; }); render(); }
+  } catch(e){ console.error(e); }
+}
+
+let partnersTimer = null;
+function persistPartners(){
+  saving = true; updateSaveStatus();
+  if(partnersTimer) clearTimeout(partnersTimer);
+  partnersTimer = setTimeout(function(){
+    (async function(){
+      try{
+        if(partners.length) await sbUpsert('partners', partners.map(function(n){ return {name:n}; }), 'name');
+        const existing = (await sbSelect('partners','select=name')) || [];
+        const localSet = new Set(partners);
+        const toDelete = existing.map(function(x){ return x.name; }).filter(function(n){ return !localSet.has(n); });
+        if(toDelete.length) await sbDeleteIn('partners','name', toDelete);
+        saveError = false;
+      } catch(e){ console.error(e); saveError = true; }
+      finally { saving=false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+async function tryLoadPartnersFromStorageAsync(){
+  try{
+    const dbRows = await sbSelect('partners','select=name&order=name.asc');
+    if(dbRows && dbRows.length){ partners = dbRows.map(function(d){ return d.name; }); render(); }
+  } catch(e){ console.error(e); }
+}
+
+let sistemaSellersTimer = null;
+function persistSistemaSellers(){
+  saving = true; updateSaveStatus();
+  if(sistemaSellersTimer) clearTimeout(sistemaSellersTimer);
+  sistemaSellersTimer = setTimeout(function(){
+    (async function(){
+      try{
+        const dbRows = SELLERS.map(function(s,i){ return { key:s.key, label:s.label, color:s.color, sort_order:i }; });
+        if(dbRows.length) await sbUpsert('sellers', dbRows, 'key');
+        const existing = (await sbSelect('sellers','select=key')) || [];
+        const localSet = new Set(SELLERS.map(function(s){ return s.key; }));
+        const toDelete = existing.map(function(x){ return x.key; }).filter(function(k){ return !localSet.has(k); });
+        if(toDelete.length) await sbDeleteIn('sellers','key', toDelete);
+        saveError = false;
+      } catch(e){ console.error(e); saveError = true; }
+      finally { saving=false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+async function tryLoadSistemaSellersFromStorageAsync(){
+  try{
+    const dbRows = await sbSelect('sellers','select=*&order=sort_order.asc');
+    if(dbRows && dbRows.length){
+      SELLERS = dbRows.map(function(d){ return { key:d.key, label:d.label, color:d.color }; });
+      render();
+    }
+  } catch(e){ console.error(e); }
+}
+
+/* ---------- Meses fechados e metas ---------- */
+let closedMonthsTimer = null;
+function persistClosedMonths(){
+  saving = true; updateSaveStatus();
+  if(closedMonthsTimer) clearTimeout(closedMonthsTimer);
+  closedMonthsTimer = setTimeout(function(){
+    (async function(){
+      try{
+        await sbDeleteAll('closed_months', 'id=gt.0');
+        const dbRows = closedMonths.map(function(k){
+          const idx = k.indexOf('-');
+          return { ano: parseInt(k.slice(0,idx),10), mes: k.slice(idx+1) };
+        });
+        if(dbRows.length) await sbUpsert('closed_months', dbRows, 'ano,mes');
+        saveError = false;
+      } catch(e){ console.error(e); saveError = true; }
+      finally { saving=false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+async function tryLoadClosedMonthsFromStorageAsync(){
+  try{
+    const dbRows = await sbSelect('closed_months','select=*');
+    if(dbRows){ closedMonths = dbRows.map(function(d){ return d.ano+'-'+d.mes; }); render(); }
+  } catch(e){ console.error(e); }
+}
+
+let metasTimer = null;
+function persistMetas(){
+  saving = true; updateSaveStatus();
+  if(metasTimer) clearTimeout(metasTimer);
+  metasTimer = setTimeout(function(){
+    (async function(){
+      try{
+        await sbDeleteAll('metas', 'id=gt.0');
+        const dbRows = Object.keys(metas).map(function(k){
+          const idx1 = k.indexOf('-');
+          const ano = parseInt(k.slice(0,idx1),10);
+          const rest = k.slice(idx1+1);
+          const idx2 = rest.indexOf('-');
+          const mes = rest.slice(0,idx2);
+          const vendedor = rest.slice(idx2+1);
+          return { ano: ano, mes: mes, vendedor: vendedor, valor_meta: metas[k] };
+        });
+        if(dbRows.length) await sbUpsert('metas', dbRows, 'ano,mes,vendedor');
+        saveError = false;
+      } catch(e){ console.error(e); saveError = true; }
+      finally { saving=false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+async function tryLoadMetasFromStorageAsync(){
+  try{
+    const dbRows = await sbSelect('metas','select=*');
+    if(dbRows){
+      metas = {};
+      dbRows.forEach(function(d){ metas[metaKey(d.ano,d.mes,d.vendedor)] = d.valor_meta; });
+      render();
+    }
+  } catch(e){ console.error(e); }
+}
+
+/* ---------- Anos extras ---------- */
+let extraYearsTimer = null;
+function persistExtraYears(){
+  saving = true; updateSaveStatus();
+  if(extraYearsTimer) clearTimeout(extraYearsTimer);
+  extraYearsTimer = setTimeout(function(){
+    (async function(){
+      try{
+        if(extraYears.length) await sbUpsert('extra_years', extraYears.map(function(a){ return {ano:a}; }), 'ano');
+        const existing = (await sbSelect('extra_years','select=ano')) || [];
+        const localSet = new Set(extraYears);
+        const toDelete = existing.map(function(x){ return x.ano; }).filter(function(a){ return !localSet.has(a); });
+        if(toDelete.length) await sbDeleteIn('extra_years','ano', toDelete);
+        saveError = false;
+      } catch(e){ console.error(e); saveError = true; }
+      finally { saving=false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+async function tryLoadExtraYearsFromStorageAsync(){
+  try{
+    const dbRows = await sbSelect('extra_years','select=ano&order=ano.asc');
+    if(dbRows && dbRows.length){ extraYears = dbRows.map(function(d){ return d.ano; }); render(); }
+  } catch(e){ console.error(e); }
+}
+/* ================= fim da camada de persistência Supabase ================= */
+
+
+function fmtMoney(v){
+  const n = Number(v)||0;
+  return n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+}
+
+
+
+function esc(s){
+  if(s===null||s===undefined) return "";
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+}
+function titleCase(str){
+  if(str===null || str===undefined || str==='') return str;
+  return String(str).split(' ').map(w => w.length ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w).join(' ');
+}
+function normalizeAllText(){
+  showConfirm(
+    "Isso vai colocar Primeira Letra Maiúscula (e o resto minúsculo) em todos os textos já lançados — cliente, produto, parceiro, colaborador, forma de pagamento, empresa/curso — nas três abas. Continuar?",
+    () => {
+      rows.forEach(r => {
+        r.cliente = titleCase(r.cliente);
+        r.venda = titleCase(r.venda);
+        r.parceiro = titleCase(r.parceiro);
+        r.colaborador = titleCase(r.colaborador);
+        r.formaPagamento = titleCase(r.formaPagamento);
+      });
+      vendaProducts = Array.from(new Set(vendaProducts.map(p => titleCase(p)))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+      persist();
+      persistVendaProducts();
+
+      ENTITY_KEYS.forEach(key => {
+        const mainField = ENTITIES[key].fields[0].key;
+        state[key].rows.forEach(r => {
+          r[mainField] = titleCase(r[mainField]);
+          r.parceiro = titleCase(r.parceiro);
+          r.colaborador = titleCase(r.colaborador);
+          r.formaPagamento = titleCase(r.formaPagamento);
+        });
+        persistEntityRows(key);
+      });
+
+      bonusRows.forEach(r => { r.descricao = titleCase(r.descricao); });
+      persistBonus();
+    },
+    "Normalizar"
+  );
+}
+function slug(s){
+  return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+}
+function vendorColor(name, list){
+  const idx = list.indexOf(name);
+  return VENDOR_PALETTE[(idx<0?0:idx) % VENDOR_PALETTE.length];
+}
+
+/* ---------------- Custom modal (confirm / prompt / alert) ----------------
+   Native window.confirm/prompt/alert can be silently blocked inside a
+   sandboxed artifact iframe, which made buttons look unresponsive.
+   This in-app modal replaces them so actions always work. */
+
+function showConfirm(message, onConfirm, confirmLabel){
+  modalState = {type:'confirm', message, onConfirm, confirmLabel: confirmLabel || 'Excluir'};
+  render();
+}
+function showPrompt(message, onSubmit){
+  modalState = {type:'prompt', message, value:'', onSubmit};
+  render();
+}
+function showAlert(message){
+  modalState = {type:'alert', message};
+  render();
+}
+function closeModal(){
+  modalState = null;
+  render();
+}
+function confirmModal(){
+  if(!modalState) return;
+  const m = modalState;
+  if(m.type === 'import'){
+    const ok = applyImportedData(m.value || '');
+    if(ok){ modalState = null; }
+    render();
+    return;
+  }
+  modalState = null;
+  if(m.type === 'confirm' && m.onConfirm) m.onConfirm();
+  else if(m.type === 'prompt' && m.onSubmit) m.onSubmit(m.value);
+  render();
+}
+function onModalInputChange(el){
+  if(modalState) modalState.value = el.value;
+}
+function onModalInputKey(el, ev){
+  if(ev.key === 'Enter'){ confirmModal(); }
+  else if(ev.key === 'Escape'){ closeModal(); }
+}
+function onModalTextareaChange(el){
+  if(modalState) modalState.value = el.value;
+}
+function renderModal(){
+  if(!modalState) return '';
+  const m = modalState;
+  if(m.type === 'manage-sellers'){
+    let bodyHtml = `<div class="modal-msg">Vendedoras do Sistema</div>`;
+    bodyHtml += `<div class="extra-vendedor-list">` + SELLERS.map(s => `
+      <div class="extra-vendedor-row">
+        <span style="display:flex;align-items:center;gap:8px;flex:1;font-weight:600;font-size:13.5px;"><span class="th-dot" style="background:${s.color}"></span>${esc(s.label)}</span>
+        <button class="action-btn danger" title="Remover" onclick="removeSistemaVendedor('${s.key}')">✕</button>
+      </div>
+    `).join('') + `</div>`;
+    bodyHtml += `<button class="modal-btn modal-btn-ghost" style="width:100%;margin-top:10px;" onclick="addSistemaVendedor()">+ Adicionar vendedora</button>`;
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-wide">
+          ${bodyHtml}
+          <div class="modal-actions"><button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button></div>
+        </div>
+      </div>
+    `;
+  }
+  let bodyHtml = `<div class="modal-msg">${esc(m.message)}</div>`;
+  let actionsHtml = '';
+  let wideClass = '';
+  if(m.type === 'confirm'){
+    actionsHtml = `
+      <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="modal-btn modal-btn-danger" onclick="confirmModal()">${esc(m.confirmLabel)}</button>
+    `;
+  } else if(m.type === 'prompt'){
+    bodyHtml += `<input id="modal-input" class="modal-input" type="text" autofocus
+      oninput="onModalInputChange(this)" onkeydown="onModalInputKey(this, event)" />`;
+    actionsHtml = `
+      <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="modal-btn modal-btn-primary" onclick="confirmModal()">Adicionar</button>
+    `;
+  } else if(m.type === 'export'){
+    wideClass = ' modal-box-wide';
+    bodyHtml += `<textarea id="modal-textarea" class="modal-textarea" readonly onclick="this.select()">${esc(m.value)}</textarea>`;
+    actionsHtml = `<button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button>`;
+  } else if(m.type === 'import'){
+    wideClass = ' modal-box-wide';
+    bodyHtml += `<textarea id="modal-textarea" class="modal-textarea" placeholder="Cole aqui o texto exportado..." oninput="onModalTextareaChange(this)"></textarea>`;
+    if(m.error) bodyHtml += `<div class="modal-error">${esc(m.error)}</div>`;
+    actionsHtml = `
+      <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="modal-btn modal-btn-primary" onclick="confirmModal()">Restaurar</button>
+    `;
+  } else {
+    actionsHtml = `<button class="modal-btn modal-btn-primary" onclick="closeModal()">OK</button>`;
+  }
+  return `
+    <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+      <div class="modal-box${wideClass}">
+        ${bodyHtml}
+        <div class="modal-actions">${actionsHtml}</div>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------------- Vendas (main sheet) ---------------- */
+
+function csvNum(v){ return (Number(v)||0).toFixed(2).replace('.', ','); }
+
+function exportResumoCSV(){
+  try{
+    const sellerBreakdown = getSellerBreakdown();
+    const partnerBreakdown = getPartnerBreakdown();
+    const scope = partnerMonthFilter === "Todos" ? ('Ano '+yearFilter) : (partnerMonthFilter+'/'+yearFilter);
+    let csv = 'Resumo de Comissoes - ' + scope + '\n\n';
+
+    csv += 'VENDEDORAS\n';
+    csv += 'Vendedora;Sistema;Consultoria;Orgaos Publicos;Cursos;Bonus;Total\n';
+    SELLERS.forEach(s => {
+      const b = sellerBreakdown[s.label] || {sistema:0,consultoria:0,publicos:0,cursos:0,bonus:0};
+      const total = b.sistema+b.consultoria+b.publicos+b.cursos+b.bonus;
+      csv += [s.label, csvNum(b.sistema), csvNum(b.consultoria), csvNum(b.publicos), csvNum(b.cursos), csvNum(b.bonus), csvNum(total)].join(';') + '\n';
+    });
+
+    csv += '\nPARCEIROS\n';
+    csv += 'Parceiro;Sistema;Consultoria;Orgaos Publicos;Cursos;Total\n';
+    partners.forEach(p => {
+      const b = partnerBreakdown[p] || {sistema:0,consultoria:0,publicos:0,cursos:0};
+      const total = b.sistema+b.consultoria+b.publicos+b.cursos;
+      csv += [p, csvNum(b.sistema), csvNum(b.consultoria), csvNum(b.publicos), csvNum(b.cursos), csvNum(total)].join(';') + '\n';
+    });
+
+    const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'resumo-comissoes-' + yearFilter + (partnerMonthFilter!=="Todos" ? '-'+partnerMonthFilter : '') + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch(e){
+    console.error('Falha ao exportar CSV', e);
+    showAlert('Não foi possível gerar o arquivo. Tente novamente.');
+  }
+}
+
+function showExport(){
+  const entities = {};
+  ENTITY_KEYS.forEach(key => {
+    entities[key] = state[key].rows;
+    entities[key+'Vendors'] = state[key].vendors;
+  });
+  const data = {
+    exportedAt: new Date().toISOString(),
+    rows: rows,
+    entities: entities,
+    bonusRows: bonusRows,
+    vendaProducts: vendaProducts,
+    partners: partners,
+    extraYears: extraYears,
+    closedMonths: closedMonths,
+    metas: metas,
+    sistemaSellers: SELLERS,
+  };
+  modalState = {
+    type: 'export',
+    message: 'Copie todo este texto (clique nele pra selecionar tudo, depois Ctrl+C ou Cmd+C) e guarde num bloco de notas. Em outro navegador, use "Importar dados" e cole aqui.',
+    value: JSON.stringify(data),
+  };
+  render();
+}
+
+function showImport(){
+  modalState = { type: 'import', message: 'Cole aqui o texto que você exportou antes:', value: '' };
+  render();
+}
+
+function applyImportedData(text){
+  try{
+    const data = JSON.parse(text);
+    if(!data || !Array.isArray(data.rows)) throw new Error('formato inválido');
+
+    rows = data.rows;
+    migrateYear(rows, 2026);
+    nextId = rows.length ? Math.max(...rows.map(r=>r.id||0)) + 1 : 1;
+
+    ENTITY_KEYS.forEach(key => {
+      // New export format: data.entities[key] / data.entities[key+'Vendors']
+      // Old export format (pre Órgãos Públicos): data[key] / data[key+'Vendors']
+      const rowsSrc = (data.entities && Array.isArray(data.entities[key])) ? data.entities[key]
+        : (Array.isArray(data[key]) ? data[key] : null);
+      const vendorsSrc = (data.entities && Array.isArray(data.entities[key+'Vendors']) && data.entities[key+'Vendors'].length) ? data.entities[key+'Vendors']
+        : (Array.isArray(data[key+'Vendors']) && data[key+'Vendors'].length ? data[key+'Vendors'] : null);
+      if(rowsSrc) state[key].rows = rowsSrc;
+      if(vendorsSrc) state[key].vendors = vendorsSrc;
+      migrateYear(state[key].rows, 2026);
+      state[key].nextId = state[key].rows.length ? Math.max(...state[key].rows.map(r=>r.id||0)) + 1 : 1;
+    });
+
+    if(Array.isArray(data.bonusRows)){
+      bonusRows = data.bonusRows;
+      migrateYear(bonusRows, 2026);
+      bonusNextId = bonusRows.length ? Math.max(...bonusRows.map(r=>r.id||0)) + 1 : 1;
+    }
+    if(Array.isArray(data.vendaProducts)) vendaProducts = data.vendaProducts;
+    if(Array.isArray(data.partners)) partners = data.partners;
+    if(Array.isArray(data.extraYears)) extraYears = data.extraYears;
+    if(Array.isArray(data.closedMonths)) closedMonths = data.closedMonths;
+    if(data.metas && typeof data.metas === 'object') metas = data.metas;
+    if(Array.isArray(data.sistemaSellers) && data.sistemaSellers.length) SELLERS = data.sistemaSellers;
+
+    persist();
+    ENTITY_KEYS.forEach(key => {
+      persistEntityRows(key);
+      persistEntityVendors(key);
+    });
+    persistBonus();
+    persistVendaProducts();
+    persistPartners();
+    persistClosedMonths();
+    persistMetas();
+    persistSistemaSellers();
+    persistExtraYears();
+
+    return true;
+  } catch(e){
+    console.error('Falha ao importar', e);
+    modalState.error = 'Não consegui ler esse texto — confira se colou exatamente o que foi exportado, sem cortar nada.';
+    return false;
+  }
+}
+
+function migrateYear(list, defaultYear){
+  list.forEach(r => { if(r.ano === undefined || r.ano === null){ r.ano = defaultYear; } });
+}
+
+function getKnownYears(){
+  const set = new Set();
+  rows.forEach(r => { if(r.ano) set.add(r.ano); });
+  ENTITY_KEYS.forEach(key => { state[key].rows.forEach(r => { if(r.ano) set.add(r.ano); }); });
+  bonusRows.forEach(r => { if(r.ano) set.add(r.ano); });
+  extraYears.forEach(y => set.add(y));
+  set.add(yearFilter);
+  set.add(new Date().getFullYear());
+  return Array.from(set).sort((a,b) => a-b);
+}
+
+function setYearFilter(y){
+  yearFilter = Number(y);
+  render();
+}
+
+function addYear(){
+  showPrompt("Novo ano (ex: 2027):", (val) => {
+    const y = parseInt(val, 10);
+    if(!y || isNaN(y)) return;
+    if(!extraYears.includes(y)) extraYears.push(y);
+    yearFilter = y;
+    persistExtraYears();
+  });
+}
+
+
+
+
+
+function loadDataSync(){
+  rows = SEED_DATA.slice();
+  migrateYear(rows, 2026);
+  nextId = NEXT_ID_START;
+  initVendaProductsFromRows();
+  render();
+}
+
+/* ---------------- Vendedoras do Sistema (lista editável) ---------------- */
+
+
+
+
+function uniqueSellerKey(name){
+  let base = slug(name) || 'vendedor';
+  let key = base;
+  let i = 2;
+  while(SELLERS.some(s => s.key === key)){
+    key = base + '-' + i;
+    i++;
+  }
+  return key;
+}
+
+function addSistemaVendedor(){
+  showPrompt("Nome da nova vendedora/vendedor:", (name) => {
+    if(!name) return;
+    const trimmed = name.trim();
+    if(!trimmed) return;
+    if(SELLERS.some(s => s.label.toLowerCase() === trimmed.toLowerCase())){
+      showAlert("Essa pessoa já está na lista.");
+      return;
+    }
+    const key = uniqueSellerKey(trimmed);
+    const color = VENDOR_PALETTE[SELLERS.length % VENDOR_PALETTE.length];
+    SELLERS.push({key, label: trimmed, color});
+    persistSistemaSellers();
+  });
+}
+
+function removeSistemaVendedor(key){
+  const s = SELLERS.find(s => s.key === key);
+  if(!s) return;
+  showConfirm(
+    `Remover "${s.label}" da lista de vendedoras do Sistema? Os valores já lançados para ela continuam guardados nos lançamentos antigos, mas a coluna some da tabela e ela deixa de poder ser escolhida em novos lançamentos.`,
+    () => {
+      SELLERS = SELLERS.filter(s => s.key !== key);
+      if(sellerFilter === key) sellerFilter = "Todas";
+      persistSistemaSellers();
+    },
+    "Remover"
+  );
+}
+
+function showManageSellersModal(){
+  modalState = {type:'manage-sellers'};
+  render();
+}
+
+function initVendaProductsFromRows(){
+  const set = new Set();
+  rows.forEach(r => { if(r.venda && r.venda.trim()) set.add(r.venda.trim()); });
+  vendaProducts = Array.from(set).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+}
+function ensureVendaProductsIncludeCurrent(){
+  let changed = false;
+  rows.forEach(r => {
+    if(r.venda && r.venda.trim()){
+      const v = r.venda.trim();
+      if(!vendaProducts.some(p => p.toLowerCase() === v.toLowerCase())){
+        vendaProducts.push(v);
+        changed = true;
+      }
+    }
+  });
+  if(changed) vendaProducts.sort((a,b)=>a.localeCompare(b,'pt-BR'));
+}
+
+
+
+
+
+
+
+
+
+function ensurePartnersIncludeCurrent(){
+  let changed = false;
+  const scan = (list) => list.forEach(r => {
+    if(r.parceiro && r.parceiro.trim()){
+      const v = r.parceiro.trim();
+      if(!partners.some(p => p.toLowerCase() === v.toLowerCase())){
+        partners.push(v);
+        changed = true;
+      }
+    }
+  });
+  scan(rows);
+  ENTITY_KEYS.forEach(key => scan(state[key].rows));
+  if(changed) partners.sort((a,b) => a.localeCompare(b,'pt-BR'));
+}
+
+function addPartner(){
+  showPrompt("Nome do novo parceiro:", (name) => {
+    if(!name) return;
+    const trimmed = name.trim();
+    if(!trimmed) return;
+    if(!partners.some(p => p.toLowerCase() === trimmed.toLowerCase())){
+      partners.push(trimmed);
+      partners.sort((a,b) => a.localeCompare(b,'pt-BR'));
+      persistPartners();
+    }
+  });
+}
+
+function partnerOptionsHtml(selected){
+  return `<option value="">—</option>${partners.map(p => `<option value="${esc(p)}" ${selected===p?'selected':''}>${esc(p)}</option>`).join('')}<option value="__new__">+ Cadastrar novo parceiro...</option>`;
+}
+
+function onParceiroSelect(el){
+  const id = Number(el.dataset.id);
+  if(el.value === '__new__'){
+    showPrompt("Nome do novo parceiro:", (name) => {
+      if(!name) return;
+      const trimmed = name.trim();
+      if(!trimmed) return;
+      if(!partners.some(p => p.toLowerCase() === trimmed.toLowerCase())){
+        partners.push(trimmed);
+        partners.sort((a,b) => a.localeCompare(b,'pt-BR'));
+        persistPartners();
+      }
+      updateCell(id, 'parceiro', trimmed);
+    });
+    return;
+  }
+  updateCell(id, 'parceiro', el.value);
+}
+
+function onEntityParceiroSelect(el){
+  const key = el.dataset.entity;
+  const id = Number(el.dataset.id);
+  if(el.value === '__new__'){
+    showPrompt("Nome do novo parceiro:", (name) => {
+      if(!name) return;
+      const trimmed = name.trim();
+      if(!trimmed) return;
+      if(!partners.some(p => p.toLowerCase() === trimmed.toLowerCase())){
+        partners.push(trimmed);
+        partners.sort((a,b) => a.localeCompare(b,'pt-BR'));
+        persistPartners();
+      }
+      updateEntityCell(key, id, 'parceiro', trimmed);
+    });
+    return;
+  }
+  updateEntityCell(key, id, 'parceiro', el.value);
+}
+
+function parsePercent(v){
+  if(v===null || v===undefined || v==='') return 0;
+  const n = parseFloat(String(v).replace('%','').replace(',','.').trim());
+  return isNaN(n) ? 0 : n;
+}
+
+/* ---------------- Pendências (incomplete-entry alerts) ---------------- */
+
+function isVendasRowPending(r){
+  const hasContent = (r.cliente && r.cliente.trim()) || (r.venda && r.venda.trim());
+  if(!hasContent) return false;
+  if(!r.valor || Number(r.valor) <= 0) return true;
+  if(r.parceiro && !(Number(r.participacao) > 0)) return true;
+  return false;
+}
+function isVendasRowDuplicate(r){
+  if(!r.cliente || !r.cliente.trim()) return false;
+  const name = r.cliente.trim().toLowerCase();
+  return rows.some(x => x.id !== r.id && x.mes === r.mes && (x.ano||2026) === (r.ano||2026) && x.cliente && x.cliente.trim().toLowerCase() === name);
+}
+function isEntityRowDuplicate(key, r){
+  const mainField = ENTITIES[key].fields[0].key;
+  if(!r[mainField] || !r[mainField].trim()) return false;
+  const name = r[mainField].trim().toLowerCase();
+  return state[key].rows.some(x => x.id !== r.id && x.mes === r.mes && (x.ano||2026) === (r.ano||2026) && x[mainField] && x[mainField].trim().toLowerCase() === name);
+}
+function isEntityRowPending(r){
+  const mainVal = Object.values(r).some(v => typeof v === 'string' && v.trim());
+  if(!r.valorContrato || Number(r.valorContrato) <= 0) return true;
+  if(r.vendedor && !(Number(r.comissaoPercent) > 0)) return true;
+  if(r.vendedor2 && !(Number(r.comissaoPercent2) > 0)) return true;
+  if(r.vendedor3 && !(Number(r.comissaoPercent3) > 0)) return true;
+  if(r.parceiro && !(Number(r.participacao) > 0)) return true;
+  if(Array.isArray(r.extraVendedores) && r.extraVendedores.some(ev => ev.vendedor && !(Number(ev.percent) > 0))) return true;
+  return false;
+}
+function isBonusRowPending(r){
+  if(!r.vendedor) return true;
+  if(!r.valor || Number(r.valor) <= 0) return true;
+  return false;
+}
+
+/* ---------------- Fechar mês ---------------- */
+
+/* ---------------- Pagamento realizado ---------------- */
+
+function getRowForPayment(entityKey, id){
+  return entityKey ? state[entityKey].rows.find(r => r.id === id) : rows.find(r => r.id === id);
+}
+function persistAfterPayment(entityKey){
+  if(entityKey) persistEntityRows(entityKey); else persist();
+}
+function onPagamentoToggle(el, entityKey){
+  const id = Number(el.dataset.id);
+  const r = getRowForPayment(entityKey, id);
+  if(!r) return;
+  if(isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    render();
+    return;
+  }
+  r.pago = el.checked;
+  if(r.pago && !r.mesPagamento) r.mesPagamento = r.mes;
+  if(!r.pago) r.mesPagamento = null;
+  persistAfterPayment(entityKey);
+  render();
+}
+function onPagamentoMesSelect(el, entityKey){
+  const id = Number(el.dataset.id);
+  const r = getRowForPayment(entityKey, id);
+  if(!r) return;
+  if(isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    render();
+    return;
+  }
+  r.mesPagamento = el.value;
+  persistAfterPayment(entityKey);
+}
+function setPagamentosMonthFilter(m){ pagamentosMonthFilter = m; render(); }
+
+function getPagamentosRealizados(){
+  const out = [];
+  rows.forEach(r => {
+    if(!r.pago) return;
+    if((r.ano||2026) !== yearFilter) return;
+    if(pagamentosMonthFilter !== "Todos" && r.mesPagamento !== pagamentosMonthFilter) return;
+    out.push({origem:"Sistema", mesVenda:r.mes, mesPagamento:r.mesPagamento, label:r.cliente||r.venda||"", valor:Number(r.valor)||0});
+  });
+  ENTITY_KEYS.forEach(key => {
+    if(!ENTITIES[key].hasPagamento) return;
+    const mainField = ENTITIES[key].fields[0].key;
+    state[key].rows.forEach(r => {
+      if(!r.pago) return;
+      if((r.ano||2026) !== yearFilter) return;
+      if(pagamentosMonthFilter !== "Todos" && r.mesPagamento !== pagamentosMonthFilter) return;
+      out.push({origem:ENTITIES[key].tabLabel, mesVenda:r.mes, mesPagamento:r.mesPagamento, label:r[mainField]||"", valor:Number(r.valorContrato)||0});
+    });
+  });
+  return out;
+}
+
+function monthsElapsedSince(mes, ano){
+  const idx = MONTHS.indexOf(mes);
+  if(idx === -1) return 0;
+  const now = new Date();
+  const nowMonthIdx = now.getMonth();
+  const nowYear = now.getFullYear();
+  return (nowYear - (ano||2026))*12 + (nowMonthIdx - idx);
+}
+
+function setAgingThreshold(el){
+  const v = parseInt(el.value, 10);
+  agingThresholdMonths = (!v || v < 0) ? 0 : v;
+  render();
+}
+
+function getPendingPayments(){
+  const out = [];
+  rows.forEach(r => {
+    if(r.pago) return;
+    const hasContent = (r.cliente && r.cliente.trim()) || (r.venda && r.venda.trim());
+    if(!hasContent) return;
+    if(!r.valor || Number(r.valor) <= 0) return;
+    out.push({origem:"Sistema", mes:r.mes, ano:r.ano||2026, label:r.cliente||r.venda, valor:Number(r.valor)||0});
+  });
+  ENTITY_KEYS.forEach(key => {
+    if(!ENTITIES[key].hasPagamento) return;
+    const mainField = ENTITIES[key].fields[0].key;
+    state[key].rows.forEach(r => {
+      if(r.pago) return;
+      if(!r[mainField] || !r[mainField].trim()) return;
+      if(!r.valorContrato || Number(r.valorContrato) <= 0) return;
+      out.push({origem:ENTITIES[key].tabLabel, mes:r.mes, ano:r.ano||2026, label:r[mainField], valor:Number(r.valorContrato)||0});
+    });
+  });
+  out.forEach(e => { e.monthsElapsed = monthsElapsedSince(e.mes, e.ano); });
+  out.sort((a,b) => b.monthsElapsed - a.monthsElapsed);
+  return out;
+}
+
+function renderPagamentosSection(){
+  const entries = getPagamentosRealizados();
+  const total = entries.reduce((s,e) => s+e.valor, 0);
+
+  const pending = getPendingPayments();
+  const pendingOverThreshold = pending.filter(e => e.monthsElapsed >= agingThresholdMonths);
+  const totalPending = pending.reduce((s,e) => s+e.valor, 0);
+
+  const agingClass = (m) => m >= 6 ? 'aging-red' : (m >= 3 ? 'aging-orange' : (m >= 1 ? 'aging-yellow' : ''));
+  const agingLabel = (m) => m <= 0 ? 'este mês' : (m === 1 ? '1 mês' : m+' meses');
+
+  const pendingRowsHtml = pendingOverThreshold.length === 0
+    ? `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhum pagamento pendente há mais de ${agingThresholdMonths} mês${agingThresholdMonths===1?'':'es'}. 🎉</td></tr>`
+    : pendingOverThreshold.map(e => `
+      <tr class="${agingClass(e.monthsElapsed)}">
+        <td>${esc(e.origem)}</td>
+        <td>${esc(e.label)}</td>
+        <td>${monthNumber(e.mes)}/${e.ano}</td>
+        <td class="num" style="font-weight:800;">${agingLabel(e.monthsElapsed)}</td>
+        <td class="num col-valor">${fmtMoney(e.valor)}</td>
+      </tr>
+    `).join('');
+
+  const agingSectionHtml = `
+    <div class="resumo-section-title">⏳ Pendentes de recebimento</div>
+    <div class="toolbar">
+      <div class="count">
+        <b>${pendingOverThreshold.length}</b> de <b>${pending.length}</b> pendente${pending.length===1?"":"s"} no total (${fmtMoney(totalPending)})
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:12.5px;color:var(--ink-soft);font-weight:600;">Mostrar pendentes há mais de</span>
+        <input type="number" min="0" value="${agingThresholdMonths}" onchange="setAgingThreshold(this)" style="width:50px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;" />
+        <span style="font-size:12.5px;color:var(--ink-soft);font-weight:600;">mês(es)</span>
+      </div>
+    </div>
+    <div class="table-card" style="margin-bottom:30px;">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Origem</th>
+              <th>Cliente / Empresa / Órgão</th>
+              <th>Mês da venda</th>
+              <th class="num">Em aberto há</th>
+              <th class="num col-valor">Valor</th>
+            </tr>
+          </thead>
+          <tbody>${pendingRowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  const pillsHtml = ['Todos', ...MONTHS].map(m => {
+    const active = m === pagamentosMonthFilter ? ' active' : '';
+    return `<button class="pill${active}" onclick="setPagamentosMonthFilter('${m}')">${m}</button>`;
+  }).join('');
+
+  const rowsHtml = entries.length === 0
+    ? `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhum pagamento marcado como realizado ainda neste filtro. Marque a caixinha "Pago" nas abas Sistema, Consultoria ou Consultoria Órgãos Públicos.</td></tr>`
+    : entries.map(e => `
+      <tr>
+        <td>${monthNumber(e.mesPagamento)}</td>
+        <td>${esc(e.origem)}</td>
+        <td>${esc(e.label)}</td>
+        <td class="num">${e.mesVenda===e.mesPagamento?'—':esc(e.mesVenda)}</td>
+        <td class="num col-valor">${fmtMoney(e.valor)}</td>
+      </tr>
+    `).join('');
+
+  return `
+    ${agingSectionHtml}
+
+    <div class="resumo-section-title">✅ Pagamentos realizados</div>
+    <div class="filters-row">
+      <div class="months">${pillsHtml}</div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi-card total">
+        <div class="kpi-label">Total pago${pagamentosMonthFilter!=="Todos" ? " · "+esc(pagamentosMonthFilter) : ""}</div>
+        <div class="kpi-value">${fmtMoney(total)}</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="count"><b>${entries.length}</b> pagamento${entries.length===1?"":"s"} realizado${entries.length===1?"":"s"}</div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:58px">Mês pgto.</th>
+              <th>Origem</th>
+              <th>Cliente / Empresa / Órgão</th>
+              <th class="num">Mês da venda (se diferente)</th>
+              <th class="num col-valor">Valor do Contrato</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="footnote" style="text-align:left;color:var(--ink-faint);font-size:12px;">
+      Este resumo é somente leitura — para editar, vá até a aba de origem do lançamento e mexa na coluna "Pagamento".
+    </div>
+  `;
+}
+
+/* ---------------- Parcelamento de contratos ---------------- */
+
+function nextMonthYear(mes, ano, stepsForward){
+  let idx = MONTHS.indexOf(mes) + stepsForward;
+  const yearOffset = Math.floor(idx / 12);
+  idx = ((idx % 12) + 12) % 12;
+  return {mes: MONTHS[idx], ano: (ano||2026) + yearOffset};
+}
+
+function splitIntoInstallments(total, n){
+  const amounts = [];
+  let remaining = total;
+  const base = Math.round((total/n)*100)/100;
+  for(let i=0;i<n;i++){
+    if(i === n-1) amounts.push(Math.round(remaining*100)/100);
+    else { amounts.push(base); remaining -= base; }
+  }
+  return amounts;
+}
+
+function parcelarRow(id){
+  const r = rows.find(r => r.id === id);
+  if(!r) return;
+  if(isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    return;
+  }
+  if(!r.valor || Number(r.valor) <= 0){
+    showAlert("Preencha o Valor do Contrato antes de parcelar.");
+    return;
+  }
+  showPrompt("Em quantas parcelas mensais? (2 a 24)", (val) => {
+    const n = parseInt(val, 10);
+    if(!n || n < 2 || n > 24){ showAlert("Digite um número de parcelas entre 2 e 24."); return; }
+    const amounts = splitIntoInstallments(Number(r.valor), n);
+    const origMes = r.mes, origAno = r.ano||2026;
+    r.valor = amounts[0];
+    r.parcelaLabel = `1/${n}`;
+    for(let i=1;i<n;i++){
+      const nm = nextMonthYear(origMes, origAno, i);
+      const copy = {...r, id: nextId++, mes: nm.mes, ano: nm.ano, valor: amounts[i], pago:false, mesPagamento:null, parcelaLabel:`${i+1}/${n}`};
+      rows.push(copy);
+    }
+    persist();
+  });
+}
+
+function isMonthClosed(ano, mes){
+  return closedMonths.indexOf(ano+'-'+mes) !== -1;
+}
+function toggleMonthClosed(ano, mes){
+  const key = ano+'-'+mes;
+  const idx = closedMonths.indexOf(key);
+  if(idx === -1) closedMonths.push(key);
+  else closedMonths.splice(idx,1);
+  persistClosedMonths();
+  render();
+}
+
+
+
+/* ---------------- Metas mensais ---------------- */
+
+function metaKey(ano, mes, vendedor){ return ano+'-'+mes+'-'+vendedor; }
+function getMeta(ano, mes, vendedor){ return metas[metaKey(ano,mes,vendedor)] || 0; }
+function setMetaValue(ano, mes, vendedor, valor){
+  const key = metaKey(ano,mes,vendedor);
+  if(valor === null || valor === undefined || isNaN(valor) || valor <= 0) delete metas[key];
+  else metas[key] = valor;
+  persistMetas();
+}
+
+
+function onMetaInput(el){
+  const vendedor = el.dataset.vendedor;
+  const v = el.value === '' ? null : parseFloat(el.value);
+  setMetaValue(yearFilter, partnerMonthFilter, vendedor, v);
+  updateMetaProgress(vendedor);
+}
+function updateMetaProgress(vendedor){
+  const bar = document.getElementById('meta-bar-'+slug(vendedor));
+  const pctLabel = document.getElementById('meta-pct-'+slug(vendedor));
+  if(!bar || !pctLabel) return;
+  const meta = getMeta(yearFilter, partnerMonthFilter, vendedor);
+  const earned = (getSellerBreakdown()[vendedor] ? Object.values(getSellerBreakdown()[vendedor]).reduce((a,b)=>a+b,0) : 0);
+  const pct = meta > 0 ? Math.round((earned/meta)*100) : 0;
+  bar.style.width = Math.min(pct,100) + '%';
+  bar.className = 'meta-bar-fill' + (pct >= 100 ? ' complete' : '');
+  pctLabel.textContent = pct + '%';
+}
+
+function getPartnerEntries(){
+  const out = [];
+  const sources = [
+    {origem:'Sistema', list: rows, valorField:'valor', labelFn: r => r.cliente || r.venda || ''},
+    {origem:'Consultoria', list: state.consultoria.rows, valorField:'valorContrato', labelFn: r => r.empresa || ''},
+    {origem:'Consultoria Órgãos Públicos', list: state.publicos.rows, valorField:'valorContrato', labelFn: r => r.orgao || ''},
+    {origem:'Cursos', list: state.cursos.rows, valorField:'valorContrato', labelFn: r => r.curso || ''},
+  ];
+  sources.forEach(src => {
+    src.list.forEach(r => {
+      if(!r.parceiro) return;
+      if((r.ano||2026) !== yearFilter) return;
+      if(partnerMonthFilter !== "Todos" && r.mes !== partnerMonthFilter) return;
+      const valorContrato = Number(r[src.valorField])||0;
+      const pct = parsePercent(r.participacao);
+      const honorario = valorContrato * (pct/100);
+      out.push({ origem: src.origem, mes: r.mes, label: src.labelFn(r), valorContrato, parceiro: r.parceiro, pct, honorario });
+    });
+  });
+  return out;
+}
+
+function computePartnerTotals(entries){
+  const t = {};
+  partners.forEach(p => t[p] = 0);
+  entries.forEach(e => {
+    if(t[e.parceiro] === undefined) t[e.parceiro] = 0;
+    t[e.parceiro] += e.honorario;
+  });
+  return t;
+}
+
+function setPartnerMonthFilter(m){ partnerMonthFilter = m; render(); }
+function togglePartnersValues(){ partnersValuesRevealed = !partnersValuesRevealed; render(); }
+
+/* ---------------- Bônus e Metas ---------------- */
+
+
+
+
+
+function addBonusRow(){
+  const mes = bonusFilter === "Todos" ? "Janeiro" : bonusFilter;
+  if(isMonthClosed(yearFilter, mes)){
+    showAlert("Este mês está fechado para novos lançamentos. Reabra em Resumo Geral para poder editar.");
+    return;
+  }
+  bonusRows.unshift({id: bonusNextId++, mes, ano: yearFilter, vendedor:"", descricao:"", valor:null});
+  persistBonus();
+  render();
+}
+
+function duplicateBonusRow(id){
+  const r = bonusRows.find(r => r.id === id);
+  if(!r) return;
+  bonusRows.unshift({...r, id: bonusNextId++});
+  persistBonus();
+  render();
+}
+
+function deleteBonusRow(id){
+  const r = bonusRows.find(r => r.id === id);
+  if(r && isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado. Reabra em Resumo Geral para poder excluir.");
+    return;
+  }
+  showConfirm("Excluir este bônus/meta?", () => {
+    bonusRows = bonusRows.filter(r => r.id !== id);
+    persistBonus();
+  });
+}
+
+function updateBonusCell(id, field, value){
+  const r = bonusRows.find(r => r.id === id);
+  if(!r) return;
+  if(isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    render();
+    return;
+  }
+  r[field] = value;
+  persistBonus();
+  if(field === "mes" || field === "vendedor") render();
+  else updateBonusSummaries();
+}
+
+function onBonusMonthSelect(el){
+  updateBonusCell(Number(el.dataset.id), "mes", el.value);
+}
+function onBonusVendedorSelect(el){
+  updateBonusCell(Number(el.dataset.id), "vendedor", el.value);
+}
+function onBonusTextInput(el){
+  updateBonusCell(Number(el.dataset.id), el.dataset.field, el.value);
+}
+function onBonusNumInput(el){
+  const v = el.value;
+  updateBonusCell(Number(el.dataset.id), "valor", v === "" ? null : parseFloat(v));
+}
+
+function setBonusFilter(m){ bonusFilter = m; render(); }
+function toggleBonusValues(){ bonusValuesRevealed = !bonusValuesRevealed; render(); }
+
+function getBonusVisible(){
+  let list = bonusRows.filter(r => (r.ano||2026) === yearFilter);
+  list = bonusFilter === "Todos" ? list : list.filter(r => r.mes === bonusFilter);
+  return list;
+}
+
+function computeBonusTotals(visible){
+  const t = {};
+  SELLERS.forEach(s => t[s.label] = 0);
+  visible.forEach(r => {
+    if(!r.vendedor) return;
+    if(t[r.vendedor] === undefined) t[r.vendedor] = 0;
+    t[r.vendedor] += Number(r.valor)||0;
+  });
+  return t;
+}
+
+function updateBonusSummaries(){
+  const visible = getBonusVisible();
+  const totals = computeBonusTotals(visible);
+  SELLERS.forEach(s => {
+    const el = document.getElementById('kpi-bonus-'+s.key);
+    if(el) el.textContent = bonusValuesRevealed ? fmtMoney(totals[s.label]) : '••••••';
+  });
+  const totalEl = document.getElementById('kpi-bonus-total');
+  if(totalEl) totalEl.textContent = fmtMoney(visible.reduce((s,r)=>s+(Number(r.valor)||0),0));
+  const countEl = document.getElementById('count-bonus');
+  if(countEl){
+    countEl.innerHTML = `<b>${visible.length}</b> lançamento${visible.length===1?"":"s"} ${bonusFilter!=="Todos" ? "em <b>"+esc(bonusFilter)+"</b>" : ""}`;
+  }
+}
+
+function renderBonusSection(){
+  const visible = getBonusVisible();
+  const totals = computeBonusTotals(visible);
+  const totalBonus = visible.reduce((s,r)=>s+(Number(r.valor)||0),0);
+
+  const pillsHtml = ['Todos', ...MONTHS].map(m => {
+    const active = m === bonusFilter ? ' active' : '';
+    return `<button class="pill${active}" onclick="setBonusFilter('${m}')">${m}</button>`;
+  }).join('');
+
+  const kpiToggleHtml = `
+    <div class="kpi-toggle-row">
+      <button class="eye-toggle" onclick="toggleBonusValues()">${bonusValuesRevealed ? '🙈 Ocultar valores' : '👁 Mostrar valores'}</button>
+    </div>
+  `;
+
+  const kpiCardsHtml = SELLERS.map(s => `
+    <div class="kpi-card" style="--kc:${esc(s.color)}">
+      <div class="kpi-label"><span class="kpi-dot"></span>${esc(s.label)}</div>
+      <div class="kpi-value${bonusValuesRevealed?'':' masked'}" id="kpi-bonus-${s.key}">${bonusValuesRevealed ? fmtMoney(totals[s.label]) : '••••••'}</div>
+    </div>
+  `).join('') + `
+    <div class="kpi-card total">
+      <div class="kpi-label">Total em bônus/metas</div>
+      <div class="kpi-value" id="kpi-bonus-total">${fmtMoney(totalBonus)}</div>
+    </div>
+  `;
+
+  const rowsHtml = visible.length === 0
+    ? `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhum bônus ou meta lançada ainda. Clique em "+ Novo bônus" para começar.</td></tr>`
+    : visible.map(row => `
+      <tr class="${isBonusRowPending(row) ? 'row-pending' : ''}${isMonthClosed(row.ano||2026,row.mes) ? ' row-locked' : ''}">
+        <td>
+          <select data-id="${row.id}" onchange="onBonusMonthSelect(this)" title="${esc(row.mes)}">
+            ${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthNumber(m)}</option>`).join('')}
+          </select>
+          ${isBonusRowPending(row) ? '<span class="pending-badge" title="Falta vendedor ou valor">⚠️</span>' : ''}
+          ${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}
+        </td>
+        <td><select data-id="${row.id}" onchange="onBonusVendedorSelect(this)"><option value="">—</option>${SELLERS.map(s => `<option value="${esc(s.label)}" ${row.vendedor===s.label?'selected':''}>${esc(s.label)}</option>`).join('')}</select></td>
+        <td><input type="text" data-id="${row.id}" data-field="descricao" value="${esc(row.descricao)}" placeholder="Ex: Meta do 1º trimestre batida" oninput="onBonusTextInput(this)" /></td>
+        <td class="col-valor"><div class="currency-wrap"><span class="currency-prefix">R$</span><input class="num" type="number" step="0.01" placeholder="—" value="${row.valor===null||row.valor===undefined?'':row.valor}" data-id="${row.id}" oninput="onBonusNumInput(this)" /></div></td>
+        <td class="del-cell">
+          <div class="row-actions">
+            <button class="action-btn" title="Duplicar" onclick="duplicateBonusRow(${row.id})">⎘</button>
+            <button class="action-btn danger" title="Excluir" onclick="deleteBonusRow(${row.id})">✕</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+
+  return `
+    ${kpiToggleHtml}
+    <div class="kpis">${kpiCardsHtml}</div>
+
+    <div class="filters-row">
+      <div class="months">${pillsHtml}</div>
+    </div>
+
+    <div class="toolbar">
+      <div class="count" id="count-bonus"><b>${visible.length}</b> lançamento${visible.length===1?"":"s"} ${bonusFilter!=="Todos" ? "em <b>"+esc(bonusFilter)+"</b>" : ""}${visible.filter(isBonusRowPending).length ? ` · <span style="color:#B45309;">⚠️ ${visible.filter(isBonusRowPending).length} incompleto${visible.filter(isBonusRowPending).length===1?'':'s'}</span>` : ''}</div>
+      <button class="btn-add" onclick="addBonusRow()">+ Novo bônus</button>
+    </div>
+
+    <div class="table-card">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:58px">Mês</th>
+              <th>Vendedor</th>
+              <th>Descrição (bônus / meta batida)</th>
+              <th class="num col-valor">Valor</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------------- Resumo Geral (vendedores + parceiros) ---------------- */
+
+function getSellerBreakdown(){
+  const by = {};
+  SELLERS.forEach(s => { by[s.label] = {sistema:0, consultoria:0, publicos:0, cursos:0, bonus:0}; });
+  const ensure = (name) => { if(!by[name]) by[name] = {sistema:0, consultoria:0, publicos:0, cursos:0, bonus:0}; };
+
+  rows.forEach(r => {
+    if((r.ano||2026) !== yearFilter) return;
+    if(partnerMonthFilter !== "Todos" && r.mes !== partnerMonthFilter) return;
+    SELLERS.forEach(s => { by[s.label].sistema += Number(r[s.key])||0; });
+  });
+
+  ENTITY_KEYS.forEach(key => {
+    state[key].rows.forEach(r => {
+      if((r.ano||2026) !== yearFilter) return;
+      if(partnerMonthFilter !== "Todos" && r.mes !== partnerMonthFilter) return;
+      const base = entityRemainingAfterPartner(r);
+      getRowSellerAssignments(r).forEach(a => {
+        ensure(a.vendedor);
+        by[a.vendedor][key] += base * (a.percent/100);
+      });
+    });
+  });
+
+  bonusRows.forEach(r => {
+    if((r.ano||2026) !== yearFilter) return;
+    if(partnerMonthFilter !== "Todos" && r.mes !== partnerMonthFilter) return;
+    if(!r.vendedor) return;
+    ensure(r.vendedor);
+    by[r.vendedor].bonus += Number(r.valor)||0;
+  });
+
+  return by;
+}
+
+function getSellerGrandTotals(){
+  const breakdown = getSellerBreakdown();
+  const totals = {};
+  Object.keys(breakdown).forEach(name => {
+    const b = breakdown[name];
+    totals[name] = b.sistema + b.consultoria + b.publicos + b.cursos + b.bonus;
+  });
+  return totals;
+}
+
+function getPartnerBreakdown(){
+  const by = {};
+  partners.forEach(p => { by[p] = {sistema:0, consultoria:0, publicos:0, cursos:0}; });
+  const ensure = (name) => { if(!by[name]) by[name] = {sistema:0, consultoria:0, publicos:0, cursos:0}; };
+
+  rows.forEach(r => {
+    if((r.ano||2026) !== yearFilter) return;
+    if(partnerMonthFilter !== "Todos" && r.mes !== partnerMonthFilter) return;
+    if(!r.parceiro) return;
+    ensure(r.parceiro);
+    by[r.parceiro].sistema += (Number(r.valor)||0) * (parsePercent(r.participacao)/100);
+  });
+
+  ENTITY_KEYS.forEach(key => {
+    state[key].rows.forEach(r => {
+      if((r.ano||2026) !== yearFilter) return;
+      if(partnerMonthFilter !== "Todos" && r.mes !== partnerMonthFilter) return;
+      if(!r.parceiro) return;
+      ensure(r.parceiro);
+      by[r.parceiro][key] += (Number(r.valorContrato)||0) * (parsePercent(r.participacao)/100);
+    });
+  });
+
+  return by;
+}
+
+function getMonthlyTotals(){
+  const totals = {};
+  MONTHS.forEach(m => totals[m] = 0);
+  rows.forEach(r => {
+    if((r.ano||2026) !== yearFilter) return;
+    SELLERS.forEach(s => { totals[r.mes] += Number(r[s.key])||0; });
+  });
+  ENTITY_KEYS.forEach(key => {
+    state[key].rows.forEach(r => {
+      if((r.ano||2026) !== yearFilter) return;
+      const base = entityRemainingAfterPartner(r);
+      getRowSellerAssignments(r).forEach(a => {
+        totals[r.mes] += base * (a.percent/100);
+      });
+    });
+  });
+  bonusRows.forEach(r => {
+    if((r.ano||2026) !== yearFilter) return;
+    totals[r.mes] += Number(r.valor)||0;
+  });
+  return totals;
+}
+
+function renderMonthlyChart(){
+  const totals = getMonthlyTotals();
+  const values = MONTHS.map(m => totals[m]);
+  const max = Math.max(...values, 1);
+  const w = 760, h = 180, padBottom = 24, padTop = 10, barGap = 6;
+  const barW = (w / 12) - barGap;
+  const bars = MONTHS.map((m,i) => {
+    const val = values[i];
+    const barH = Math.max((val/max) * (h-padTop-padBottom), val>0?2:0);
+    const x = i * (w/12) + barGap/2;
+    const y = h - padBottom - barH;
+    const fill = m === partnerMonthFilter ? 'var(--primary)' : '#C7C2FB';
+    const tooltipVal = partnersValuesRevealed ? fmtMoney(val) : 'valor oculto';
+    return `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="3" fill="${fill}">
+      <title>${m}: ${tooltipVal}</title>
+    </rect>
+    <text x="${x+barW/2}" y="${h-6}" text-anchor="middle" font-size="10" fill="var(--ink-faint)">${monthNumber(m)}</text>`;
+  }).join('');
+  return `
+    <div class="chart-card">
+      <div class="resumo-section-title" style="margin-bottom:4px;">Evolução mensal — ${yearFilter} (todas as origens somadas)</div>
+      <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="overflow:visible;">${bars}</svg>
+    </div>
+  `;
+}
+
+function renderParceirosSection(){
+  const entries = getPartnerEntries();
+  const totals = computePartnerTotals(entries);
+  const totalHonorarios = entries.reduce((s,e) => s+e.honorario, 0);
+  const sellerTotals = getSellerGrandTotals();
+  const grandTotalSellers = SELLERS.reduce((s,sel) => s+(sellerTotals[sel.label]||0), 0);
+  const sellerBreakdown = getSellerBreakdown();
+  const partnerBreakdown = getPartnerBreakdown();
+  const maskOr = (v) => partnersValuesRevealed ? fmtMoney(v) : '••••';
+
+  const metasPanelHtml = partnerMonthFilter === "Todos" ? '' : `
+    <div class="resumo-section-title">Metas de ${esc(partnerMonthFilter)}/${yearFilter}</div>
+    <div class="metas-panel">
+      ${SELLERS.map(s => {
+        const meta = getMeta(yearFilter, partnerMonthFilter, s.label);
+        const earned = Object.values(sellerBreakdown[s.label] || {}).reduce((a,b)=>a+b,0);
+        const pct = meta > 0 ? Math.round((earned/meta)*100) : 0;
+        return `
+          <div class="meta-row">
+            <span class="meta-name"><span class="th-dot" style="background:${s.color}"></span>${esc(s.label)}</span>
+            <div class="meta-input-wrap"><span class="currency-prefix">R$</span><input class="num" type="number" step="50" placeholder="Definir meta" value="${meta||''}" data-vendedor="${esc(s.label)}" onchange="onMetaInput(this)" /></div>
+            <div class="meta-bar-track"><div class="meta-bar-fill${pct>=100?' complete':''}" id="meta-bar-${slug(s.label)}" style="width:${Math.min(pct,100)}%"></div></div>
+            <span class="meta-pct" id="meta-pct-${slug(s.label)}">${meta>0?pct+'%':'—'}</span>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  const isMonthClosedNow = partnerMonthFilter !== "Todos" && isMonthClosed(yearFilter, partnerMonthFilter);
+  const closeButtonHtml = partnerMonthFilter === "Todos" ? '' : `
+    <button class="eye-toggle${isMonthClosedNow?' danger-toggle':''}" onclick="toggleMonthClosed(${yearFilter}, '${partnerMonthFilter}')">
+      ${isMonthClosedNow ? '🔓 Reabrir ' + esc(partnerMonthFilter) : '🔒 Fechar ' + esc(partnerMonthFilter)}
+    </button>
+  `;
+  const exportPrintHtml = `
+    <button class="eye-toggle" onclick="exportResumoCSV()">📊 Baixar Excel (CSV)</button>
+    <button class="eye-toggle" onclick="window.print()">🖨️ Imprimir / PDF</button>
+  `;
+
+  const sellerBreakdownRowsHtml = SELLERS.map(s => {
+    const b = sellerBreakdown[s.label] || {sistema:0,consultoria:0,publicos:0,cursos:0,bonus:0};
+    const total = b.sistema + b.consultoria + b.publicos + b.cursos + b.bonus;
+    return `
+      <tr>
+        <td><span class="th-dot" style="background:${s.color}"></span>${esc(s.label)}</td>
+        <td class="num">${maskOr(b.sistema)}</td>
+        <td class="num">${maskOr(b.consultoria)}</td>
+        <td class="num">${maskOr(b.publicos)}</td>
+        <td class="num">${maskOr(b.cursos)}</td>
+        <td class="num">${maskOr(b.bonus)}</td>
+        <td class="num" style="font-weight:800;">${maskOr(total)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const partnerBreakdownRowsHtml = partners.length === 0
+    ? `<tr class="empty-row"><td colspan="6"><span class="empty-icon">◌</span>Nenhum parceiro cadastrado ainda.</td></tr>`
+    : partners.map((p,i) => {
+        const b = partnerBreakdown[p] || {sistema:0,consultoria:0,publicos:0,cursos:0};
+        const total = b.sistema + b.consultoria + b.publicos + b.cursos;
+        return `
+          <tr>
+            <td><span class="th-dot" style="background:${VENDOR_PALETTE[i % VENDOR_PALETTE.length]}"></span>${esc(p)}</td>
+            <td class="num">${maskOr(b.sistema)}</td>
+            <td class="num">${maskOr(b.consultoria)}</td>
+            <td class="num">${maskOr(b.publicos)}</td>
+            <td class="num">${maskOr(b.cursos)}</td>
+            <td class="num" style="font-weight:800;">${maskOr(total)}</td>
+          </tr>
+        `;
+      }).join('');
+
+  const pillsHtml = ['Todos', ...MONTHS].map(m => {
+    const active = m === partnerMonthFilter ? ' active' : '';
+    return `<button class="pill${active}" onclick="setPartnerMonthFilter('${m}')">${m}</button>`;
+  }).join('');
+
+  const kpiToggleHtml = `
+    <div class="kpi-toggle-row">
+      <button class="eye-toggle" onclick="togglePartnersValues()">${partnersValuesRevealed ? '🙈 Ocultar valores' : '👁 Mostrar valores'}</button>
+    </div>
+  `;
+
+  const sellerKpiCardsHtml = SELLERS.map(s => `
+    <div class="kpi-card" style="--kc:${esc(s.color)}">
+      <div class="kpi-label"><span class="kpi-dot"></span>${esc(s.label)}</div>
+      <div class="kpi-value${partnersValuesRevealed?'':' masked'}">${partnersValuesRevealed ? fmtMoney(sellerTotals[s.label]||0) : '••••••'}</div>
+    </div>
+  `).join('') + `
+    <div class="kpi-card total">
+      <div class="kpi-label">Total vendedoras</div>
+      <div class="kpi-value">${fmtMoney(grandTotalSellers)}</div>
+    </div>
+  `;
+
+  const kpiCardsHtml = partners.map((p, i) => `
+    <div class="kpi-card" style="--kc:${VENDOR_PALETTE[i % VENDOR_PALETTE.length]}">
+      <div class="kpi-label"><span class="kpi-dot"></span>${esc(p)}</div>
+      <div class="kpi-value${partnersValuesRevealed?'':' masked'}">${partnersValuesRevealed ? fmtMoney(totals[p]||0) : '••••••'}</div>
+    </div>
+  `).join('') + `
+    <div class="kpi-card total">
+      <div class="kpi-label">Total honorários</div>
+      <div class="kpi-value">${fmtMoney(totalHonorarios)}</div>
+    </div>
+  `;
+
+  const emptyMsg = partners.length === 0
+    ? 'Nenhum parceiro cadastrado ainda. Clique em "+ Parceiro" para cadastrar o primeiro.'
+    : 'Nenhum honorário neste filtro — confira se o percentual do parceiro está preenchido em alguma venda/lançamento.';
+
+  const rowsHtml = entries.length === 0
+    ? `<tr class="empty-row"><td colspan="7"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
+    : entries.map(e => `
+      <tr>
+        <td>${esc(e.mes)}</td>
+        <td>${esc(e.origem)}</td>
+        <td>${esc(e.label)}</td>
+        <td class="num">${fmtMoney(e.valorContrato)}</td>
+        <td>${esc(e.parceiro)}</td>
+        <td class="num">${e.pct}%</td>
+        <td class="num">${fmtMoney(e.honorario)}</td>
+      </tr>
+    `).join('');
+
+  return `
+    ${kpiToggleHtml}
+
+    <div class="filters-row">
+      <div class="months">${pillsHtml}</div>
+      ${closeButtonHtml}
+      ${exportPrintHtml}
+    </div>
+
+    ${isMonthClosedNow ? `<div class="storage-warning">🔒 ${esc(partnerMonthFilter)}/${yearFilter} está FECHADO — nenhuma edição é permitida em nenhuma aba para esse mês até reabrir aqui.</div>` : ''}
+
+    ${renderMonthlyChart()}
+
+    ${metasPanelHtml}
+
+    <div class="resumo-section-title">Vendedoras — ganhos totais (Sistema + Consultoria + Órgãos Públicos + Cursos + Bônus)</div>
+    <div class="kpis">${sellerKpiCardsHtml}</div>
+    <div class="table-card" style="margin-bottom:26px;">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Vendedora</th>
+              <th class="num">Sistema</th>
+              <th class="num">Consultoria</th>
+              <th class="num">Órgãos Públicos</th>
+              <th class="num">Cursos</th>
+              <th class="num">Bônus</th>
+              <th class="num">Total</th>
+            </tr>
+          </thead>
+          <tbody>${sellerBreakdownRowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="resumo-section-title">Parceiros — honorários por origem</div>
+    <div class="kpis">${kpiCardsHtml}</div>
+    <div class="table-card" style="margin-bottom:26px;">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Parceiro</th>
+              <th class="num">Sistema</th>
+              <th class="num">Consultoria</th>
+              <th class="num">Órgãos Públicos</th>
+              <th class="num">Cursos</th>
+              <th class="num">Total</th>
+            </tr>
+          </thead>
+          <tbody>${partnerBreakdownRowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="resumo-section-title">Detalhamento — lançamento a lançamento (parceiros)</div>
+    <div class="toolbar">
+      <div class="count"><b>${entries.length}</b> honorário${entries.length===1?"":"s"} ${partnerMonthFilter!=="Todos" ? "em <b>"+esc(partnerMonthFilter)+"</b>" : ""}</div>
+      <button class="btn-add" onclick="addPartner()">+ Parceiro</button>
+    </div>
+
+    <div class="table-card">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:58px">Mês</th>
+              <th>Origem</th>
+              <th>Cliente / Empresa / Curso</th>
+              <th class="num col-valor">Valor do Contrato</th>
+              <th>Parceiro</th>
+              <th class="num">%</th>
+              <th class="num">Honorário</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="footnote" style="text-align:left;color:var(--ink-faint);font-size:12px;">
+      Este resumo é somente leitura — para editar um lançamento, vá até a aba de origem dele (Sistema, Consultoria, Órgãos Públicos, Cursos ou Bônus e Metas). O filtro de mês acima vale para as duas seções.
+    </div>
+  `;
+}
+
+function onVendaSelect(el){
+  const id = Number(el.dataset.id);
+  if(el.value === '__new__'){
+    showPrompt("Nome do novo produto:", (name) => {
+      if(!name) return;
+      const trimmed = name.trim();
+      if(!trimmed) return;
+      if(!vendaProducts.some(p => p.toLowerCase() === trimmed.toLowerCase())){
+        vendaProducts.push(trimmed);
+        vendaProducts.sort((a,b)=>a.localeCompare(b,'pt-BR'));
+        persistVendaProducts();
+      }
+      updateCell(id, 'venda', trimmed);
+    });
+    return;
+  }
+  updateCell(id, 'venda', el.value);
+}
+
+
+
+
+
+function updateSaveStatus(){
+  const dot = document.getElementById('save-dot');
+  const label = document.getElementById('save-label');
+  if(!dot) return;
+  if(saveError){
+    dot.className = "dot error";
+    label.textContent = "erro ao salvar";
+  } else {
+    dot.className = "dot" + (saving ? " saving" : "");
+    label.textContent = saving ? "salvando" : "salvo";
+  }
+}
+
+
+
+function updateCell(id, field, value){
+  const r = rows.find(r => r.id === id);
+  if(!r) return;
+  if(isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    render();
+    return;
+  }
+  r[field] = value;
+  persist();
+  if(field === "mes" || field === "parceiro") render();
+  else {
+    updateSummaries();
+    if(field === "valor" || field === "participacao"){
+      updateRowPartnerCalc(id);
+    }
+  }
+}
+
+function updateRowPartnerCalc(id){
+  const r = rows.find(r => r.id === id);
+  if(!r) return;
+  const el = document.getElementById('calcParceiro-'+id);
+  if(el) el.textContent = fmtMoney((Number(r.valor)||0) * (parsePercent(r.participacao)/100));
+}
+
+function addRow(){
+  const mes = filter === "Todos" ? "Janeiro" : filter;
+  if(isMonthClosed(yearFilter, mes)){
+    showAlert("Este mês está fechado para novos lançamentos. Reabra em Resumo Geral para poder editar.");
+    return;
+  }
+  const newRow = {id: nextId++, mes, ano: yearFilter, cliente:"", venda:"", valor:null,
+                   parceiro:"", participacao:"", formaPagamento:"", colaborador:"", vendedor2:"", vendedor3:"",
+                   pago:false, mesPagamento:null, observacoes:"",
+                   soraya:null, angela:null, rios:null, uilma:null, luciana:null};
+  if(sellerFilter !== "Todas"){
+    newRow[sellerFilter] = 0;
+  }
+  rows.unshift(newRow);
+  persist();
+  render();
+}
+
+function deleteRow(id){
+  const r = rows.find(r => r.id === id);
+  if(r && isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado. Reabra em Resumo Geral para poder excluir.");
+    return;
+  }
+  showConfirm("Excluir esta venda?", () => {
+    rows = rows.filter(r => r.id !== id);
+    persist();
+  });
+}
+
+function duplicateRow(id){
+  const r = rows.find(r => r.id === id);
+  if(!r) return;
+  const copy = {...r, id: nextId++};
+  rows.unshift(copy);
+  persist();
+  render();
+}
+
+function repeatRowForYear(id){
+  const r = rows.find(r => r.id === id);
+  if(!r) return;
+  const startIdx = MONTHS.indexOf(r.mes);
+  if(startIdx === -1 || startIdx === MONTHS.length - 1){
+    showAlert("Esse lançamento já está em Dezembro — não há meses seguintes pra repetir.");
+    return;
+  }
+  const remainingMonths = MONTHS.slice(startIdx + 1);
+  const label = r.cliente || r.venda || "esse lançamento";
+  showConfirm(
+    `Repetir "${label}" para todos os meses restantes de ${r.ano} (${remainingMonths.join(', ')})? Meses que já tiverem um lançamento igual (mesmo cliente e produto) serão pulados.`,
+    () => {
+      remainingMonths.forEach(targetMonth => {
+        const exists = rows.some(x => x.ano===r.ano && x.mes===targetMonth && (x.cliente||"")===(r.cliente||"") && (x.venda||"")===(r.venda||""));
+        if(exists) return;
+        const copy = {...r, id: nextId++, mes: targetMonth};
+        rows.push(copy);
+      });
+      persist();
+    },
+    "Repetir"
+  );
+}
+
+function resetToOriginal(){
+  showConfirm(
+    "Isso vai substituir os dados atuais pelos dados originais (Jan–Jul reais + recorrentes Ago–Dez). Continuar?",
+    () => {
+      rows = SEED_DATA.slice();
+      migrateYear(rows, 2026);
+      nextId = NEXT_ID_START;
+      yearFilter = 2026;
+      persist();
+    },
+    "Restaurar"
+  );
+}
+
+function wipeAllData(){
+  showConfirm(
+    "⚠️ ISSO VAI APAGAR TODOS OS LANÇAMENTOS de todas as abas (Sistema, Consultoria, Consultoria Órgãos Públicos, Cursos e Bônus e Metas), de todos os anos — não dá pra desfazer. Os produtos, vendedores e parceiros cadastrados continuam. Recomendo exportar os dados antes (botão ⬇ Exportar dados), caso precise deles depois. Tem certeza que quer zerar tudo?",
+    () => {
+      rows = [];
+      nextId = 1;
+      persist();
+
+      ENTITY_KEYS.forEach(key => {
+        state[key].rows = [];
+        state[key].nextId = 1;
+        persistEntityRows(key);
+      });
+
+      bonusRows = [];
+      bonusNextId = 1;
+      persistBonus();
+
+      closedMonths = [];
+      persistClosedMonths();
+    },
+    "Zerar tudo"
+  );
+}
+
+function setFilter(m){ filter = m; render(); }
+function setSellerFilter(key){ sellerFilter = key; render(); }
+function getVisibleSellers(){
+  return sellerFilter === "Todas" ? SELLERS : SELLERS.filter(s => s.key === sellerFilter);
+}
+function getVisible(){
+  let list = rows.filter(r => (r.ano||2026) === yearFilter);
+  list = filter === "Todos" ? list : list.filter(r => r.mes === filter);
+  if(sellerFilter !== "Todas"){
+    list = list.filter(r => r[sellerFilter] !== null && r[sellerFilter] !== undefined && r[sellerFilter] !== "");
+  }
+  if(searchCliente.trim()){
+    const q = searchCliente.trim().toLowerCase();
+    list = list.filter(r => (r.cliente||"").toLowerCase().includes(q));
+  }
+  if(searchParceiro.trim()){
+    const q = searchParceiro.trim().toLowerCase();
+    list = list.filter(r => (r.parceiro||"").toLowerCase().includes(q));
+  }
+  if(searchColaborador.trim()){
+    const q = searchColaborador.trim().toLowerCase();
+    list = list.filter(r => (r.colaborador||"").toLowerCase().includes(q));
+  }
+  return list;
+}
+function onVendasSearchInput(el, field){
+  const pos = el.selectionStart;
+  const id = el.id;
+  if(field==='cliente') searchCliente = el.value;
+  else if(field==='parceiro') searchParceiro = el.value;
+  else if(field==='colaborador') searchColaborador = el.value;
+  render();
+  const ne = document.getElementById(id);
+  if(ne){ ne.focus(); try{ ne.setSelectionRange(pos,pos); }catch(e){} }
+}
+function computeTotals(visible){
+  const t = {valor:0};
+  SELLERS.forEach(s => { t[s.key] = 0; });
+  visible.forEach(r => {
+    t.valor += Number(r.valor)||0;
+    SELLERS.forEach(s => t[s.key] += Number(r[s.key])||0);
+  });
+  return t;
+}
+function numInputHtml(row, field){
+  const v = (row[field] === null || row[field] === undefined) ? "" : row[field];
+  return `<input class="num" type="number" step="0.01" placeholder="—" value="${esc(v)}"
+            data-id="${row.id}" data-field="${field}" oninput="onNumInput(this)" />`;
+}
+function onNumInput(el){
+  const id = Number(el.dataset.id);
+  const field = el.dataset.field;
+  const v = el.value;
+  updateCell(id, field, v === "" ? null : parseFloat(v));
+}
+function onTextInput(el){
+  const id = Number(el.dataset.id);
+  const field = el.dataset.field;
+  updateCell(id, field, el.value);
+}
+function onMonthSelect(el){
+  const id = Number(el.dataset.id);
+  updateCell(id, "mes", el.value);
+}
+function onVendedor2Select(el){
+  const id = Number(el.dataset.id);
+  updateCell(id, "vendedor2", el.value);
+}
+function onVendedor3Select(el){
+  const id = Number(el.dataset.id);
+  updateCell(id, "vendedor3", el.value);
+}
+function toggleSellerValues(){
+  sellerValuesRevealed = !sellerValuesRevealed;
+  render();
+}
+
+function updateSummaries(){
+  const visible = getVisible();
+  const totals = computeTotals(visible);
+  const totalContract = document.getElementById('kpi-total');
+  if(totalContract) totalContract.textContent = fmtMoney(totals.valor);
+  SELLERS.forEach(s => {
+    const el = document.getElementById('kpi-' + s.key);
+    if(el) el.textContent = sellerValuesRevealed ? fmtMoney(totals[s.key]) : '••••••';
+  });
+  const countEl = document.getElementById('count-label');
+  if(countEl){
+    countEl.innerHTML = `<b>${visible.length}</b> venda${visible.length===1?"":"s"} ${filter!=="Todos" ? "em <b>"+esc(filter)+"</b>" : ""}`;
+  }
+}
+
+function renderVendasSection(){
+  ensureVendaProductsIncludeCurrent();
+  const visible = getVisible();
+  const totals = computeTotals(visible);
+
+  const pillsHtml = ['Todos', ...MONTHS].map(m => {
+    const active = m === filter ? ' active' : '';
+    return `<button class="pill${active}" onclick="setFilter('${m}')">${m}</button>`;
+  }).join('');
+
+  const visibleSellers = getVisibleSellers();
+
+  const sellerPillsHtml = ['Todas', ...SELLERS.map(s=>s.key)].map(key => {
+    const label = key === 'Todas' ? 'Todas' : SELLERS.find(s=>s.key===key).label;
+    const active = key === sellerFilter ? ' active' : '';
+    return `<button class="pill seller-pill${active}" onclick="setSellerFilter('${key}')">${esc(label)}</button>`;
+  }).join('');
+
+  const kpiToggleHtml = `
+    <div class="kpi-toggle-row">
+      <button class="eye-toggle" onclick="toggleSellerValues()">${sellerValuesRevealed ? '🙈 Ocultar valores' : '👁 Mostrar valores'}</button>
+    </div>
+  `;
+  const kpiCardsHtml = visibleSellers.map(s => `
+    <div class="kpi-card" style="--kc:${esc(s.color)}">
+      <div class="kpi-label"><span class="kpi-dot"></span>${esc(s.label)}</div>
+      <div class="kpi-value${sellerValuesRevealed?'':' masked'}" id="kpi-${s.key}">${sellerValuesRevealed ? fmtMoney(totals[s.key]) : '••••••'}</div>
+    </div>
+  `).join('') + `
+    <div class="kpi-card total">
+      <div class="kpi-label">Total vendido</div>
+      <div class="kpi-value" id="kpi-total">${fmtMoney(totals.valor)}</div>
+    </div>
+  `;
+
+  const emptyMsg = sellerFilter !== "Todas"
+    ? `Nenhuma venda com comissão de ${SELLERS.find(s=>s.key===sellerFilter).label} neste filtro.`
+    : `Nenhuma venda neste mês ainda. Clique em "+ Nova venda" para lançar a primeira.`;
+  const rowsHtml = visible.length === 0
+    ? `<tr class="empty-row"><td colspan="${10+visibleSellers.length}"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
+    : visible.map(row => `
+      <tr class="${isVendasRowPending(row) ? 'row-pending' : ''}${isMonthClosed(row.ano||2026,row.mes) ? ' row-locked' : ''}${isVendasRowDuplicate(row) ? ' row-duplicate' : ''}">
+        <td>
+          <select data-id="${row.id}" onchange="onMonthSelect(this)" title="${esc(row.mes)}">
+            ${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthNumber(m)}</option>`).join('')}
+          </select>
+          ${isVendasRowPending(row) ? '<span class="pending-badge" title="Lançamento incompleto: falta valor ou percentual">⚠️</span>' : ''}
+          ${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}
+          ${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}
+          ${isVendasRowDuplicate(row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo cliente neste mês — confira se não é duplicado">🔁 Duplicado</span>` : ''}
+        </td>
+        <td class="cliente"><input type="text" data-id="${row.id}" data-field="cliente" value="${esc(row.cliente)}" placeholder="Cliente" oninput="onTextInput(this)" /></td>
+        <td class="venda">
+          <select data-id="${row.id}" onchange="onVendaSelect(this)">
+            <option value="">—</option>
+            ${vendaProducts.map(p => `<option value="${esc(p)}" ${row.venda===p?'selected':''}>${esc(p)}</option>`).join('')}
+            <option value="__new__">+ Cadastrar novo produto...</option>
+          </select>
+        </td>
+        <td class="col-valor"><div class="currency-wrap"><span class="currency-prefix">R$</span>${numInputHtml(row,'valor')}</div></td>
+        <td><select data-id="${row.id}" onchange="onParceiroSelect(this)">${partnerOptionsHtml(row.parceiro)}</select></td>
+        <td class="col-pct">
+          <div class="pct-wrap"><input class="num" type="number" step="0.1" min="0" placeholder="0" value="${row.participacao===null||row.participacao===undefined?'':row.participacao}" data-id="${row.id}" data-field="participacao" oninput="onNumInput(this)" /><span class="pct-suffix">%</span></div>
+          ${row.parceiro ? `<div class="calc-value" id="calcParceiro-${row.id}">${fmtMoney((Number(row.valor)||0) * (parsePercent(row.participacao)/100))}</div>` : ''}
+        </td>
+        <td><input type="text" data-id="${row.id}" data-field="formaPagamento" value="${esc(row.formaPagamento)}" placeholder="Forma de pagamento" oninput="onTextInput(this)" /></td>
+        <td class="pagamento-cell">
+          <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" onchange="onPagamentoToggle(this)" /><span>${row.pago?'Pago':'Pendente'}</span></label>
+          ${row.pago ? `<select data-id="${row.id}" onchange="onPagamentoMesSelect(this)">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthNumber(m)}</option>`).join('')}</select>` : ''}
+        </td>
+        <td class="obs-cell"><input type="text" data-id="${row.id}" data-field="observacoes" value="${esc(row.observacoes)}" placeholder="Anotação livre..." oninput="onTextInput(this)" /></td>
+        ${visibleSellers.map(s => `<td>${numInputHtml(row,s.key)}</td>`).join('')}
+        <td class="del-cell">
+          <div class="row-actions">
+            <button class="action-btn" title="Duplicar" onclick="duplicateRow(${row.id})">⎘</button>
+            <button class="action-btn" title="Parcelar em vários meses" onclick="parcelarRow(${row.id})">🧩</button>
+            <button class="action-btn" title="Repetir até dezembro (assinatura mensal)" onclick="repeatRowForYear(${row.id})">🔁</button>
+            <button class="action-btn danger" title="Excluir" onclick="deleteRow(${row.id})">✕</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+
+  const thDot = (color) => `<span class="th-dot" style="background:${color}"></span>`;
+
+  return `
+    ${kpiToggleHtml}
+    <div class="kpis">${kpiCardsHtml}</div>
+
+    <div class="filters-row">
+      <div class="months">${pillsHtml}</div>
+      <div class="months seller-filter">${sellerPillsHtml}</div>
+    </div>
+
+    <div class="search-row">
+      <input id="search-vendas-cliente" class="search-input" type="text" placeholder="🔍 Buscar cliente..." value="${esc(searchCliente)}" oninput="onVendasSearchInput(this,'cliente')" />
+      <input id="search-vendas-parceiro" class="search-input" type="text" placeholder="🔍 Buscar parceiro..." value="${esc(searchParceiro)}" oninput="onVendasSearchInput(this,'parceiro')" />
+      <input id="search-vendas-colaborador" class="search-input" type="text" placeholder="🔍 Buscar colaborador..." value="${esc(searchColaborador)}" oninput="onVendasSearchInput(this,'colaborador')" />
+    </div>
+
+    <div class="toolbar">
+      <div class="count" id="count-label"><b>${visible.length}</b> venda${visible.length===1?"":"s"} ${filter!=="Todos" ? "em <b>"+esc(filter)+"</b>" : ""}${visible.filter(isVendasRowPending).length ? ` · <span style="color:#B45309;">⚠️ ${visible.filter(isVendasRowPending).length} incompleta${visible.filter(isVendasRowPending).length===1?'':'s'}</span>` : ''}${visible.filter(isVendasRowDuplicate).length ? ` · <span style="color:#6D28D9;">🔁 ${visible.filter(isVendasRowDuplicate).length} duplicado${visible.filter(isVendasRowDuplicate).length===1?'':'s'}</span>` : ''}</div>
+      <div class="btn-row">
+        <button class="btn-add btn-secondary" onclick="showManageSellersModal()">+ Vendedoras</button>
+        <button class="btn-add" onclick="addRow()">+ Nova venda</button>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:58px">Mês</th>
+              <th>Nome do Cliente</th>
+              <th>Venda</th>
+              <th class="num col-valor">Valor do Contrato</th>
+              <th>Parceiro</th>
+              <th>Participação</th>
+              <th>Forma de Pagamento</th>
+              <th style="width:110px">Pagamento</th>
+              <th>Observações</th>
+              ${visibleSellers.map(s => `<th class="num">${thDot(s.color)}${esc(s.label)}</th>`).join('')}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="footnote">
+      <button class="reset-link" onclick="resetToOriginal()">Restaurar dados originais</button>
+    </div>
+  `;
+}
+
+/* ---------------- Generic entity tabs (Consultoria / Cursos) ---------------- */
+
+
+
+
+
+
+
+function addEntityRow(key){
+  const cfg = ENTITIES[key];
+  const st = state[key];
+  const mes = st.filter === "Todos" ? "Janeiro" : st.filter;
+  if(isMonthClosed(yearFilter, mes)){
+    showAlert("Este mês está fechado para novos lançamentos. Reabra em Resumo Geral para poder editar.");
+    return;
+  }
+  const row = {id: st.nextId++, mes, ano: yearFilter, comissaoPercent:null, vendedor: st.vendorFilter!=="Todos" ? st.vendorFilter : "", comissaoPercent2:null, vendedor2:"", comissaoPercent3:null, vendedor3:""};
+  if(cfg.hasPagamento){ row.pago = false; row.mesPagamento = null; }
+  cfg.fields.forEach(f => { row[f.key] = f.type==="select" ? f.options[0] : (f.type==="number" ? null : ""); });
+  st.rows.unshift(row);
+  persistEntityRows(key);
+  render();
+}
+
+function addExtraVendedorSlot(key, rowId){
+  const r = state[key].rows.find(r => r.id === rowId);
+  if(!r) return;
+  if(isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    return;
+  }
+  if(!Array.isArray(r.extraVendedores)) r.extraVendedores = [];
+  r.extraVendedores.push({id: Date.now() + r.extraVendedores.length, vendedor:"", percent:null});
+  persistEntityRows(key);
+  render();
+}
+
+function removeExtraVendedorSlot(key, rowId, slotId){
+  const r = state[key].rows.find(r => r.id === rowId);
+  if(!r || !Array.isArray(r.extraVendedores)) return;
+  r.extraVendedores = r.extraVendedores.filter(ev => ev.id !== slotId);
+  persistEntityRows(key);
+  render();
+}
+
+function updateExtraVendedorField(key, rowId, slotId, field, value){
+  const r = state[key].rows.find(r => r.id === rowId);
+  if(!r || !Array.isArray(r.extraVendedores)) return;
+  if(isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    render();
+    return;
+  }
+  const ev = r.extraVendedores.find(e => e.id === slotId);
+  if(!ev) return;
+  ev[field] = value;
+  persistEntityRows(key);
+  render();
+}
+
+function deleteEntityRow(key, id){
+  const r = state[key].rows.find(r => r.id === id);
+  if(r && isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado. Reabra em Resumo Geral para poder excluir.");
+    return;
+  }
+  showConfirm("Excluir este lançamento?", () => {
+    state[key].rows = state[key].rows.filter(r => r.id !== id);
+    persistEntityRows(key);
+  });
+}
+
+function duplicateEntityRow(key, id){
+  const st = state[key];
+  const r = st.rows.find(r => r.id === id);
+  if(!r) return;
+  const copy = {...r, id: st.nextId++};
+  st.rows.unshift(copy);
+  persistEntityRows(key);
+  render();
+}
+
+function parcelarEntityRow(key, id){
+  const st = state[key];
+  const r = st.rows.find(r => r.id === id);
+  if(!r) return;
+  if(isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    return;
+  }
+  if(!r.valorContrato || Number(r.valorContrato) <= 0){
+    showAlert("Preencha o Valor do Contrato antes de parcelar.");
+    return;
+  }
+  showPrompt("Em quantas parcelas mensais? (2 a 24)", (val) => {
+    const n = parseInt(val, 10);
+    if(!n || n < 2 || n > 24){ showAlert("Digite um número de parcelas entre 2 e 24."); return; }
+    const amounts = splitIntoInstallments(Number(r.valorContrato), n);
+    const origMes = r.mes, origAno = r.ano||2026;
+    r.valorContrato = amounts[0];
+    r.parcelaLabel = `1/${n}`;
+    for(let i=1;i<n;i++){
+      const nm = nextMonthYear(origMes, origAno, i);
+      const copy = {...r, id: st.nextId++, mes: nm.mes, ano: nm.ano, valorContrato: amounts[i],
+                    extraVendedores: Array.isArray(r.extraVendedores) ? r.extraVendedores.map(ev => ({...ev})) : [],
+                    parcelaLabel:`${i+1}/${n}`};
+      if(cfg_hasPagamento(key)){ copy.pago = false; copy.mesPagamento = null; }
+      st.rows.push(copy);
+    }
+    persistEntityRows(key);
+  });
+}
+function cfg_hasPagamento(key){ return !!ENTITIES[key].hasPagamento; }
+
+function repeatEntityRowForYear(key, id){
+  const st = state[key];
+  const r = st.rows.find(r => r.id === id);
+  if(!r) return;
+  const startIdx = MONTHS.indexOf(r.mes);
+  if(startIdx === -1 || startIdx === MONTHS.length - 1){
+    showAlert("Esse lançamento já está em Dezembro — não há meses seguintes pra repetir.");
+    return;
+  }
+  const remainingMonths = MONTHS.slice(startIdx + 1);
+  const mainField = ENTITIES[key].fields[0].key;
+  const label = r[mainField] || "esse lançamento";
+  showConfirm(
+    `Repetir "${label}" para todos os meses restantes de ${r.ano} (${remainingMonths.join(', ')})? Meses que já tiverem um lançamento igual (mesmo ${ENTITIES[key].fields[0].label.toLowerCase()}) serão pulados.`,
+    () => {
+      remainingMonths.forEach(targetMonth => {
+        const exists = st.rows.some(x => x.ano===r.ano && x.mes===targetMonth && (x[mainField]||"")===(r[mainField]||""));
+        if(exists) return;
+        const copy = {...r, id: st.nextId++, mes: targetMonth};
+        st.rows.push(copy);
+      });
+      persistEntityRows(key);
+    },
+    "Repetir"
+  );
+}
+
+function addEntityVendor(key){
+  showPrompt("Nome do(a) vendedor(a):", (name) => {
+    if(!name) return;
+    const trimmed = name.trim();
+    if(!trimmed) return;
+    const exists = state[key].vendors.some(v => v.toLowerCase() === trimmed.toLowerCase());
+    if(exists){ showAlert("Esse vendedor já está na lista."); return; }
+    state[key].vendors.push(trimmed);
+    persistEntityVendors(key);
+  });
+}
+
+function setEntityFilter(key, m){ state[key].filter = m; render(); }
+function setEntityVendorFilter(el){ state[el.dataset.entity].vendorFilter = el.dataset.vendor; render(); }
+function setEntityFieldFilter(key, fieldKey, value){ state[key].fieldFilters[fieldKey] = value; render(); }
+
+function updateEntityCell(key, id, field, value){
+  const r = state[key].rows.find(r => r.id === id);
+  if(!r) return;
+  if(isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    render();
+    return;
+  }
+  r[field] = value;
+  persistEntityRows(key);
+  if(field === "mes" || field === "vendedor" || field === "vendedor2" || field === "vendedor3" || field === "parceiro") render();
+  else {
+    updateEntitySummaries(key);
+    if(field === "valorContrato" || field === "comissaoPercent" || field === "comissaoPercent2" || field === "comissaoPercent3" || field === "participacao"){
+      updateEntityRowCalc(key, id);
+    }
+  }
+}
+
+function getEntityVisible(key){
+  const st = state[key];
+  let list = st.rows.filter(r => (r.ano||2026) === yearFilter);
+  list = st.filter === "Todos" ? list : list.filter(r => r.mes === st.filter);
+  if(st.vendorFilter !== "Todos"){
+    list = list.filter(r => getRowSellerAssignments(r).some(a => a.vendedor === st.vendorFilter));
+  }
+  ENTITIES[key].fields.forEach(f => {
+    if(f.type === "select" && st.fieldFilters[f.key] && st.fieldFilters[f.key] !== "Todos"){
+      list = list.filter(r => r[f.key] === st.fieldFilters[f.key]);
+    }
+  });
+  const mainField = ENTITIES[key].fields[0].key;
+  if(st.search.main.trim()){
+    const q = st.search.main.trim().toLowerCase();
+    list = list.filter(r => (r[mainField]||"").toLowerCase().includes(q));
+  }
+  if(st.search.parceiro.trim()){
+    const q = st.search.parceiro.trim().toLowerCase();
+    list = list.filter(r => (r.parceiro||"").toLowerCase().includes(q));
+  }
+  if(st.search.colaborador.trim()){
+    const q = st.search.colaborador.trim().toLowerCase();
+    list = list.filter(r => (r.colaborador||"").toLowerCase().includes(q));
+  }
+  return list;
+}
+function onEntitySearchInput(el, key, field){
+  const pos = el.selectionStart;
+  const id = el.id;
+  state[key].search[field] = el.value;
+  render();
+  const ne = document.getElementById(id);
+  if(ne){ ne.focus(); try{ ne.setSelectionRange(pos,pos); }catch(e){} }
+}
+
+function entityRemainingAfterPartner(row){
+  const valorContrato = Number(row.valorContrato)||0;
+  if(!row.parceiro) return valorContrato;
+  const partnerPct = parsePercent(row.participacao);
+  return valorContrato - (valorContrato * (partnerPct/100));
+}
+
+function getRowSellerAssignments(r){
+  const list = [];
+  if(r.vendedor) list.push({vendedor: r.vendedor, percent: Number(r.comissaoPercent)||0});
+  if(r.vendedor2) list.push({vendedor: r.vendedor2, percent: Number(r.comissaoPercent2)||0});
+  if(r.vendedor3) list.push({vendedor: r.vendedor3, percent: Number(r.comissaoPercent3)||0});
+  if(Array.isArray(r.extraVendedores)){
+    r.extraVendedores.forEach(ev => {
+      if(ev.vendedor) list.push({vendedor: ev.vendedor, percent: Number(ev.percent)||0});
+    });
+  }
+  return list;
+}
+
+function computeEntityTotals(key, visible){
+  const st = state[key];
+  const t = {contrato:0, comissao:0, byVendor:{}};
+  st.vendors.forEach(v => t.byVendor[v] = 0);
+  visible.forEach(r => {
+    const valorContrato = Number(r.valorContrato)||0;
+    t.contrato += valorContrato;
+    const baseAposParceiro = entityRemainingAfterPartner(r);
+    getRowSellerAssignments(r).forEach(a => {
+      const commission = baseAposParceiro * (a.percent/100);
+      t.comissao += commission;
+      if(t.byVendor[a.vendedor] === undefined) t.byVendor[a.vendedor] = 0;
+      t.byVendor[a.vendedor] += commission;
+    });
+  });
+  return t;
+}
+
+function entityRowCommission(r, slot){
+  const base = entityRemainingAfterPartner(r);
+  const pctField = slot === 3 ? 'comissaoPercent3' : (slot === 2 ? 'comissaoPercent2' : 'comissaoPercent');
+  const pct = Number(r[pctField])||0;
+  return base * (pct/100);
+}
+
+function updateEntityRowCalc(key, id){
+  const r = state[key].rows.find(r => r.id === id);
+  if(!r) return;
+  const el1 = document.getElementById('calc1-'+key+'-'+id);
+  if(el1) el1.textContent = fmtMoney(entityRowCommission(r, 1));
+  const el2 = document.getElementById('calc2-'+key+'-'+id);
+  if(el2) el2.textContent = fmtMoney(entityRowCommission(r, 2));
+  const el3 = document.getElementById('calc3-'+key+'-'+id);
+  if(el3) el3.textContent = fmtMoney(entityRowCommission(r, 3));
+  const elP = document.getElementById('calcParceiro-'+key+'-'+id);
+  if(elP) elP.textContent = fmtMoney((Number(r.valorContrato)||0) * (parsePercent(r.participacao)/100));
+}
+
+function entityNumInputHtml(key, row, field){
+  const v = (row[field] === null || row[field] === undefined) ? "" : row[field];
+  return `<input class="num" type="number" step="0.01" placeholder="—" value="${esc(v)}"
+            data-entity="${key}" data-id="${row.id}" data-field="${field}" oninput="onEntityNumInput(this)" />`;
+}
+function onEntityNumInput(el){
+  const key = el.dataset.entity, id = Number(el.dataset.id), field = el.dataset.field, v = el.value;
+  updateEntityCell(key, id, field, v === "" ? null : parseFloat(v));
+}
+function onEntityTextInput(el){
+  const key = el.dataset.entity, id = Number(el.dataset.id), field = el.dataset.field;
+  updateEntityCell(key, id, field, el.value);
+}
+function onEntitySelectField(el){
+  const key = el.dataset.entity, id = Number(el.dataset.id), field = el.dataset.field;
+  updateEntityCell(key, id, field, el.value);
+}
+function onEntityMonthSelect(el){
+  const key = el.dataset.entity, id = Number(el.dataset.id);
+  updateEntityCell(key, id, "mes", el.value);
+}
+
+function toggleEntityValues(key){
+  state[key].valuesRevealed = !state[key].valuesRevealed;
+  render();
+}
+
+function updateEntitySummaries(key){
+  const st = state[key];
+  const visible = getEntityVisible(key);
+  const totals = computeEntityTotals(key, visible);
+  const visibleVendors = st.vendorFilter === "Todos" ? st.vendors : [st.vendorFilter];
+  visibleVendors.forEach(v => {
+    const el = document.getElementById('kpi-'+key+'-'+slug(v));
+    if(el) el.textContent = st.valuesRevealed ? fmtMoney(totals.byVendor[v]||0) : '••••••';
+  });
+  const totalEl = document.getElementById('kpi-'+key+'-total');
+  if(totalEl) totalEl.textContent = fmtMoney(totals.contrato);
+  const countEl = document.getElementById('count-'+key);
+  if(countEl){
+    countEl.innerHTML = `<b>${visible.length}</b> ${ENTITIES[key].itemLabel}${visible.length===1?"":"s"} ${st.filter!=="Todos" ? "em <b>"+esc(st.filter)+"</b>" : ""}`;
+  }
+}
+
+function renderEntitySection(key){
+  const cfg = ENTITIES[key];
+  const st = state[key];
+  const visible = getEntityVisible(key);
+  const totals = computeEntityTotals(key, visible);
+  const visibleVendors = st.vendorFilter === "Todos" ? st.vendors : [st.vendorFilter];
+
+  const pillsHtml = ['Todos', ...MONTHS].map(m => {
+    const active = m === st.filter ? ' active' : '';
+    return `<button class="pill${active}" onclick="setEntityFilter('${key}','${m}')">${m}</button>`;
+  }).join('');
+
+  const vendorPillsHtml = ['Todos', ...st.vendors].map(v => {
+    const active = v === st.vendorFilter ? ' active' : '';
+    return `<button class="pill seller-pill${active}" data-entity="${key}" data-vendor="${esc(v)}" onclick="setEntityVendorFilter(this)">${esc(v)}</button>`;
+  }).join('');
+
+  const selectFields = cfg.fields.filter(f => f.type === "select");
+  const fieldFilterRowsHtml = selectFields.map(f => {
+    const current = st.fieldFilters[f.key] || "Todos";
+    const optsHtml = ['Todos', ...f.options].map(o => {
+      const active = o === current ? ' active' : '';
+      return `<button class="pill seller-pill${active}" onclick="setEntityFieldFilter('${key}','${f.key}','${esc(o)}')">${esc(o)}</button>`;
+    }).join('');
+    return `
+      <div class="filters-row">
+        <span class="year-row-label">${esc(f.label)}:</span>
+        <div class="months seller-filter">${optsHtml}</div>
+      </div>
+    `;
+  }).join('');
+
+  const kpiToggleHtml = `
+    <div class="kpi-toggle-row">
+      <button class="eye-toggle" onclick="toggleEntityValues('${key}')">${st.valuesRevealed ? '🙈 Ocultar valores' : '👁 Mostrar valores'}</button>
+    </div>
+  `;
+  const kpiCardsHtml = visibleVendors.map(v => `
+    <div class="kpi-card" style="--kc:${vendorColor(v, st.vendors)}">
+      <div class="kpi-label"><span class="kpi-dot"></span>${esc(v)}</div>
+      <div class="kpi-value${st.valuesRevealed?'':' masked'}" id="kpi-${key}-${slug(v)}">${st.valuesRevealed ? fmtMoney(totals.byVendor[v]||0) : '••••••'}</div>
+    </div>
+  `).join('') + `
+    <div class="kpi-card total">
+      <div class="kpi-label">Total em contratos</div>
+      <div class="kpi-value" id="kpi-${key}-total">${fmtMoney(totals.contrato)}</div>
+    </div>
+  `;
+
+  const emptyMsg = st.vendorFilter !== "Todos"
+    ? `Nenhum lançamento de ${esc(st.vendorFilter)} neste filtro.`
+    : `Nenhum lançamento ainda. Clique em "+ Novo lançamento" para começar.`;
+
+  const maxExtra = visible.reduce((max,r) => Math.max(max, Array.isArray(r.extraVendedores)?r.extraVendedores.length:0), 0);
+  const colCount = 2 + cfg.fields.length + 7 + (maxExtra*2) + (cfg.hasPagamento?1:0);
+  const rowsHtml = visible.length === 0
+    ? `<tr class="empty-row"><td colspan="${colCount}"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
+    : visible.map(row => {
+        let cells = `<td><select data-entity="${key}" data-id="${row.id}" onchange="onEntityMonthSelect(this)" title="${esc(row.mes)}">${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthNumber(m)}</option>`).join('')}</select>${isEntityRowPending(row) ? '<span class="pending-badge" title="Lançamento incompleto: falta valor ou percentual">⚠️</span>' : ''}${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}${isEntityRowDuplicate(key,row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo nome neste mês — confira se não é duplicado">🔁 Duplicado</span>` : ''}</td>`;
+        cfg.fields.forEach(f => {
+          if(f.key === "parceiro"){
+            cells += `<td><select data-entity="${key}" data-id="${row.id}" onchange="onEntityParceiroSelect(this)">${partnerOptionsHtml(row.parceiro)}</select></td>`;
+          } else if(f.key === "participacao"){
+            cells += `<td class="col-pct">
+              <div class="pct-wrap"><input class="num" type="number" step="0.1" min="0" placeholder="0" value="${row.participacao===null||row.participacao===undefined?'':row.participacao}" data-entity="${key}" data-id="${row.id}" data-field="participacao" oninput="onEntityNumInput(this)" /><span class="pct-suffix">%</span></div>
+              ${row.parceiro ? `<div class="calc-value" id="calcParceiro-${key}-${row.id}">${fmtMoney((Number(row.valorContrato)||0) * (parsePercent(row.participacao)/100))}</div>` : ''}
+            </td>`;
+          } else if(f.type === "text"){
+            cells += `<td><input type="text" data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" /></td>`;
+            if(f.key === "formaPagamento" && cfg.hasPagamento){
+              cells += `<td class="pagamento-cell">
+                <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" onchange="onPagamentoToggle(this,'${key}')" /><span>${row.pago?'Pago':'Pendente'}</span></label>
+                ${row.pago ? `<select data-id="${row.id}" onchange="onPagamentoMesSelect(this,'${key}')">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthNumber(m)}</option>`).join('')}</select>` : ''}
+              </td>`;
+            }
+          } else if(f.type === "number"){
+            const isValor = f.key === "valorContrato";
+            cells += `<td${isValor?' class="col-valor"':''}>${isValor?'<div class="currency-wrap"><span class="currency-prefix">R$</span>'+entityNumInputHtml(key,row,f.key)+'</div>':entityNumInputHtml(key,row,f.key)}</td>`;
+          } else if(f.type === "select"){
+            cells += `<td><select data-entity="${key}" data-id="${row.id}" data-field="${f.key}" onchange="onEntitySelectField(this)">${f.options.map(o => `<option value="${o}" ${row[f.key]===o?'selected':''}>${o}</option>`).join('')}</select></td>`;
+          }
+        });
+        cells += `<td class="col-pct">
+          <div class="pct-wrap"><input class="num" type="number" step="0.1" min="0" placeholder="0" value="${row.comissaoPercent===null||row.comissaoPercent===undefined?'':row.comissaoPercent}" data-entity="${key}" data-id="${row.id}" data-field="comissaoPercent" oninput="onEntityNumInput(this)" /><span class="pct-suffix">%</span></div>
+          <div class="calc-value" id="calc1-${key}-${row.id}">${fmtMoney(entityRowCommission(row,1))}</div>
+        </td>`;
+        cells += `<td><select data-entity="${key}" data-id="${row.id}" data-field="vendedor" onchange="onEntitySelectField(this)"><option value="">—</option>${st.vendors.map(v => `<option value="${esc(v)}" ${row.vendedor===v?'selected':''}>${esc(v)}</option>`).join('')}</select></td>`;
+        cells += `<td class="col-pct">
+          <div class="pct-wrap"><input class="num" type="number" step="0.1" min="0" placeholder="0" value="${row.comissaoPercent2===null||row.comissaoPercent2===undefined?'':row.comissaoPercent2}" data-entity="${key}" data-id="${row.id}" data-field="comissaoPercent2" oninput="onEntityNumInput(this)" /><span class="pct-suffix">%</span></div>
+          <div class="calc-value" id="calc2-${key}-${row.id}">${fmtMoney(entityRowCommission(row,2))}</div>
+        </td>`;
+        cells += `<td><select data-entity="${key}" data-id="${row.id}" data-field="vendedor2" onchange="onEntitySelectField(this)"><option value="">—</option>${st.vendors.map(v => `<option value="${esc(v)}" ${row.vendedor2===v?'selected':''}>${esc(v)}</option>`).join('')}</select></td>`;
+        cells += `<td class="col-pct">
+          <div class="pct-wrap"><input class="num" type="number" step="0.1" min="0" placeholder="0" value="${row.comissaoPercent3===null||row.comissaoPercent3===undefined?'':row.comissaoPercent3}" data-entity="${key}" data-id="${row.id}" data-field="comissaoPercent3" oninput="onEntityNumInput(this)" /><span class="pct-suffix">%</span></div>
+          <div class="calc-value" id="calc3-${key}-${row.id}">${fmtMoney(entityRowCommission(row,3))}</div>
+        </td>`;
+        cells += `<td><select data-entity="${key}" data-id="${row.id}" data-field="vendedor3" onchange="onEntitySelectField(this)"><option value="">—</option>${st.vendors.map(v => `<option value="${esc(v)}" ${row.vendedor3===v?'selected':''}>${esc(v)}</option>`).join('')}</select></td>`;
+        for(let i=0; i<maxExtra; i++){
+          const ev = (row.extraVendedores||[])[i];
+          const slotNum = 4+i;
+          if(ev){
+            const evValor = entityRemainingAfterPartner(row) * ((Number(ev.percent)||0)/100);
+            cells += `<td class="col-pct">
+              <div class="pct-wrap"><input class="num" type="number" step="0.1" min="0" placeholder="0" value="${ev.percent===null||ev.percent===undefined?'':ev.percent}" onchange="updateExtraVendedorField('${key}',${row.id},${ev.id},'percent',this.value===''?null:parseFloat(this.value))" /><span class="pct-suffix">%</span></div>
+              <div class="calc-value">${fmtMoney(evValor)}</div>
+            </td>`;
+            cells += `<td>
+              <div style="display:flex;align-items:center;gap:2px;">
+                <select style="flex:1;" onchange="updateExtraVendedorField('${key}',${row.id},${ev.id},'vendedor',this.value)"><option value="">—</option>${st.vendors.map(v => `<option value="${esc(v)}" ${ev.vendedor===v?'selected':''}>${esc(v)}</option>`).join('')}</select>
+                <button class="action-btn danger" title="Remover Vendedor ${slotNum}" onclick="removeExtraVendedorSlot('${key}',${row.id},${ev.id})">✕</button>
+              </div>
+            </td>`;
+          } else {
+            cells += `<td class="col-pct"><span class="pct-disabled">—</span></td><td><span class="pct-disabled">—</span></td>`;
+          }
+        }
+        cells += `<td class="del-cell">
+          <div class="row-actions">
+            <button class="action-btn" title="Adicionar mais um vendedor" onclick="addExtraVendedorSlot('${key}',${row.id})">➕</button>
+            <button class="action-btn" title="Duplicar" onclick="duplicateEntityRow('${key}',${row.id})">⎘</button>
+            <button class="action-btn" title="Parcelar em vários meses" onclick="parcelarEntityRow('${key}',${row.id})">🧩</button>
+            <button class="action-btn" title="Repetir até dezembro (assinatura mensal)" onclick="repeatEntityRowForYear('${key}',${row.id})">🔁</button>
+            <button class="action-btn danger" title="Excluir" onclick="deleteEntityRow('${key}',${row.id})">✕</button>
+          </div>
+        </td>`;
+        return `<tr class="${isEntityRowPending(row) ? 'row-pending' : ''}${isMonthClosed(row.ano||2026,row.mes) ? ' row-locked' : ''}${isEntityRowDuplicate(key,row) ? ' row-duplicate' : ''}">${cells}</tr>`;
+      }).join('');
+
+  return `
+    ${kpiToggleHtml}
+    <div class="kpis">${kpiCardsHtml}</div>
+
+    <div class="filters-row">
+      <div class="months">${pillsHtml}</div>
+      <div class="months seller-filter">${vendorPillsHtml}</div>
+    </div>
+
+    ${fieldFilterRowsHtml}
+
+    <div class="search-row">
+      <input id="search-${key}-main" class="search-input" type="text" placeholder="🔍 Buscar ${cfg.fields[0].label.toLowerCase()}..." value="${esc(st.search.main)}" oninput="onEntitySearchInput(this,'${key}','main')" />
+      <input id="search-${key}-parceiro" class="search-input" type="text" placeholder="🔍 Buscar parceiro..." value="${esc(st.search.parceiro)}" oninput="onEntitySearchInput(this,'${key}','parceiro')" />
+      <input id="search-${key}-colaborador" class="search-input" type="text" placeholder="🔍 Buscar colaborador..." value="${esc(st.search.colaborador)}" oninput="onEntitySearchInput(this,'${key}','colaborador')" />
+    </div>
+
+    <div class="toolbar">
+      <div class="count" id="count-${key}"><b>${visible.length}</b> ${cfg.itemLabel}${visible.length===1?"":"s"} ${st.filter!=="Todos" ? "em <b>"+esc(st.filter)+"</b>" : ""}${visible.filter(isEntityRowPending).length ? ` · <span style="color:#B45309;">⚠️ ${visible.filter(isEntityRowPending).length} incompleto${visible.filter(isEntityRowPending).length===1?'':'s'}</span>` : ''}${visible.filter(r=>isEntityRowDuplicate(key,r)).length ? ` · <span style="color:#6D28D9;">🔁 ${visible.filter(r=>isEntityRowDuplicate(key,r)).length} duplicado${visible.filter(r=>isEntityRowDuplicate(key,r)).length===1?'':'s'}</span>` : ''}</div>
+      <div class="btn-row">
+        <button class="btn-add btn-secondary" onclick="addEntityVendor('${key}')">+ Vendedor</button>
+        <button class="btn-add" onclick="addEntityRow('${key}')">+ Novo lançamento</button>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:58px">Mês</th>
+              ${cfg.fields.map(f => `<th${f.key==='valorContrato'?' class="num col-valor"':(f.key==='participacao'?' class="num col-pct"':(f.type==='number'?' class="num"':''))}>${f.label}</th>${f.key==='formaPagamento'&&cfg.hasPagamento?'<th style="width:110px">Pagamento</th>':''}`).join('')}
+              <th class="num">% Comissão</th>
+              <th>Vendedor</th>
+              <th class="num">% Comissão V2</th>
+              <th>Vendedor 2</th>
+              <th class="num">% Comissão V3</th>
+              <th>Vendedor 3</th>
+              ${Array.from({length:maxExtra}).map((_,i) => `<th class="num">% Comissão V${4+i}</th><th>Vendedor ${4+i}</th>`).join('')}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------------- App shell ---------------- */
+
+function setTab(t){ activeTab = t; render(); }
+
+function render(){
+  const root = document.getElementById('root');
+  if(!authSession){ renderAuthScreen(); return; }
+  if(!initialDataLoaded){
+    root.innerHTML = `<div class="app-loading"><div class="spinner"></div><div>Carregando seus dados...</div></div>`;
+    return;
+  }
+  ensurePartnersIncludeCurrent();
+  const sectionHtml = activeTab === "vendas" ? renderVendasSection()
+    : activeTab === "parceiros" ? renderParceirosSection()
+    : activeTab === "bonus" ? renderBonusSection()
+    : activeTab === "pagamentos" ? renderPagamentosSection()
+    : renderEntitySection(activeTab);
+
+  const tabsHtml = TABS.map(t => {
+    const active = t.key === activeTab ? ' active' : '';
+    return `<button class="tab-btn${active}" onclick="setTab('${t.key}')">${t.label}</button>`;
+  }).join('');
+
+  const years = getKnownYears();
+  const yearPillsHtml = years.map(y => {
+    const active = y === yearFilter ? ' active' : '';
+    return `<button class="pill year-pill${active}" onclick="setYearFilter(${y})">${y}</button>`;
+  }).join('') + `<button class="pill year-pill year-add" onclick="addYear()">+ Ano</button>`;
+
+  root.innerHTML = `
+    <div class="wrap">
+      <div class="topbar">
+        <div class="title-block">
+          <div class="company-name">Open Soluções Tributárias</div>
+          <h1>Comissões — Equipe Comercial</h1>
+          <div class="sub">Controle mensal de vendas e comissões · ${yearFilter}</div>
+        </div>
+        <div class="topbar-actions">
+          <button class="eye-toggle" onclick="showExport()" title="Copia todos os dados em texto, pra guardar ou levar pra outro navegador">⬇ Exportar dados</button>
+          <button class="eye-toggle" onclick="showImport()" title="Cola um texto exportado antes e restaura os dados">⬆ Importar dados</button>
+          <button class="eye-toggle" onclick="normalizeAllText()" title="Coloca Primeira Letra Maiúscula em todos os textos já lançados">Aa Normalizar textos</button>
+          <button class="eye-toggle danger-toggle" onclick="wipeAllData()" title="Apaga todos os lançamentos das três abas, mantendo produtos/vendedores/parceiros cadastrados">🗑 Zerar tudo</button>
+          <div class="save-chip">
+            <span id="save-dot" class="dot${saveError?' error':(saving?' saving':'')}"></span>
+            <span id="save-label">${saveError?'erro ao salvar':(saving?'salvando':'salvo')}</span>
+          </div>
+          <div class="user-chip">
+            <span title="Conectado como">${esc((authSession.user && authSession.user.email) || '')}</span>
+            <button class="logout-btn" onclick="logout()" title="Sair da conta">Sair</button>
+          </div>
+        </div>
+      </div>
+
+      ${storageAvailable === false ? `
+        <div class="storage-warning">
+          ⚠️ Não foi possível conectar ao banco de dados agora — os lançamentos podem não estar sendo salvos nem sincronizados entre pessoas. Verifique sua internet e recarregue a página.
+        </div>
+      ` : ''}
+
+      <div class="year-row">
+        <span class="year-row-label">Ano:</span>
+        <div class="months">${yearPillsHtml}</div>
+      </div>
+
+      <div class="tabs-nav">${tabsHtml}</div>
+
+      ${sectionHtml}
+    </div>
+    ${renderModal()}
+  `;
+}
+
+function boot(){
+  loadDataSync();
+  checkStorageAvailability();
+  const loaders = [
+    tryLoadFromStorageAsync(),
+    tryLoadVendaProductsFromStorageAsync(),
+    tryLoadSistemaSellersFromStorageAsync(),
+    tryLoadPartnersFromStorageAsync(),
+    tryLoadExtraYearsFromStorageAsync(),
+    tryLoadEntityFromStorageAsync('consultoria'),
+    tryLoadEntityFromStorageAsync('publicos'),
+    tryLoadEntityFromStorageAsync('cursos'),
+    tryLoadBonusFromStorageAsync(),
+    tryLoadClosedMonthsFromStorageAsync(),
+    tryLoadMetasFromStorageAsync(),
+  ];
+  Promise.allSettled(loaders).then(function(){
+    initialDataLoaded = true;
+    render();
+  });
+  render();
+}
+
+/* Link de recuperação de senha do Supabase volta com #access_token=...&type=recovery */
+(function initAuth(){
+  const hash = window.location.hash;
+  if(hash && hash.length > 1){
+    const params = new URLSearchParams(hash.slice(1));
+    if(params.get('type') === 'recovery' && params.get('access_token')){
+      authRecoveryToken = params.get('access_token');
+      authScreen = 'reset';
+      renderAuthScreen();
+      return;
+    }
+  }
+  authSession = loadStoredAuthSession();
+  if(authSession) boot();
+  else renderAuthScreen();
+})();
+</script>
+</body>
+</html>
