@@ -477,6 +477,16 @@
   .panel-head-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
   .panel-meta{font-size:12.5px;color:var(--ink-soft);font-weight:600;white-space:nowrap;}
   .panel-meta b{color:var(--ink);font-weight:800;}
+  tr.linha-subtotal td{
+    background:var(--border-soft);font-weight:800;font-size:12.5px;color:var(--ink);
+    border-top:1px solid var(--border);
+  }
+  .aviso-previsao{
+    background:#FFF8E8;border:1px solid #F5DFA8;color:#8A6114;
+    border-radius:var(--radius-sm);padding:10px 12px;font-size:12.5px;font-weight:600;
+    line-height:1.5;margin:0 16px 14px;
+  }
+
   /* ---------- Metas ---------- */
   .metas-lista{display:flex;flex-direction:column;gap:12px;}
   .meta-empty{color:var(--ink-soft);font-size:13.5px;line-height:1.5;padding:6px 2px;}
@@ -2127,6 +2137,155 @@ function getPendingPayments(){
   return out;
 }
 
+/* ---------------- Comissões por status de recebimento ----------------
+   A consultoria só recebe quando o cliente paga a nota. Como cada
+   lançamento já tem "Pago" + mês do pagamento, dá pra separar o que já
+   está liberado do que ainda depende do cliente pagar — e mostrar, por
+   pessoa, de qual cliente veio cada valor.
+   Uma conta restrita só enxerga as próprias linhas: o banco já devolve
+   os lançamentos dela com o vendedor/percentual dos colegas em branco. */
+function getComissoesPorStatus(pago){
+  const out = [];
+
+  rows.forEach(r => {
+    if((r.ano||2026) !== yearFilter) return;
+    if(!!r.pago !== pago) return;
+    SELLERS.forEach(s => {
+      const comissao = Number(r[s.key])||0;
+      if(comissao <= 0) return;
+      out.push({
+        vendedor: s.label, origem: 'Sistema', cliente: r.cliente || r.venda || '—',
+        mesVenda: r.mes, mesPagamento: r.mesPagamento || null,
+        valorPago: Number(r.valor)||0, pct: null, comissao: comissao,
+      });
+    });
+  });
+
+  ENTITY_KEYS.forEach(key => {
+    if(!ENTITIES[key].hasPagamento) return;
+    const mainField = ENTITIES[key].fields[0].key;
+    state[key].rows.forEach(r => {
+      if((r.ano||2026) !== yearFilter) return;
+      if(!!r.pago !== pago) return;
+      const base = entityRemainingAfterPartner(r);
+      getRowSellerAssignments(r).forEach(a => {
+        const comissao = base * (a.percent/100);
+        if(comissao <= 0) return;
+        out.push({
+          vendedor: a.vendedor, origem: ENTITIES[key].tabLabel, cliente: r[mainField] || '—',
+          mesVenda: r.mes, mesPagamento: r.mesPagamento || null,
+          valorPago: Number(r.valorContrato)||0, pct: a.percent, comissao: comissao,
+        });
+      });
+    });
+  });
+
+  return out;
+}
+
+function agruparPorVendedor(lista){
+  const por = {};
+  lista.forEach(e => {
+    if(!por[e.vendedor]) por[e.vendedor] = {total:0, itens:[]};
+    por[e.vendedor].total += e.comissao;
+    por[e.vendedor].itens.push(e);
+  });
+  return Object.keys(por).sort((a,b) => por[b].total - por[a].total)
+    .map(nome => ({nome, total: por[nome].total, itens: por[nome].itens}));
+}
+
+function tabelaComissoes(grupos, mostrarMesPagamento){
+  if(grupos.length === 0) return '';
+  return `
+    <div class="table-scroll">
+      <table class="table-plain">
+        <thead>
+          <tr>
+            <th>Vendedor(a)</th>
+            <th>Origem</th>
+            <th>Cliente / Empresa / Órgão</th>
+            <th>Mês da venda</th>
+            ${mostrarMesPagamento ? '<th>Mês do pagamento</th>' : ''}
+            <th class="num">Valor ${mostrarMesPagamento ? 'pago' : 'do contrato'}</th>
+            <th class="num">%</th>
+            <th class="num">Comissão</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${grupos.map(g => g.itens.map((e,i) => `
+            <tr>
+              <td>${i === 0 ? esc(g.nome) : ''}</td>
+              <td>${esc(e.origem)}</td>
+              <td>${esc(e.cliente)}</td>
+              <td>${monthNumber(e.mesVenda)}</td>
+              ${mostrarMesPagamento ? `<td>${e.mesPagamento ? monthNumber(e.mesPagamento) : '—'}</td>` : ''}
+              <td class="num">${fmtMoney(e.valorPago)}</td>
+              <td class="num">${e.pct === null ? '—' : String(e.pct).replace('.',',')+'%'}</td>
+              <td class="num" style="font-weight:800;">${fmtMoney(e.comissao)}</td>
+            </tr>
+          `).join('') + `
+            <tr class="linha-subtotal">
+              <td colspan="${mostrarMesPagamento ? 6 : 5}">Subtotal — ${esc(g.nome)}</td>
+              <td></td>
+              <td class="num">${fmtMoney(g.total)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function kpisComissoes(grupos, total, rotuloTotal){
+  return `
+    <div class="kpis" style="margin:0 16px 14px;">
+      ${grupos.map((g,i) => `
+        <div class="kpi-card" style="--kc:${esc(vendorColor(g.nome, grupos.map(x=>x.nome)))}">
+          <div class="kpi-label"><span class="kpi-dot"></span>${esc(g.nome)}</div>
+          <div class="kpi-value">${fmtMoney(g.total)}</div>
+        </div>
+      `).join('')}
+      <div class="kpi-card total">
+        <div class="kpi-label">${esc(rotuloTotal)}</div>
+        <div class="kpi-value">${fmtMoney(total)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderComissoesLiberadas(){
+  let lista = getComissoesPorStatus(true);
+  if(pagamentosMonthFilter !== "Todos") lista = lista.filter(e => e.mesPagamento === pagamentosMonthFilter);
+  const grupos = agruparPorVendedor(lista);
+  const total = lista.reduce((s,e) => s+e.comissao, 0);
+  const escopo = pagamentosMonthFilter === "Todos" ? `${yearFilter}` : `${esc(pagamentosMonthFilter)}/${yearFilter}`;
+
+  const corpo = grupos.length === 0
+    ? `<div class="meta-empty">Nenhuma comissão liberada neste filtro. Uma comissão entra aqui quando o lançamento é marcado como <b>Pago</b> na aba de origem.</div>`
+    : kpisComissoes(grupos, total, `Total liberado · ${escopo}`) + tabelaComissoes(grupos, true);
+
+  return panel('com-liberadas', '💰 Comissões liberadas — o cliente já pagou', corpo, {
+    flush: grupos.length > 0,
+    meta: grupos.length ? `<b>${fmtMoney(total)}</b> em ${lista.length} lançamento${lista.length===1?'':'s'}` : '',
+  });
+}
+
+function renderComissoesAguardando(){
+  const lista = getComissoesPorStatus(false);
+  const grupos = agruparPorVendedor(lista);
+  const total = lista.reduce((s,e) => s+e.comissao, 0);
+
+  const corpo = grupos.length === 0
+    ? `<div class="meta-empty">Nenhuma comissão pendente — todos os lançamentos de ${yearFilter} já estão marcados como pagos.</div>`
+    : `<div class="aviso-previsao">Estes valores <b>ainda não estão liberados</b>: dependem do cliente pagar a nota. Assim que o lançamento for marcado como Pago na aba de origem, ele passa para o quadro de cima.</div>`
+      + kpisComissoes(grupos, total, `Total previsto · ${yearFilter}`) + tabelaComissoes(grupos, false);
+
+  return panel('com-aguardando', '⏳ A receber — aguardando o cliente pagar', corpo, {
+    flush: grupos.length > 0,
+    meta: grupos.length ? `<b>${fmtMoney(total)}</b> em ${lista.length} lançamento${lista.length===1?'':'s'}` : '',
+  });
+}
+
 function renderPagamentosSection(){
   const entries = getPagamentosRealizados();
   const total = entries.reduce((s,e) => s+e.valor, 0);
@@ -2226,6 +2385,8 @@ function renderPagamentosSection(){
 
   return `
     ${sectionsToolbarHtml()}
+    ${renderComissoesLiberadas()}
+    ${renderComissoesAguardando()}
     ${agingSectionHtml}
     ${realizadosHtml}
 
