@@ -282,42 +282,25 @@ create policy "admin update" on metas for update to authenticated using (current
 create policy "admin delete" on metas for delete to authenticated using (current_user_is_admin());
 
 -- lancamentos (consultoria / publicos / cursos)
-create policy "select own or admin" on lancamentos for select to authenticated
-  using (
-    current_user_is_admin()
-    or name_matches(vendedor, current_user_person_name())
-    or name_matches(vendedor2, current_user_person_name())
-    or name_matches(vendedor3, current_user_person_name())
-    or name_matches(colaborador, current_user_person_name())
-    or lancamento_has_extra_vendedor(id, current_user_person_name())
-  );
+-- Leitura das tabelas com dados de varias pessoas na mesma linha e
+-- exclusiva de admin: as contas restritas leem pelas views "_safe"
+-- definidas mais abaixo, que mascaram coluna a coluna.
+create policy "select admin only" on lancamentos for select to authenticated
+  using (current_user_is_admin());
 create policy "admin insert" on lancamentos for insert to authenticated with check (current_user_is_admin());
 create policy "admin update" on lancamentos for update to authenticated using (current_user_is_admin()) with check (current_user_is_admin());
 create policy "admin delete" on lancamentos for delete to authenticated using (current_user_is_admin());
 
 -- lancamentos_extra_vendedores
-create policy "select own or admin" on lancamentos_extra_vendedores for select to authenticated
-  using (
-    current_user_is_admin()
-    or name_matches(vendedor, current_user_person_name())
-    or lancamento_matches_person(lancamento_id, current_user_person_name())
-  );
+create policy "select admin only" on lancamentos_extra_vendedores for select to authenticated
+  using (current_user_is_admin());
 create policy "admin insert" on lancamentos_extra_vendedores for insert to authenticated with check (current_user_is_admin());
 create policy "admin update" on lancamentos_extra_vendedores for update to authenticated using (current_user_is_admin()) with check (current_user_is_admin());
 create policy "admin delete" on lancamentos_extra_vendedores for delete to authenticated using (current_user_is_admin());
 
 -- vendas (aba Sistema)
-create policy "select own or admin" on vendas for select to authenticated
-  using (
-    current_user_is_admin()
-    or name_matches(vendedor2, current_user_person_name())
-    or name_matches(vendedor3, current_user_person_name())
-    or name_matches(colaborador, current_user_person_name())
-    or exists (
-      select 1 from vendas_comissoes vc join sellers s on s.key = vc.seller_key
-      where vc.venda_id = vendas.id and name_matches(s.label, current_user_person_name())
-    )
-  );
+create policy "select admin only" on vendas for select to authenticated
+  using (current_user_is_admin());
 create policy "admin insert" on vendas for insert to authenticated with check (current_user_is_admin());
 create policy "admin update" on vendas for update to authenticated using (current_user_is_admin()) with check (current_user_is_admin());
 create policy "admin delete" on vendas for delete to authenticated using (current_user_is_admin());
@@ -333,6 +316,62 @@ create policy "select own or admin" on vendas_comissoes for select to authentica
 create policy "admin insert" on vendas_comissoes for insert to authenticated with check (current_user_is_admin());
 create policy "admin update" on vendas_comissoes for update to authenticated using (current_user_is_admin()) with check (current_user_is_admin());
 create policy "admin delete" on vendas_comissoes for delete to authenticated using (current_user_is_admin());
+
+-- ============================================================
+-- Views "_safe": leitura das contas restritas (mascaramento por coluna)
+-- ============================================================
+-- RLS controla quais LINHAS aparecem, mas nao quais COLUNAS. Como um
+-- lancamento pode ter 3 vendedores + colaborador na mesma linha, sem
+-- isto quem participa de um contrato dividido veria o nome e a % dos
+-- colegas daquele contrato. Estas views sao criadas pelo dono do banco
+-- (postgres, com bypassrls) e aplicam o filtro por dentro; o app le por
+-- elas, nunca pelas tabelas base.
+
+create or replace view lancamentos_safe with (security_barrier = true) as
+select
+  id, entidade, ano, mes, nome, valor_contrato, tipo, parceiro, participacao,
+  forma_pagamento, observacoes,
+  case when current_user_is_admin() or name_matches(colaborador, current_user_person_name()) then colaborador else null end as colaborador,
+  case when current_user_is_admin() or name_matches(vendedor,  current_user_person_name()) then vendedor          else null end as vendedor,
+  case when current_user_is_admin() or name_matches(vendedor,  current_user_person_name()) then comissao_percent  else null end as comissao_percent,
+  case when current_user_is_admin() or name_matches(vendedor2, current_user_person_name()) then vendedor2         else null end as vendedor2,
+  case when current_user_is_admin() or name_matches(vendedor2, current_user_person_name()) then comissao_percent2 else null end as comissao_percent2,
+  case when current_user_is_admin() or name_matches(vendedor3, current_user_person_name()) then vendedor3         else null end as vendedor3,
+  case when current_user_is_admin() or name_matches(vendedor3, current_user_person_name()) then comissao_percent3 else null end as comissao_percent3,
+  pago, mes_pagamento, parcela_label, created_at, updated_at
+from lancamentos
+where current_user_is_admin()
+   or name_matches(vendedor,  current_user_person_name())
+   or name_matches(vendedor2, current_user_person_name())
+   or name_matches(vendedor3, current_user_person_name())
+   or name_matches(colaborador, current_user_person_name())
+   or lancamento_has_extra_vendedor(id, current_user_person_name());
+
+create or replace view lancamentos_extra_vendedores_safe with (security_barrier = true) as
+select id, lancamento_id, vendedor, percent
+from lancamentos_extra_vendedores
+where current_user_is_admin()
+   or name_matches(vendedor, current_user_person_name());
+
+create or replace view vendas_safe with (security_barrier = true) as
+select
+  id, ano, mes, cliente, venda, valor, parceiro, participacao,
+  forma_pagamento, observacoes,
+  case when current_user_is_admin() or name_matches(colaborador, current_user_person_name()) then colaborador else null end as colaborador,
+  case when current_user_is_admin() or name_matches(vendedor2,   current_user_person_name()) then vendedor2   else null end as vendedor2,
+  case when current_user_is_admin() or name_matches(vendedor3,   current_user_person_name()) then vendedor3   else null end as vendedor3,
+  pago, mes_pagamento, parcela_label, created_at, updated_at
+from vendas
+where current_user_is_admin()
+   or name_matches(vendedor2, current_user_person_name())
+   or name_matches(vendedor3, current_user_person_name())
+   or name_matches(colaborador, current_user_person_name())
+   or exists (
+     select 1 from vendas_comissoes vc join sellers s on s.key = vc.seller_key
+     where vc.venda_id = vendas.id and name_matches(s.label, current_user_person_name())
+   );
+
+grant select on lancamentos_safe, lancamentos_extra_vendedores_safe, vendas_safe to authenticated;
 
 -- Depois de rodar isto, cadastre cada pessoa em app_user_access, ex:
 --   insert into app_user_access (auth_user_id, full_access, person_name)

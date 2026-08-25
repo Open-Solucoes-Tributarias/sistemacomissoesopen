@@ -818,8 +818,18 @@ async function sb(path, opts){
   if(ct.indexOf('application/json') !== -1) return res.json();
   return null;
 }
+/* Leitura passa pelas views "_safe": elas escondem, linha a linha, os
+   vendedores/percentuais que não são da pessoa logada. Para admin as views
+   devolvem tudo. A escrita continua indo direto nas tabelas base (só admin
+   tem permissão de escrever nelas). */
+const READ_VIEWS = {
+  vendas: 'vendas_safe',
+  lancamentos: 'lancamentos_safe',
+  lancamentos_extra_vendedores: 'lancamentos_extra_vendedores_safe',
+};
 function sbSelect(table, query){
-  return sb('/rest/v1/' + table + (query ? '?' + query : ''), { method: 'GET' });
+  const source = READ_VIEWS[table] || table;
+  return sb('/rest/v1/' + source + (query ? '?' + query : ''), { method: 'GET' });
 }
 function sbUpsert(table, rows, onConflict){
   if(!rows || rows.length === 0) return Promise.resolve();
@@ -1419,7 +1429,7 @@ function exportResumoCSV(){
 
     csv += 'VENDEDORAS\n';
     csv += 'Vendedora;Sistema;Consultoria;Orgaos Publicos;Cursos;Bonus;Total\n';
-    SELLERS.forEach(s => {
+    sellersForCurrentUser().forEach(s => {
       const b = sellerBreakdown[s.label] || {sistema:0,consultoria:0,publicos:0,cursos:0,bonus:0};
       const total = b.sistema+b.consultoria+b.publicos+b.cursos+b.bonus;
       csv += [s.label, csvNum(b.sistema), csvNum(b.consultoria), csvNum(b.publicos), csvNum(b.cursos), csvNum(b.bonus), csvNum(total)].join(';') + '\n';
@@ -2221,7 +2231,7 @@ function renderBonusSection(){
     </div>
   `;
 
-  const kpiCardsHtml = SELLERS.map(s => `
+  const kpiCardsHtml = sellersForCurrentUser().map(s => `
     <div class="kpi-card" style="--kc:${esc(s.color)}">
       <div class="kpi-label"><span class="kpi-dot"></span>${esc(s.label)}</div>
       <div class="kpi-value${bonusValuesRevealed?'':' masked'}" id="kpi-bonus-${s.key}">${bonusValuesRevealed ? fmtMoney(totals[s.label]) : '••••••'}</div>
@@ -2244,7 +2254,7 @@ function renderBonusSection(){
           ${isBonusRowPending(row) ? '<span class="pending-badge" title="Falta vendedor ou valor">⚠️</span>' : ''}
           ${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}
         </td>
-        <td><select data-id="${row.id}" onchange="onBonusVendedorSelect(this)"><option value="">—</option>${SELLERS.map(s => `<option value="${esc(s.label)}" ${row.vendedor===s.label?'selected':''}>${esc(s.label)}</option>`).join('')}</select></td>
+        <td><select data-id="${row.id}" onchange="onBonusVendedorSelect(this)"><option value="">—</option>${sellersForCurrentUser().map(s => `<option value="${esc(s.label)}" ${row.vendedor===s.label?'selected':''}>${esc(s.label)}</option>`).join('')}</select></td>
         <td><input type="text" data-id="${row.id}" data-field="descricao" value="${esc(row.descricao)}" placeholder="Ex: Meta do 1º trimestre batida" oninput="onBonusTextInput(this)" /></td>
         <td class="col-valor"><div class="currency-wrap"><span class="currency-prefix">R$</span><input class="num" type="number" step="0.01" placeholder="—" value="${row.valor===null||row.valor===undefined?'':row.valor}" data-id="${row.id}" oninput="onBonusNumInput(this)" /></div></td>
         <td class="del-cell">
@@ -2414,7 +2424,7 @@ function renderParceirosSection(){
   const totals = computePartnerTotals(entries);
   const totalHonorarios = entries.reduce((s,e) => s+e.honorario, 0);
   const sellerTotals = getSellerGrandTotals();
-  const grandTotalSellers = SELLERS.reduce((s,sel) => s+(sellerTotals[sel.label]||0), 0);
+  const grandTotalSellers = sellersForCurrentUser().reduce((s,sel) => s+(sellerTotals[sel.label]||0), 0);
   const sellerBreakdown = getSellerBreakdown();
   const partnerBreakdown = getPartnerBreakdown();
   const maskOr = (v) => partnersValuesRevealed ? fmtMoney(v) : '••••';
@@ -2422,7 +2432,7 @@ function renderParceirosSection(){
   const metasPanelHtml = partnerMonthFilter === "Todos" ? '' : `
     <div class="resumo-section-title">Metas de ${esc(partnerMonthFilter)}/${yearFilter}</div>
     <div class="metas-panel">
-      ${SELLERS.map(s => {
+      ${sellersForCurrentUser().map(s => {
         const meta = getMeta(yearFilter, partnerMonthFilter, s.label);
         const earned = Object.values(sellerBreakdown[s.label] || {}).reduce((a,b)=>a+b,0);
         const pct = meta > 0 ? Math.round((earned/meta)*100) : 0;
@@ -2449,7 +2459,7 @@ function renderParceirosSection(){
     <button class="eye-toggle" onclick="window.print()">🖨️ Imprimir / PDF</button>
   `;
 
-  const sellerBreakdownRowsHtml = SELLERS.map(s => {
+  const sellerBreakdownRowsHtml = sellersForCurrentUser().map(s => {
     const b = sellerBreakdown[s.label] || {sistema:0,consultoria:0,publicos:0,cursos:0,bonus:0};
     const total = b.sistema + b.consultoria + b.publicos + b.cursos + b.bonus;
     return `
@@ -2493,7 +2503,7 @@ function renderParceirosSection(){
     </div>
   `;
 
-  const sellerKpiCardsHtml = SELLERS.map(s => `
+  const sellerKpiCardsHtml = sellersForCurrentUser().map(s => `
     <div class="kpi-card" style="--kc:${esc(s.color)}">
       <div class="kpi-label"><span class="kpi-dot"></span>${esc(s.label)}</div>
       <div class="kpi-value${partnersValuesRevealed?'':' masked'}">${partnersValuesRevealed ? fmtMoney(sellerTotals[s.label]||0) : '••••••'}</div>
@@ -2797,6 +2807,17 @@ function getVisibleSellers(){
     list = list.filter(s => name_matches_client(s.label, currentPersonName));
   }
   return list;
+}
+/* Em modo restrito a tela não deve nem listar o nome dos colegas (o banco já
+   não manda os valores deles, mas a lista de nomes vinha do catálogo). */
+function sellersForCurrentUser(){
+  if(isAdmin) return SELLERS;
+  return SELLERS.filter(s => name_matches_client(s.label, currentPersonName));
+}
+function entityVendorsForCurrentUser(key){
+  const all = state[key].vendors || [];
+  if(isAdmin) return all;
+  return all.filter(v => name_matches_client(v, currentPersonName));
 }
 function name_matches_client(a, b){
   return !!a && !!b && String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
@@ -3327,7 +3348,7 @@ function updateEntitySummaries(key){
   const st = state[key];
   const visible = getEntityVisible(key);
   const totals = computeEntityTotals(key, visible);
-  const visibleVendors = st.vendorFilter === "Todos" ? st.vendors : [st.vendorFilter];
+  const visibleVendors = st.vendorFilter === "Todos" ? entityVendorsForCurrentUser(key) : [st.vendorFilter];
   visibleVendors.forEach(v => {
     const el = document.getElementById('kpi-'+key+'-'+slug(v));
     if(el) el.textContent = st.valuesRevealed ? fmtMoney(totals.byVendor[v]||0) : '••••••';
@@ -3345,14 +3366,14 @@ function renderEntitySection(key){
   const st = state[key];
   const visible = getEntityVisible(key);
   const totals = computeEntityTotals(key, visible);
-  const visibleVendors = st.vendorFilter === "Todos" ? st.vendors : [st.vendorFilter];
+  const visibleVendors = st.vendorFilter === "Todos" ? entityVendorsForCurrentUser(key) : [st.vendorFilter];
 
   const pillsHtml = ['Todos', ...MONTHS].map(m => {
     const active = m === st.filter ? ' active' : '';
     return `<button class="pill${active}" onclick="setEntityFilter('${key}','${m}')">${m}</button>`;
   }).join('');
 
-  const vendorPillsHtml = ['Todos', ...st.vendors].map(v => {
+  const vendorPillsHtml = ['Todos', ...entityVendorsForCurrentUser(key)].map(v => {
     const active = v === st.vendorFilter ? ' active' : '';
     return `<button class="pill seller-pill${active}" data-entity="${key}" data-vendor="${esc(v)}" onclick="setEntityVendorFilter(this)">${esc(v)}</button>`;
   }).join('');
@@ -3426,17 +3447,17 @@ function renderEntitySection(key){
           <div class="pct-wrap"><input class="num" type="number" step="0.1" min="0" placeholder="0" value="${row.comissaoPercent===null||row.comissaoPercent===undefined?'':row.comissaoPercent}" data-entity="${key}" data-id="${row.id}" data-field="comissaoPercent" oninput="onEntityNumInput(this)" /><span class="pct-suffix">%</span></div>
           <div class="calc-value" id="calc1-${key}-${row.id}">${fmtMoney(entityRowCommission(row,1))}</div>
         </td>`;
-        cells += `<td><select data-entity="${key}" data-id="${row.id}" data-field="vendedor" onchange="onEntitySelectField(this)"><option value="">—</option>${st.vendors.map(v => `<option value="${esc(v)}" ${row.vendedor===v?'selected':''}>${esc(v)}</option>`).join('')}</select></td>`;
+        cells += `<td><select data-entity="${key}" data-id="${row.id}" data-field="vendedor" onchange="onEntitySelectField(this)"><option value="">—</option>${entityVendorsForCurrentUser(key).map(v => `<option value="${esc(v)}" ${row.vendedor===v?'selected':''}>${esc(v)}</option>`).join('')}</select></td>`;
         cells += `<td class="col-pct">
           <div class="pct-wrap"><input class="num" type="number" step="0.1" min="0" placeholder="0" value="${row.comissaoPercent2===null||row.comissaoPercent2===undefined?'':row.comissaoPercent2}" data-entity="${key}" data-id="${row.id}" data-field="comissaoPercent2" oninput="onEntityNumInput(this)" /><span class="pct-suffix">%</span></div>
           <div class="calc-value" id="calc2-${key}-${row.id}">${fmtMoney(entityRowCommission(row,2))}</div>
         </td>`;
-        cells += `<td><select data-entity="${key}" data-id="${row.id}" data-field="vendedor2" onchange="onEntitySelectField(this)"><option value="">—</option>${st.vendors.map(v => `<option value="${esc(v)}" ${row.vendedor2===v?'selected':''}>${esc(v)}</option>`).join('')}</select></td>`;
+        cells += `<td><select data-entity="${key}" data-id="${row.id}" data-field="vendedor2" onchange="onEntitySelectField(this)"><option value="">—</option>${entityVendorsForCurrentUser(key).map(v => `<option value="${esc(v)}" ${row.vendedor2===v?'selected':''}>${esc(v)}</option>`).join('')}</select></td>`;
         cells += `<td class="col-pct">
           <div class="pct-wrap"><input class="num" type="number" step="0.1" min="0" placeholder="0" value="${row.comissaoPercent3===null||row.comissaoPercent3===undefined?'':row.comissaoPercent3}" data-entity="${key}" data-id="${row.id}" data-field="comissaoPercent3" oninput="onEntityNumInput(this)" /><span class="pct-suffix">%</span></div>
           <div class="calc-value" id="calc3-${key}-${row.id}">${fmtMoney(entityRowCommission(row,3))}</div>
         </td>`;
-        cells += `<td><select data-entity="${key}" data-id="${row.id}" data-field="vendedor3" onchange="onEntitySelectField(this)"><option value="">—</option>${st.vendors.map(v => `<option value="${esc(v)}" ${row.vendedor3===v?'selected':''}>${esc(v)}</option>`).join('')}</select></td>`;
+        cells += `<td><select data-entity="${key}" data-id="${row.id}" data-field="vendedor3" onchange="onEntitySelectField(this)"><option value="">—</option>${entityVendorsForCurrentUser(key).map(v => `<option value="${esc(v)}" ${row.vendedor3===v?'selected':''}>${esc(v)}</option>`).join('')}</select></td>`;
         for(let i=0; i<maxExtra; i++){
           const ev = (row.extraVendedores||[])[i];
           const slotNum = 4+i;
@@ -3448,7 +3469,7 @@ function renderEntitySection(key){
             </td>`;
             cells += `<td>
               <div style="display:flex;align-items:center;gap:2px;">
-                <select style="flex:1;" onchange="updateExtraVendedorField('${key}',${row.id},${ev.id},'vendedor',this.value)"><option value="">—</option>${st.vendors.map(v => `<option value="${esc(v)}" ${ev.vendedor===v?'selected':''}>${esc(v)}</option>`).join('')}</select>
+                <select style="flex:1;" onchange="updateExtraVendedorField('${key}',${row.id},${ev.id},'vendedor',this.value)"><option value="">—</option>${entityVendorsForCurrentUser(key).map(v => `<option value="${esc(v)}" ${ev.vendedor===v?'selected':''}>${esc(v)}</option>`).join('')}</select>
                 <button class="action-btn danger" title="Remover Vendedor ${slotNum}" onclick="removeExtraVendedorSlot('${key}',${row.id},${ev.id})">✕</button>
               </div>
             </td>`;
@@ -3573,7 +3594,7 @@ function render(){
 
       ${!isAdmin ? `
         <div class="storage-warning read-only-notice">
-          👁 Modo somente leitura — você só vê os lançamentos relacionados a você${currentPersonName ? ` (<b>${esc(currentPersonName)}</b>)` : ''} e não pode editar. Pra lançar ou alterar algo, peça pra Soraya, Deborah ou Open.
+          👁 Modo somente leitura — você só vê os lançamentos relacionados a você${currentPersonName ? ` (<b>${esc(currentPersonName)}</b>)` : ''} e não pode editar. Pra lançar ou alterar algo, fale com a administração do sistema.
         </div>
       ` : ''}
 
