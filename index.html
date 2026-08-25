@@ -477,6 +477,46 @@
   .panel-head-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
   .panel-meta{font-size:12.5px;color:var(--ink-soft);font-weight:600;white-space:nowrap;}
   .panel-meta b{color:var(--ink);font-weight:800;}
+  /* ---------- Metas ---------- */
+  .metas-lista{display:flex;flex-direction:column;gap:12px;}
+  .meta-empty{color:var(--ink-soft);font-size:13.5px;line-height:1.5;padding:6px 2px;}
+  .meta-card{
+    border:1px solid var(--border);border-radius:var(--radius-md);
+    padding:13px 15px;background:var(--surface);
+  }
+  .meta-card.batida{border-color:#A7E8C4;background:#F4FCF7;}
+  .meta-card-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;}
+  .meta-card-quem{display:flex;align-items:center;gap:8px;font-size:14px;}
+  .meta-card-acoes{display:flex;gap:2px;}
+  .meta-tag{
+    font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;
+    background:var(--border-soft);color:var(--ink-soft);padding:3px 8px;border-radius:999px;
+  }
+  .meta-tag.ok{background:#DCFCE7;color:#15803D;}
+  .meta-card-regra{font-size:12.5px;color:var(--ink-soft);font-weight:600;margin-bottom:9px;line-height:1.45;}
+  .meta-card .meta-bar-track{margin-bottom:8px;}
+  .meta-card-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+  .meta-card-num{font-size:12.5px;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
+  .meta-card-num b{color:var(--ink);}
+
+  .meta-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media (max-width:560px){ .meta-form-grid{grid-template-columns:1fr;} }
+  .meta-field{display:block;margin-bottom:12px;}
+  .meta-field > span{display:block;font-size:12.5px;font-weight:700;color:var(--ink-soft);margin-bottom:5px;}
+  .meta-field select, .meta-field input{
+    width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);
+    font-family:var(--font);font-size:14px;color:var(--ink);background:var(--surface);outline:none;
+  }
+  .meta-field select:focus, .meta-field input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+  .meta-field-money{display:flex;align-items:center;border:1.5px solid var(--border);border-radius:var(--radius-sm);padding-left:10px;background:var(--surface);}
+  .meta-field-money:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+  .meta-field-money input{border:none;box-shadow:none;padding-left:6px;}
+  .meta-field-money input:focus{border:none;box-shadow:none;}
+  .meta-form-preview{
+    background:var(--primary-soft);color:var(--primary);border-radius:var(--radius-sm);
+    padding:10px 12px;font-size:12.5px;font-weight:600;line-height:1.5;margin-bottom:14px;
+  }
+
   .sections-toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
   .panel-body{padding:16px;}
   .panel-body-flush{padding:0;}
@@ -609,7 +649,8 @@ let bonusNextId = 1;
 let bonusFilter = "Todos";
 let bonusValuesRevealed = false;
 let closedMonths = [];
-let metas = {};
+let metas = [];      // regras de meta: gatilho da empresa que premia uma pessoa
+let metasNextId = 1;
 let pagamentosMonthFilter = "Todos";
 let agingThresholdMonths = 1;
 
@@ -1125,7 +1166,7 @@ function persistBonus(){
   bonusTimer = setTimeout(function(){
     (async function(){
       try{
-        const dbRows = bonusRows.map(function(r){ return { id:r.id, ano:r.ano||2026, mes:r.mes, vendedor:r.vendedor||'', descricao:r.descricao||'', valor:r.valor }; });
+        const dbRows = bonusRows.map(function(r){ return { id:r.id, ano:r.ano||2026, mes:r.mes, vendedor:r.vendedor||'', descricao:r.descricao||'', valor:r.valor, meta_id: r.metaId || null }; });
         await sbUpsert('bonus', dbRows, 'id');
         const existing = (await sbSelect('bonus','select=id')) || [];
         const localIds = bonusRows.map(function(r){ return r.id; });
@@ -1141,7 +1182,7 @@ async function tryLoadBonusFromStorageAsync(){
   try{
     const dbRows = await sbSelect('bonus','select=*&order=id.asc');
     if(dbRows && dbRows.length){
-      bonusRows = dbRows.map(function(d){ return { id:d.id, ano:d.ano, mes:d.mes, vendedor:d.vendedor||'', descricao:d.descricao||'', valor:d.valor }; });
+      bonusRows = dbRows.map(function(d){ return { id:d.id, ano:d.ano, mes:d.mes, vendedor:d.vendedor||'', descricao:d.descricao||'', valor:d.valor, metaId: d.meta_id || null }; });
       migrateYear(bonusRows, 2026);
       bonusNextId = bonusRows.length ? Math.max.apply(null, bonusRows.map(function(r){ return r.id||0; }))+1 : 1;
       render();
@@ -1263,17 +1304,18 @@ function persistMetas(){
   metasTimer = setTimeout(function(){
     (async function(){
       try{
-        await sbDeleteAll('metas', 'id=gt.0');
-        const dbRows = Object.keys(metas).map(function(k){
-          const idx1 = k.indexOf('-');
-          const ano = parseInt(k.slice(0,idx1),10);
-          const rest = k.slice(idx1+1);
-          const idx2 = rest.indexOf('-');
-          const mes = rest.slice(0,idx2);
-          const vendedor = rest.slice(idx2+1);
-          return { ano: ano, mes: mes, vendedor: vendedor, valor_meta: metas[k] };
+        const dbRows = metas.map(function(m){
+          return {
+            id: m.id, ano: m.ano, mes: m.mes, vendedor: m.vendedor, origem: m.origem,
+            alvo: m.alvo, premio_tipo: m.premioTipo, premio_valor: m.premioValor,
+            descricao: m.descricao || '',
+          };
         });
-        if(dbRows.length) await sbUpsert('metas', dbRows, 'ano,mes,vendedor');
+        await sbUpsert('metas', dbRows, 'id');
+        const existing = (await sbSelect('metas','select=id')) || [];
+        const localIds = metas.map(function(m){ return m.id; });
+        const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
+        if(toDelete.length) await sbDeleteIn('metas','id', toDelete);
         saveError = false;
       } catch(e){ console.error(e); saveError = true; }
       finally { saving=false; updateSaveStatus(); }
@@ -1282,10 +1324,16 @@ function persistMetas(){
 }
 async function tryLoadMetasFromStorageAsync(){
   try{
-    const dbRows = await sbSelect('metas','select=*');
+    const dbRows = await sbSelect('metas','select=*&order=id.asc');
     if(dbRows){
-      metas = {};
-      dbRows.forEach(function(d){ metas[metaKey(d.ano,d.mes,d.vendedor)] = d.valor_meta; });
+      metas = dbRows.map(function(d){
+        return {
+          id: d.id, ano: d.ano, mes: d.mes, vendedor: d.vendedor || '', origem: d.origem,
+          alvo: Number(d.alvo)||0, premioTipo: d.premio_tipo, premioValor: Number(d.premio_valor)||0,
+          descricao: d.descricao || '',
+        };
+      });
+      metasNextId = metas.length ? Math.max.apply(null, metas.map(function(m){ return m.id||0; })) + 1 : 1;
       render();
     }
   } catch(e){ console.error(e); }
@@ -1502,6 +1550,75 @@ function renderModal(){
       </div>
     `;
   }
+  if(m.type === 'meta-form'){
+    const f = m.meta;
+    const novo = f.id === null;
+    const vendedorOptions = SELLERS.map(x =>
+      `<option value="${esc(x.label)}" ${f.vendedor===x.label?'selected':''}>${esc(x.label)}</option>`).join('');
+    const origemOptions = META_ORIGENS.map(o =>
+      `<option value="${o.key}" ${f.origem===o.key?'selected':''}>${esc(o.label)}</option>`).join('');
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-wide">
+          <div class="modal-msg">${novo ? 'Nova meta' : 'Editar meta'} — ${esc(f.mes)}/${f.ano}</div>
+          ${m.error ? `<div class="modal-error">${esc(m.error)}</div>` : ''}
+
+          <div class="meta-form-grid">
+            <label class="meta-field">
+              <span>Quem recebe o prêmio</span>
+              <select onchange="onMetaFormChange(this,'vendedor')">
+                <option value="">— escolher —</option>${vendedorOptions}
+              </select>
+            </label>
+            <label class="meta-field">
+              <span>Onde o faturamento é medido</span>
+              <select onchange="onMetaFormChange(this,'origem')">${origemOptions}</select>
+            </label>
+          </div>
+
+          <label class="meta-field">
+            <span>A empresa precisa faturar (no mês)</span>
+            <div class="meta-field-money">
+              <span class="currency-prefix">R$</span>
+              <input type="number" step="1000" min="0" placeholder="200000" value="${f.alvo===null||f.alvo===undefined?'':f.alvo}"
+                     oninput="onMetaFormChange(this,'alvo')" />
+            </div>
+          </label>
+
+          <div class="meta-form-grid">
+            <label class="meta-field">
+              <span>Tipo de prêmio</span>
+              <select onchange="onMetaFormChange(this,'premioTipo')">
+                <option value="fixo" ${f.premioTipo==='fixo'?'selected':''}>Valor fixo em R$</option>
+                <option value="percentual_total" ${f.premioTipo==='percentual_total'?'selected':''}>% sobre o total faturado</option>
+              </select>
+            </label>
+            <label class="meta-field">
+              <span>${f.premioTipo==='fixo' ? 'Valor do prêmio' : 'Porcentagem'}</span>
+              <div class="meta-field-money">
+                <span class="currency-prefix">${f.premioTipo==='fixo' ? 'R$' : '%'}</span>
+                <input type="number" step="${f.premioTipo==='fixo'?'50':'0.1'}" min="0"
+                       placeholder="${f.premioTipo==='fixo'?'500':'1'}"
+                       value="${f.premioValor===null||f.premioValor===undefined?'':f.premioValor}"
+                       oninput="onMetaFormChange(this,'premioValor')" />
+              </div>
+            </label>
+          </div>
+
+          <div class="meta-form-preview">
+            ${f.premioTipo==='fixo'
+              ? 'Ex: batendo o alvo, a pessoa ganha o valor fixo, não importa quanto passou.'
+              : 'A porcentagem incide sobre o <b>total faturado</b>, não sobre o que passou do alvo. Ex: alvo de R$ 200.000 com 1% — se a empresa faturar R$ 400.000, o prêmio é R$ 4.000.'}
+          </div>
+
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
+            <button class="modal-btn modal-btn-primary" onclick="salvarMeta()">${novo ? 'Criar meta' : 'Salvar'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
   let bodyHtml = `<div class="modal-msg">${esc(m.message)}</div>`;
   let actionsHtml = '';
   let wideClass = '';
@@ -1646,7 +1763,12 @@ function applyImportedData(text){
     if(Array.isArray(data.partners)) partners = data.partners;
     if(Array.isArray(data.extraYears)) extraYears = data.extraYears;
     if(Array.isArray(data.closedMonths)) closedMonths = data.closedMonths;
-    if(data.metas && typeof data.metas === 'object') metas = data.metas;
+    // metas mudaram de objeto (chave->valor) para lista de regras; backups
+    // antigos vêm no formato velho e são descartados de propósito.
+    if(Array.isArray(data.metas)){
+      metas = data.metas;
+      metasNextId = metas.length ? Math.max(...metas.map(m=>m.id||0)) + 1 : 1;
+    }
     if(Array.isArray(data.sistemaSellers) && data.sistemaSellers.length) SELLERS = data.sistemaSellers;
 
     persist();
@@ -2172,34 +2294,159 @@ function toggleMonthClosed(ano, mes){
 
 
 
-/* ---------------- Metas mensais ---------------- */
+/* ---------------- Metas mensais ----------------
+   Uma meta é um GATILHO DA EMPRESA que premia uma pessoa:
+   "quando a empresa faturar R$ X em <origem> no mês, fulana ganha Y".
+   O prêmio é um valor fixo em R$ ou uma % sobre o total faturado
+   (sobre o total inteiro, não sobre o que passou do alvo).
+   Como depende do faturamento geral, só admin configura e acompanha. */
 
-function metaKey(ano, mes, vendedor){ return ano+'-'+mes+'-'+vendedor; }
-function getMeta(ano, mes, vendedor){ return metas[metaKey(ano,mes,vendedor)] || 0; }
-function setMetaValue(ano, mes, vendedor, valor){
-  const key = metaKey(ano,mes,vendedor);
-  if(valor === null || valor === undefined || isNaN(valor) || valor <= 0) delete metas[key];
-  else metas[key] = valor;
+const META_ORIGENS = [
+  {key:'cursos',      label:'Cursos'},
+  {key:'sistema',     label:'Sistema'},
+  {key:'consultoria', label:'Consultoria'},
+  {key:'publicos',    label:'Consultoria Órgãos Públicos'},
+  {key:'todas',       label:'Todas as abas somadas'},
+];
+function origemLabel(key){
+  const o = META_ORIGENS.find(x => x.key === key);
+  return o ? o.label : key;
+}
+
+/* Total faturado pela empresa numa origem, no mês/ano informado.
+   Usa o valor cheio do contrato, antes de comissões e parceiros. */
+function faturamentoDaOrigem(origem, ano, mes){
+  let total = 0;
+  if(origem === 'sistema' || origem === 'todas'){
+    rows.forEach(r => {
+      if((r.ano||2026) !== ano || r.mes !== mes) return;
+      total += Number(r.valor)||0;
+    });
+  }
+  ENTITY_KEYS.forEach(key => {
+    if(origem !== 'todas' && origem !== key) return;
+    state[key].rows.forEach(r => {
+      if((r.ano||2026) !== ano || r.mes !== mes) return;
+      total += Number(r.valorContrato)||0;
+    });
+  });
+  return total;
+}
+
+/* Situação de uma meta: quanto já faturou, se bateu e quanto vale o prêmio. */
+function avaliarMeta(m){
+  const faturado = faturamentoDaOrigem(m.origem, m.ano, m.mes);
+  const bateu = m.alvo > 0 && faturado >= m.alvo;
+  const premio = !bateu ? 0
+    : (m.premioTipo === 'fixo' ? Number(m.premioValor)||0
+                               : faturado * ((Number(m.premioValor)||0) / 100));
+  const pct = m.alvo > 0 ? Math.round((faturado / m.alvo) * 100) : 0;
+  return { faturado, bateu, premio, pct, falta: Math.max(0, m.alvo - faturado) };
+}
+
+function metaDescricaoRegra(m){
+  const gatilho = `Quando a empresa faturar ${fmtMoney(m.alvo)} em ${origemLabel(m.origem)}`;
+  const premio = m.premioTipo === 'fixo'
+    ? `${fmtMoney(m.premioValor)} fixos`
+    : `${String(m.premioValor).replace('.',',')}% do total faturado`;
+  return `${gatilho} → ${premio}`;
+}
+
+function metasDoMes(){
+  if(partnerMonthFilter === "Todos") return [];
+  return metas.filter(m => m.ano === yearFilter && m.mes === partnerMonthFilter);
+}
+function bonusDaMeta(metaId){
+  return bonusRows.find(b => b.metaId === metaId);
+}
+
+/* ---- criar / editar / excluir uma meta ---- */
+function novaMeta(){
+  if(partnerMonthFilter === "Todos"){
+    showAlert("Escolha um mês no filtro acima para criar uma meta — metas são mensais.");
+    return;
+  }
+  modalState = {
+    type:'meta-form',
+    meta:{ id:null, ano:yearFilter, mes:partnerMonthFilter, vendedor:'',
+           origem:'cursos', alvo:null, premioTipo:'fixo', premioValor:null },
+    error:'',
+  };
+  render();
+}
+function editarMeta(id){
+  const m = metas.find(x => x.id === id);
+  if(!m) return;
+  modalState = { type:'meta-form', meta: Object.assign({}, m), error:'' };
+  render();
+}
+function excluirMeta(id){
+  const m = metas.find(x => x.id === id);
+  if(!m) return;
+  showConfirm(
+    `Excluir a meta de ${m.vendedor}? ${metaDescricaoRegra(m)}. O bônus já lançado a partir dela, se houver, continua na aba Bônus e Metas.`,
+    () => {
+      metas = metas.filter(x => x.id !== id);
+      persistMetas();
+      render();
+    },
+    "Excluir"
+  );
+}
+function onMetaFormChange(el, campo){
+  if(!modalState || modalState.type !== 'meta-form') return;
+  const v = el.value;
+  if(campo === 'alvo' || campo === 'premioValor') modalState.meta[campo] = v === '' ? null : parseFloat(v);
+  else modalState.meta[campo] = v;
+  if(campo === 'premioTipo') render();
+}
+function salvarMeta(){
+  if(!modalState || modalState.type !== 'meta-form') return;
+  const m = modalState.meta;
+  if(!m.vendedor){ modalState.error = 'Escolha quem recebe o prêmio.'; render(); return; }
+  if(!(Number(m.alvo) > 0)){ modalState.error = 'Informe o valor que a empresa precisa faturar.'; render(); return; }
+  if(!(Number(m.premioValor) > 0)){ modalState.error = 'Informe o valor do prêmio.'; render(); return; }
+  if(m.premioTipo === 'percentual_total' && Number(m.premioValor) > 100){
+    modalState.error = 'A porcentagem do prêmio não pode passar de 100%.'; render(); return;
+  }
+  if(m.id === null){
+    m.id = metasNextId++;
+    metas.push(m);
+  } else {
+    const i = metas.findIndex(x => x.id === m.id);
+    if(i !== -1) metas[i] = m;
+  }
+  modalState = null;
   persistMetas();
+  render();
 }
 
-
-function onMetaInput(el){
-  const vendedor = el.dataset.vendedor;
-  const v = el.value === '' ? null : parseFloat(el.value);
-  setMetaValue(yearFilter, partnerMonthFilter, vendedor, v);
-  updateMetaProgress(vendedor);
-}
-function updateMetaProgress(vendedor){
-  const bar = document.getElementById('meta-bar-'+slug(vendedor));
-  const pctLabel = document.getElementById('meta-pct-'+slug(vendedor));
-  if(!bar || !pctLabel) return;
-  const meta = getMeta(yearFilter, partnerMonthFilter, vendedor);
-  const earned = (getSellerBreakdown()[vendedor] ? Object.values(getSellerBreakdown()[vendedor]).reduce((a,b)=>a+b,0) : 0);
-  const pct = meta > 0 ? Math.round((earned/meta)*100) : 0;
-  bar.style.width = Math.min(pct,100) + '%';
-  bar.className = 'meta-bar-fill' + (pct >= 100 ? ' complete' : '');
-  pctLabel.textContent = pct + '%';
+/* ---- lançar o bônus da meta batida (com confirmação) ---- */
+function lancarBonusDaMeta(id){
+  const m = metas.find(x => x.id === id);
+  if(!m) return;
+  const av = avaliarMeta(m);
+  if(!av.bateu){ showAlert("Esta meta ainda não foi batida."); return; }
+  if(bonusDaMeta(id)){ showAlert("O bônus desta meta já foi lançado."); return; }
+  if(isMonthClosed(m.ano, m.mes)){
+    showAlert("Este mês está fechado para novos lançamentos. Reabra em Resumo Geral para poder lançar.");
+    return;
+  }
+  showConfirm(
+    `Lançar ${fmtMoney(av.premio)} de bônus para ${m.vendedor} em ${m.mes}/${m.ano}? A empresa faturou ${fmtMoney(av.faturado)} em ${origemLabel(m.origem)} (meta: ${fmtMoney(m.alvo)}). O lançamento vai para a aba Bônus e Metas e pode ser editado lá.`,
+    () => {
+      const desc = m.premioTipo === 'fixo'
+        ? `Meta batida — ${origemLabel(m.origem)} ${fmtMoney(m.alvo)}`
+        : `Meta batida — ${String(m.premioValor).replace('.',',')}% de ${fmtMoney(av.faturado)} em ${origemLabel(m.origem)}`;
+      bonusRows.unshift({
+        id: bonusNextId++, ano: m.ano, mes: m.mes, vendedor: m.vendedor,
+        descricao: desc, valor: Math.round(av.premio*100)/100, metaId: m.id,
+      });
+      persistBonus();
+      render();
+    },
+    "Lançar bônus"
+  );
 }
 
 function getPartnerEntries(){
@@ -2536,6 +2783,64 @@ function renderMonthlyChart(){
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="overflow:visible;display:block;">${bars}</svg>`;
 }
 
+/* Painel de metas: só admin (depende do faturamento geral da empresa). */
+function renderMetasPanel(){
+  if(!isAdmin) return '';
+  if(partnerMonthFilter === "Todos"){
+    return panel('resumo-metas', `Metas`, `
+      <div class="meta-empty">Escolha um mês no filtro acima para ver e configurar as metas — elas são mensais.</div>
+    `);
+  }
+
+  const lista = metasDoMes();
+  const batidas = lista.filter(m => avaliarMeta(m).bateu);
+  const aLancar = batidas.filter(m => !bonusDaMeta(m.id));
+
+  const corpo = lista.length === 0
+    ? `<div class="meta-empty">Nenhuma meta configurada para ${esc(partnerMonthFilter)}/${yearFilter}. Clique em "+ Nova meta" para criar a primeira.</div>`
+    : lista.map(m => {
+        const av = avaliarMeta(m);
+        const jaLancado = bonusDaMeta(m.id);
+        const pctBarra = Math.min(av.pct, 100);
+        return `
+          <div class="meta-card${av.bateu ? ' batida' : ''}">
+            <div class="meta-card-top">
+              <div class="meta-card-quem">
+                <span class="th-dot" style="background:${esc(vendorColor(m.vendedor, SELLERS.map(x=>x.label)))}"></span>
+                <strong>${esc(m.vendedor)}</strong>
+                ${av.bateu ? '<span class="meta-tag ok">meta batida</span>' : `<span class="meta-tag">${av.pct}%</span>`}
+              </div>
+              <div class="meta-card-acoes">
+                <button class="action-btn" title="Editar meta" onclick="editarMeta(${m.id})">✎</button>
+                <button class="action-btn danger" title="Excluir meta" onclick="excluirMeta(${m.id})">✕</button>
+              </div>
+            </div>
+            <div class="meta-card-regra">${esc(metaDescricaoRegra(m))}</div>
+            <div class="meta-bar-track"><div class="meta-bar-fill${av.bateu?' complete':''}" style="width:${pctBarra}%"></div></div>
+            <div class="meta-card-bottom">
+              <span class="meta-card-num">
+                ${fmtMoney(av.faturado)} de ${fmtMoney(m.alvo)}
+                ${av.bateu ? '' : ` · faltam <b>${fmtMoney(av.falta)}</b>`}
+              </span>
+              ${av.bateu ? (jaLancado
+                ? `<span class="meta-tag ok">✓ bônus de ${fmtMoney(jaLancado.valor)} lançado</span>`
+                : `<button class="btn-add" onclick="lancarBonusDaMeta(${m.id})">Lançar bônus de ${fmtMoney(av.premio)}</button>`)
+              : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+  return panel('resumo-metas', `Metas de ${esc(partnerMonthFilter)}/${yearFilter}`, `
+    <div class="metas-lista">${corpo}</div>
+  `, {
+    meta: lista.length
+      ? `<b>${batidas.length}</b> de <b>${lista.length}</b> batida${batidas.length===1?'':'s'}${aLancar.length ? ` · <span style="color:#B45309;">${aLancar.length} a lançar</span>` : ''}`
+      : '',
+    actions: `<button class="btn-add" onclick="novaMeta()">+ Nova meta</button>`,
+  });
+}
+
 function renderParceirosSection(){
   const entries = getPartnerEntries();
   const totals = computePartnerTotals(entries);
@@ -2546,26 +2851,7 @@ function renderParceirosSection(){
   const partnerBreakdown = getPartnerBreakdown();
   const maskOr = (v) => partnersValuesRevealed ? fmtMoney(v) : '••••';
 
-  const metasPanelInner = partnerMonthFilter === "Todos" ? '' : `
-    <div class="metas-panel" style="border:none;box-shadow:none;padding:0;margin:0;">
-      ${sellersForCurrentUser().map(s => {
-        const meta = getMeta(yearFilter, partnerMonthFilter, s.label);
-        const earned = Object.values(sellerBreakdown[s.label] || {}).reduce((a,b)=>a+b,0);
-        const pct = meta > 0 ? Math.round((earned/meta)*100) : 0;
-        return `
-          <div class="meta-row">
-            <span class="meta-name"><span class="th-dot" style="background:${s.color}"></span>${esc(s.label)}</span>
-            <div class="meta-input-wrap"><span class="currency-prefix">R$</span><input class="num" type="number" step="50" placeholder="Definir meta" value="${meta||''}" data-vendedor="${esc(s.label)}" onchange="onMetaInput(this)" /></div>
-            <div class="meta-bar-track"><div class="meta-bar-fill${pct>=100?' complete':''}" id="meta-bar-${slug(s.label)}" style="width:${Math.min(pct,100)}%"></div></div>
-            <span class="meta-pct" id="meta-pct-${slug(s.label)}">${meta>0?pct+'%':'—'}</span>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-  const metasPanelHtml = metasPanelInner
-    ? panel('resumo-metas', `Metas de ${esc(partnerMonthFilter)}/${yearFilter}`, metasPanelInner)
-    : '';
+  const metasPanelHtml = renderMetasPanel();
 
   const isMonthClosedNow = partnerMonthFilter !== "Todos" && isMonthClosed(yearFilter, partnerMonthFilter);
   const closeButtonHtml = partnerMonthFilter === "Todos" ? '' : `

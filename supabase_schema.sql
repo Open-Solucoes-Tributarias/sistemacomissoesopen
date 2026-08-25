@@ -104,17 +104,29 @@ create table bonus (
   vendedor text default '',
   descricao text default '',
   valor numeric,
+  -- preenchido quando o bônus veio de uma meta batida; o índice único
+  -- mais abaixo garante que a mesma meta nunca pague duas vezes
+  meta_id bigint,
   created_at timestamptz not null default now()
 );
 
--- Metas mensais por vendedor(a)
+-- Metas: gatilho da EMPRESA que premia uma pessoa.
+-- "quando a empresa faturar R$ <alvo> em <origem> no mês,
+--  <vendedor> ganha <prêmio>", onde o prêmio é um valor fixo ou uma
+-- % sobre o TOTAL faturado (não sobre o que passou do alvo).
 create table metas (
   id bigserial primary key,
   ano int not null,
   mes text not null,
-  vendedor text not null,
-  valor_meta numeric not null,
-  unique(ano, mes, vendedor)
+  vendedor text not null,                        -- quem recebe o prêmio
+  origem text not null
+    check (origem in ('sistema','consultoria','publicos','cursos','todas')),
+  alvo numeric not null check (alvo > 0),
+  premio_tipo text not null
+    check (premio_tipo in ('fixo','percentual_total')),
+  premio_valor numeric not null check (premio_valor > 0),
+  descricao text default '',
+  created_at timestamptz not null default now()
 );
 
 -- Meses fechados (trava edição)
@@ -134,6 +146,9 @@ create table extra_years (
 create index on vendas (ano, mes);
 create index on lancamentos (entidade, ano, mes);
 create index on bonus (ano, mes);
+create index on metas (ano, mes);
+alter table bonus add constraint bonus_meta_fk foreign key (meta_id) references metas(id) on delete set null;
+create unique index bonus_meta_unico on bonus (meta_id) where meta_id is not null;
 create index on vendas_comissoes (venda_id);
 create index on lancamentos_extra_vendedores (lancamento_id);
 
@@ -259,9 +274,11 @@ create policy "admin insert" on bonus for insert to authenticated with check (cu
 create policy "admin update" on bonus for update to authenticated using (current_user_is_admin()) with check (current_user_is_admin());
 create policy "admin delete" on bonus for delete to authenticated using (current_user_is_admin());
 
--- metas
-create policy "select own or admin" on metas for select to authenticated
-  using (current_user_is_admin() or name_matches(vendedor, current_user_person_name()));
+-- metas: dependem do faturamento da empresa inteira, que conta restrita
+-- não pode ver, então configurar e acompanhar é exclusivo de admin.
+-- (A premiada vê o resultado na aba Bônus, que leva o nome dela.)
+create policy "select admin only" on metas for select to authenticated
+  using (current_user_is_admin());
 create policy "admin insert" on metas for insert to authenticated with check (current_user_is_admin());
 create policy "admin update" on metas for update to authenticated using (current_user_is_admin()) with check (current_user_is_admin());
 create policy "admin delete" on metas for delete to authenticated using (current_user_is_admin());

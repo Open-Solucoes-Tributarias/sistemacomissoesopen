@@ -19,6 +19,7 @@ Sistema de controle de vendas, comissões, parceiros e pagamentos da equipe come
 ├── supabase_row_access_migration.sql   → migração 2: acesso por pessoa (admin x conta restrita)
 ├── supabase_column_masking_migration.sql → migração 3: esconde os dados dos colegas dentro de um lançamento compartilhado
 ├── supabase_hardening_migration.sql     → migração 4: correções da conferência (ver "Segurança")
+├── supabase_metas_migration.sql         → migração 5: metas viram regras configuráveis
 └── .gitignore
 ```
 
@@ -68,8 +69,9 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 3. Rode `supabase_row_access_migration.sql` — separa admin de conta restrita.
 4. Rode `supabase_column_masking_migration.sql` — cria as views `_safe` e fecha a leitura direta das tabelas base.
 5. Rode `supabase_hardening_migration.sql` — correções encontradas na conferência do banco.
-6. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
-7. Só depois publique esta versão atualizada do `index.html`.
+6. Rode `supabase_metas_migration.sql` — novo formato das metas (recria a tabela `metas`).
+7. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
+8. Só depois publique esta versão atualizada do `index.html`.
 
 ⚠️ A partir da migração 3, o `index.html` lê pelas views `_safe`. Uma versão antiga do front, apontando para as tabelas base, mostraria tudo vazio para as contas restritas — publique o `index.html` desta versão junto.
 
@@ -82,7 +84,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `lancamentos` | Lançamentos de Consultoria, Consultoria Órgãos Públicos e Cursos (uma tabela só, filtrada pela coluna `entidade`) |
 | `lancamentos_extra_vendedores` | Vendedores extras (4º em diante) por lançamento |
 | `bonus` | Bônus e metas batidas |
-| `metas` | Metas mensais por vendedor(a) |
+| `metas` | Regras de meta: gatilho da empresa + prêmio de quem bate |
 | `partners` | Parceiros cadastrados |
 | `venda_products` | Catálogo de produtos da aba Sistema |
 | `sellers` | Vendedoras do Sistema (lista editável) |
@@ -116,10 +118,33 @@ Pronto — a Vercel te dá uma URL pública (tipo `seu-projeto.vercel.app`) que 
 1. Crie uma conta no [github.com](https://github.com) se ainda não tiver.
 2. Clique em **New repository** (botão verde no canto superior direito).
 3. Dê um nome (ex: `comissoes-open-tributarias`), marque como **Private** (recomendado, já que tem dados comerciais) e clique em **Create repository**.
-4. Na tela que aparece, clique em **uploading an existing file** e arraste os arquivos deste projeto (`index.html`, `README.md`, `.gitignore`, `supabase_schema.sql`, `supabase_security_migration.sql`, `supabase_row_access_migration.sql`, `supabase_column_masking_migration.sql`, `supabase_hardening_migration.sql`).
+4. Na tela que aparece, clique em **uploading an existing file** e arraste os arquivos deste projeto (`index.html`, `README.md`, `.gitignore`, `supabase_schema.sql`, `supabase_security_migration.sql`, `supabase_row_access_migration.sql`, `supabase_column_masking_migration.sql`, `supabase_hardening_migration.sql`, `supabase_metas_migration.sql`).
 5. Clique em **Commit changes**.
 
 Pronto, o código está no GitHub. Agora é só seguir o passo "Deploy no Vercel" acima.
+
+## Metas e bônus
+
+Uma meta é um **gatilho da empresa que premia uma pessoa**, não uma cota individual:
+
+> Quando a empresa faturar **R$ 200.000 em Cursos** no mês, **Soraya** ganha **1% do total faturado**.
+
+Cada meta tem quatro partes, configuráveis por regra (em **Resumo Geral → Metas**, escolhendo um mês no filtro):
+
+| Parte | O que é |
+|---|---|
+| Quem recebe | a vendedora premiada |
+| Onde é medido | Sistema, Consultoria, Órgãos Públicos, Cursos ou todas somadas |
+| Alvo | quanto a empresa precisa faturar no mês (valor cheio dos contratos, antes de comissões e parceiros) |
+| Prêmio | um valor fixo em R$, ou uma % **sobre o total faturado** |
+
+A porcentagem incide sobre o total inteiro, não sobre o excedente: alvo de R$ 200.000 com 1%, faturando R$ 400.000, paga R$ 4.000.
+
+Várias pessoas podem ter regras diferentes para o mesmo gatilho — uma ganha 1% do total, outra R$ 500 fixos, outra R$ 750.
+
+**Como o prêmio vira bônus:** ao bater, o card fica verde e aparece o botão *"Lançar bônus de R$ X"*. Alguém confirma e a linha vai para a aba **Bônus e Metas**, onde pode ser editada como qualquer outra. A linha guarda de qual meta veio, então a mesma meta nunca paga duas vezes — depois de lançada, o card passa a mostrar *"✓ bônus lançado"*.
+
+Como a meta depende do faturamento da empresa inteira, **só admin configura e acompanha**. A vendedora premiada vê o resultado normalmente na aba Bônus, porque a linha leva o nome dela.
 
 ## Backup manual
 
