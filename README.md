@@ -134,6 +134,13 @@ A equipe de consultoria só recebe quando o **cliente paga a nota** — contrato
 
 O que move um lançamento de um quadro para o outro é a caixinha **"Pago"** na aba de origem (Sistema, Consultoria ou Órgãos Públicos). Marcou como pago, a comissão sai de "a receber" e entra em "liberadas".
 
+Cada quadro tem seu **próprio filtro de mês**, e eles filtram por coisas diferentes — o que é proposital:
+
+- **Liberadas** filtra pelo **mês em que o cliente pagou**, porque é quando o dinheiro entrou.
+- **A receber** filtra pelo **mês da venda**, porque ainda não existe pagamento para filtrar.
+
+Os dois são independentes: dá pra ver o que foi pago em setembro e, ao mesmo tempo, o que ainda está em aberto das vendas de agosto. Quando o filtro de "a receber" está num mês, a dica embaixo das pills mostra também o total do ano todo, pra não perder a visão geral.
+
 Os dois quadros já descontam a participação do parceiro antes de calcular a comissão: contrato de R$ 60.000 com 10% de parceiro e 20% de comissão paga R$ 10.800, não R$ 12.000.
 
 Cada vendedor(a) logado enxerga **apenas as próprias linhas** — é o mesmo corte de acesso do resto do sistema, feito no banco. Admin vê todo mundo, agrupado por pessoa e com subtotal.

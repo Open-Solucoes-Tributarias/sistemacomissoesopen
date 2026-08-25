@@ -481,6 +481,11 @@
     background:var(--border-soft);font-weight:800;font-size:12.5px;color:var(--ink);
     border-top:1px solid var(--border);
   }
+  .dica-filtro{
+    font-size:12px;color:var(--ink-faint);font-weight:600;
+    margin:-4px 16px 12px;line-height:1.45;
+  }
+  .dica-filtro b{color:var(--ink-soft);}
   .aviso-previsao{
     background:#FFF8E8;border:1px solid #F5DFA8;color:#8A6114;
     border-radius:var(--radius-sm);padding:10px 12px;font-size:12.5px;font-weight:600;
@@ -664,6 +669,7 @@ let closedMonths = [];
 let metas = [];      // regras de meta: gatilho da empresa que premia uma pessoa
 let metasNextId = 1;
 let pagamentosMonthFilter = "Todos";
+let aReceberMonthFilter = "Todos";   // filtra "a receber" pelo mês da VENDA
 let agingThresholdMonths = 1;
 
 const state = {};
@@ -2076,6 +2082,15 @@ function onPagamentoMesSelect(el, entityKey){
   persistAfterPayment(entityKey);
 }
 function setPagamentosMonthFilter(m){ pagamentosMonthFilter = m; render(); }
+function setAReceberMonthFilter(m){ aReceberMonthFilter = m; render(); }
+
+/* Fita de meses reutilizável pelos quadros de comissão. */
+function pillsDeMes(ativo, fnNome){
+  return `<div class="filters-row" style="margin:0 16px 12px;"><div class="months">` +
+    ['Todos', ...MONTHS].map(m =>
+      `<button class="pill${m===ativo?' active':''}" onclick="${fnNome}('${m}')">${m}</button>`
+    ).join('') + `</div></div>`;
+}
 
 function getPagamentosRealizados(){
   const out = [];
@@ -2258,31 +2273,40 @@ function renderComissoesLiberadas(){
   if(pagamentosMonthFilter !== "Todos") lista = lista.filter(e => e.mesPagamento === pagamentosMonthFilter);
   const grupos = agruparPorVendedor(lista);
   const total = lista.reduce((s,e) => s+e.comissao, 0);
-  const escopo = pagamentosMonthFilter === "Todos" ? `${yearFilter}` : `${esc(pagamentosMonthFilter)}/${yearFilter}`;
 
-  const corpo = grupos.length === 0
-    ? `<div class="meta-empty">Nenhuma comissão liberada neste filtro. Uma comissão entra aqui quando o lançamento é marcado como <b>Pago</b> na aba de origem.</div>`
-    : kpisComissoes(grupos, total, `Total liberado · ${escopo}`) + tabelaComissoes(grupos, true);
+  const fita = pillsDeMes(pagamentosMonthFilter, 'setPagamentosMonthFilter')
+    + `<div class="dica-filtro">Filtrando pelo <b>mês em que o cliente pagou</b>.</div>`;
+
+  const corpo = fita + (grupos.length === 0
+    ? `<div class="meta-empty" style="padding:6px 16px 10px;">Nenhuma comissão liberada em <b>${pagamentosMonthFilter === "Todos" ? yearFilter : esc(pagamentosMonthFilter)+'/'+yearFilter}</b>. Uma comissão entra aqui quando o lançamento é marcado como <b>Pago</b> na aba de origem.</div>`
+    : kpisComissoes(grupos, total, 'Total liberado') + tabelaComissoes(grupos, true));
 
   return panel('com-liberadas', '💰 Comissões liberadas — o cliente já pagou', corpo, {
-    flush: grupos.length > 0,
-    meta: grupos.length ? `<b>${fmtMoney(total)}</b> em ${lista.length} lançamento${lista.length===1?'':'s'}` : '',
+    flush: true,
+    meta: `<b>${fmtMoney(total)}</b> em ${lista.length} lançamento${lista.length===1?'':'s'}${pagamentosMonthFilter!=="Todos" ? ` · pagos em <b>${esc(pagamentosMonthFilter)}</b>` : ''}`,
   });
 }
 
 function renderComissoesAguardando(){
-  const lista = getComissoesPorStatus(false);
+  let lista = getComissoesPorStatus(false);
+  const totalAno = lista.reduce((s,e) => s+e.comissao, 0);
+  if(aReceberMonthFilter !== "Todos") lista = lista.filter(e => e.mesVenda === aReceberMonthFilter);
   const grupos = agruparPorVendedor(lista);
   const total = lista.reduce((s,e) => s+e.comissao, 0);
+  const escopo = aReceberMonthFilter === "Todos" ? `${yearFilter}` : `${esc(aReceberMonthFilter)}/${yearFilter}`;
 
-  const corpo = grupos.length === 0
-    ? `<div class="meta-empty">Nenhuma comissão pendente — todos os lançamentos de ${yearFilter} já estão marcados como pagos.</div>`
+  const fita = pillsDeMes(aReceberMonthFilter, 'setAReceberMonthFilter')
+    + `<div class="dica-filtro">Como o cliente ainda não pagou, o filtro é pelo <b>mês da venda</b>.${
+        aReceberMonthFilter !== "Todos" ? ` No ano todo são ${fmtMoney(totalAno)}.` : ''}</div>`;
+
+  const corpo = fita + (grupos.length === 0
+    ? `<div class="meta-empty" style="padding:6px 16px 10px;">Nenhuma comissão pendente em <b>${escopo}</b> — os lançamentos desse período já estão marcados como pagos.</div>`
     : `<div class="aviso-previsao">Estes valores <b>ainda não estão liberados</b>: dependem do cliente pagar a nota. Assim que o lançamento for marcado como Pago na aba de origem, ele passa para o quadro de cima.</div>`
-      + kpisComissoes(grupos, total, `Total previsto · ${yearFilter}`) + tabelaComissoes(grupos, false);
+      + kpisComissoes(grupos, total, 'Total previsto') + tabelaComissoes(grupos, false));
 
   return panel('com-aguardando', '⏳ A receber — aguardando o cliente pagar', corpo, {
-    flush: grupos.length > 0,
-    meta: grupos.length ? `<b>${fmtMoney(total)}</b> em ${lista.length} lançamento${lista.length===1?'':'s'}` : '',
+    flush: true,
+    meta: `<b>${fmtMoney(total)}</b> em ${lista.length} lançamento${lista.length===1?'':'s'}${aReceberMonthFilter!=="Todos" ? ` · vendidos em <b>${esc(aReceberMonthFilter)}</b>` : ''}`,
   });
 }
 
