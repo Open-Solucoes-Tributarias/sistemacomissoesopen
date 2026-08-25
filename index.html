@@ -157,6 +157,11 @@
     .table-card, .chart-card, .metas-panel{ box-shadow:none; border:1px solid #999; break-inside:avoid; }
     input, select{ border:none !important; background:transparent !important; color:#000 !important; }
     .kpi-value.masked{ display:none; }
+    /* No papel tudo sai aberto, mesmo o que estiver minimizado na tela */
+    .sections-toolbar, .panel-chevron{ display:none !important; }
+    .panel .panel-body, .panel.collapsed .panel-body{ display:block !important; }
+    .panel{ box-shadow:none; border:1px solid #999; break-inside:avoid; }
+    .panel-head{ border-bottom:1px solid #999 !important; }
   }
 
   /* Tabs nav */
@@ -285,9 +290,9 @@
   .table-scroll{overflow-x:auto;}
   table{border-collapse:collapse;width:100%;table-layout:auto;}
   thead th{
-    background:var(--border-soft);color:var(--ink-soft);
-    font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.04em;
-    text-align:left;padding:9px 8px;white-space:nowrap;
+    background:var(--surface);color:var(--ink-faint);
+    font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;
+    text-align:left;padding:12px 10px 10px;white-space:nowrap;
     border-bottom:1px solid var(--border);
   }
   thead th.num{text-align:right;}
@@ -433,6 +438,65 @@
   .user-chip{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--ink-soft);background:var(--surface);border:1px solid var(--border);padding:7px 12px;border-radius:999px;}
   .user-chip .logout-btn{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-family:var(--font);font-weight:700;font-size:12px;padding:0;}
   .user-chip .logout-btn:hover{color:var(--danger);}
+
+  /* ---------- Painéis recolhíveis ---------- */
+  .panel{
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);
+    margin-bottom:18px;overflow:hidden;
+  }
+  .panel-head{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;
+    padding:13px 16px;border-bottom:1px solid var(--border-soft);
+    transition:border-color .18s, background .15s;
+  }
+  .panel-head:hover{background:#FCFCFE;}
+  .panel.collapsed .panel-head{border-bottom-color:transparent;}
+  .panel-toggle{
+    display:flex;align-items:center;gap:10px;flex:1;min-width:0;
+    background:none;border:none;cursor:pointer;padding:2px 0;
+    font-family:var(--font);text-align:left;color:var(--ink);
+  }
+  .panel-chevron{
+    flex:none;width:18px;height:18px;border-radius:5px;
+    display:inline-flex;align-items:center;justify-content:center;
+    color:var(--ink-faint);transition:transform .2s ease, color .15s;
+  }
+  .panel-chevron::before{
+    content:"";width:5px;height:5px;
+    border-right:1.8px solid currentColor;border-bottom:1.8px solid currentColor;
+    transform:rotate(45deg);margin-top:-2px;
+  }
+  .panel.collapsed .panel-chevron{transform:rotate(-90deg);}
+  .panel-toggle:hover .panel-chevron{color:var(--primary);}
+  .panel-title{
+    font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .panel-toggle:hover .panel-title{color:var(--ink);}
+  .panel-head-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
+  .panel-meta{font-size:12.5px;color:var(--ink-soft);font-weight:600;white-space:nowrap;}
+  .panel-meta b{color:var(--ink);font-weight:800;}
+  .sections-toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+  .panel-body{padding:16px;}
+  .panel-body-flush{padding:0;}
+  .panel.collapsed .panel-body{display:none;}
+  .panel-body > .table-scroll > table{margin:0;}
+  .panel-body-flush .table-scroll thead th:first-child,
+  .panel-body-flush .table-scroll tbody td:first-child{padding-left:16px;}
+  .panel-body-flush .table-scroll thead th:last-child,
+  .panel-body-flush .table-scroll tbody td:last-child{padding-right:16px;}
+
+  /* Tabelas de leitura (resumos): respiram, em vez de parecer print de planilha */
+  table.table-plain tbody td{padding:12px 10px;font-size:13px;color:var(--ink);}
+  table.table-plain tbody td:first-child{font-weight:700;}
+  table.table-plain tbody tr:hover{background:#FAFAFE;}
+  table.table-plain td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  table.table-plain tfoot td{
+    padding:12px 10px;font-size:13px;font-weight:800;color:var(--ink);
+    border-top:1.5px solid var(--border);background:var(--border-soft);
+  }
+  table.table-plain tfoot td.num{text-align:right;font-variant-numeric:tabular-nums;}
 
   .app-loading{min-height:70vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--ink-soft);font-weight:600;font-size:14px;}
   .spinner{width:30px;height:30px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--primary);animation:auth-spin .8s linear infinite;}
@@ -1266,6 +1330,68 @@ function esc(s){
   if(s===null||s===undefined) return "";
   return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 }
+
+/* ---------------- Painéis recolhíveis ----------------
+   Cada bloco de tabela/resumo vira um painel que a pessoa pode minimizar.
+   O que está aberto/fechado fica salvo no navegador de quem usa (não vai
+   pro banco), então cada um monta a tela do jeito que preferir. */
+const COLLAPSE_KEY = 'comissoes_paineis_v1';
+let collapsedSections = {};
+try{
+  collapsedSections = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '{}') || {};
+} catch(e){ collapsedSections = {}; }
+
+function isSectionCollapsed(id){ return !!collapsedSections[id]; }
+function toggleSection(id){
+  collapsedSections[id] = !collapsedSections[id];
+  try{ localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsedSections)); } catch(e){}
+  const el = document.getElementById('sec-'+id);
+  if(el){
+    el.classList.toggle('collapsed', collapsedSections[id]);
+    const btn = el.querySelector('.panel-toggle');
+    if(btn) btn.setAttribute('aria-expanded', collapsedSections[id] ? 'false' : 'true');
+  }
+}
+function setAllSections(collapsed){
+  document.querySelectorAll('.panel[id^="sec-"]').forEach(function(el){
+    collapsedSections[el.id.slice(4)] = collapsed;
+  });
+  try{ localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsedSections)); } catch(e){}
+  render();
+}
+
+/* panel(id, titulo, corpo, {meta, actions, flush})
+   `titulo`, `meta` e `actions` entram como HTML — quem chama escapa o texto. */
+function panel(id, title, bodyHtml, opts){
+  opts = opts || {};
+  const collapsed = isSectionCollapsed(id);
+  return `
+    <section class="panel${collapsed ? ' collapsed' : ''}" id="sec-${id}">
+      <div class="panel-head">
+        <button type="button" class="panel-toggle" aria-expanded="${collapsed ? 'false' : 'true'}"
+                aria-controls="secbody-${id}" onclick="toggleSection('${id}')">
+          <span class="panel-chevron" aria-hidden="true"></span>
+          <span class="panel-title">${title}</span>
+        </button>
+        <div class="panel-head-right">
+          ${opts.meta ? `<span class="panel-meta">${opts.meta}</span>` : ''}
+          ${opts.actions || ''}
+        </div>
+      </div>
+      <div class="panel-body${opts.flush ? ' panel-body-flush' : ''}" id="secbody-${id}">${bodyHtml}</div>
+    </section>
+  `;
+}
+
+/* Atalho pra abrir/fechar de uma vez os painéis da aba aberta. */
+function sectionsToolbarHtml(){
+  return `
+    <div class="sections-toolbar">
+      <button type="button" class="eye-toggle" onclick="setAllSections(false)">Expandir tudo</button>
+      <button type="button" class="eye-toggle" onclick="setAllSections(true)">Minimizar tudo</button>
+    </div>
+  `;
+}
 function titleCase(str){
   if(str===null || str===undefined || str==='') return str;
   return String(str).split(' ').map(w => w.length ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w).join(' ');
@@ -1900,21 +2026,17 @@ function renderPagamentosSection(){
       </tr>
     `).join('');
 
-  const agingSectionHtml = `
-    <div class="resumo-section-title">⏳ Pendentes de recebimento</div>
-    <div class="toolbar">
-      <div class="count">
-        <b>${pendingOverThreshold.length}</b> de <b>${pending.length}</b> pendente${pending.length===1?"":"s"} no total (${fmtMoney(totalPending)})
+  const agingSectionHtml = panel('pag-pendentes', '⏳ Pendentes de recebimento', `
+      <div class="toolbar" style="margin:0 16px 4px;">
+        <div class="count">Mostrando os que estão em aberto há <b>${agingThresholdMonths}</b> mês(es) ou mais</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:12.5px;color:var(--ink-soft);font-weight:600;">Em aberto há mais de</span>
+          <input type="number" min="0" value="${agingThresholdMonths}" onchange="setAgingThreshold(this)" style="width:50px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;" />
+          <span style="font-size:12.5px;color:var(--ink-soft);font-weight:600;">mês(es)</span>
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-size:12.5px;color:var(--ink-soft);font-weight:600;">Mostrar pendentes há mais de</span>
-        <input type="number" min="0" value="${agingThresholdMonths}" onchange="setAgingThreshold(this)" style="width:50px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;" />
-        <span style="font-size:12.5px;color:var(--ink-soft);font-weight:600;">mês(es)</span>
-      </div>
-    </div>
-    <div class="table-card" style="margin-bottom:30px;">
       <div class="table-scroll">
-        <table>
+        <table class="table-plain">
           <thead>
             <tr>
               <th>Origem</th>
@@ -1927,8 +2049,10 @@ function renderPagamentosSection(){
           <tbody>${pendingRowsHtml}</tbody>
         </table>
       </div>
-    </div>
-  `;
+  `, {
+    flush: true,
+    meta: `<b>${pendingOverThreshold.length}</b> de <b>${pending.length}</b> · ${fmtMoney(totalPending)} em aberto`,
+  });
 
   const pillsHtml = ['Todos', ...MONTHS].map(m => {
     const active = m === pagamentosMonthFilter ? ' active' : '';
@@ -1947,28 +2071,18 @@ function renderPagamentosSection(){
       </tr>
     `).join('');
 
-  return `
-    ${agingSectionHtml}
-
-    <div class="resumo-section-title">✅ Pagamentos realizados</div>
-    <div class="filters-row">
-      <div class="months">${pillsHtml}</div>
-    </div>
-
-    <div class="kpis">
-      <div class="kpi-card total">
-        <div class="kpi-label">Total pago${pagamentosMonthFilter!=="Todos" ? " · "+esc(pagamentosMonthFilter) : ""}</div>
-        <div class="kpi-value">${fmtMoney(total)}</div>
+  const realizadosHtml = panel('pag-realizados', '✅ Pagamentos realizados', `
+      <div class="filters-row" style="margin:0 16px 12px;">
+        <div class="months">${pillsHtml}</div>
       </div>
-    </div>
-
-    <div class="toolbar">
-      <div class="count"><b>${entries.length}</b> pagamento${entries.length===1?"":"s"} realizado${entries.length===1?"":"s"}</div>
-    </div>
-
-    <div class="table-card">
+      <div class="kpis" style="margin:0 16px 14px;">
+        <div class="kpi-card total">
+          <div class="kpi-label">Total pago${pagamentosMonthFilter!=="Todos" ? " · "+esc(pagamentosMonthFilter) : ""}</div>
+          <div class="kpi-value">${fmtMoney(total)}</div>
+        </div>
+      </div>
       <div class="table-scroll">
-        <table>
+        <table class="table-plain">
           <thead>
             <tr>
               <th style="width:58px">Mês pgto.</th>
@@ -1981,7 +2095,15 @@ function renderPagamentosSection(){
           <tbody>${rowsHtml}</tbody>
         </table>
       </div>
-    </div>
+  `, {
+    flush: true,
+    meta: `<b>${entries.length}</b> pagamento${entries.length===1?"":"s"} · ${fmtMoney(total)}`,
+  });
+
+  return `
+    ${sectionsToolbarHtml()}
+    ${agingSectionHtml}
+    ${realizadosHtml}
 
     <div class="footnote" style="text-align:left;color:var(--ink-faint);font-size:12px;">
       Este resumo é somente leitura — para editar, vá até a aba de origem do lançamento e mexa na coluna "Pagamento".
@@ -2274,12 +2396,7 @@ function renderBonusSection(){
       <div class="months">${pillsHtml}</div>
     </div>
 
-    <div class="toolbar">
-      <div class="count" id="count-bonus"><b>${visible.length}</b> lançamento${visible.length===1?"":"s"} ${bonusFilter!=="Todos" ? "em <b>"+esc(bonusFilter)+"</b>" : ""}${visible.filter(isBonusRowPending).length ? ` · <span style="color:#B45309;">⚠️ ${visible.filter(isBonusRowPending).length} incompleto${visible.filter(isBonusRowPending).length===1?'':'s'}</span>` : ''}</div>
-      <button class="btn-add" onclick="addBonusRow()">+ Novo bônus</button>
-    </div>
-
-    <div class="table-card">
+    ${panel('bonus-lancamentos', 'Bônus e metas lançados', `
       <div class="table-scroll">
         <table>
           <thead>
@@ -2294,7 +2411,11 @@ function renderBonusSection(){
           <tbody>${rowsHtml}</tbody>
         </table>
       </div>
-    </div>
+    `, {
+      flush: true,
+      meta: `<span id="count-bonus"><b>${visible.length}</b> lançamento${visible.length===1?"":"s"}${bonusFilter!=="Todos" ? " em <b>"+esc(bonusFilter)+"</b>" : ""}${visible.filter(isBonusRowPending).length ? ` · <span style="color:#B45309;">⚠️ ${visible.filter(isBonusRowPending).length} incompleto${visible.filter(isBonusRowPending).length===1?'':'s'}</span>` : ''}</span>`,
+      actions: `<button class="btn-add" onclick="addBonusRow()">+ Novo bônus</button>`,
+    })}
   `;
 }
 
@@ -2411,12 +2532,8 @@ function renderMonthlyChart(){
     </rect>
     <text x="${x+barW/2}" y="${h-6}" text-anchor="middle" font-size="10" fill="var(--ink-faint)">${monthNumber(m)}</text>`;
   }).join('');
-  return `
-    <div class="chart-card">
-      <div class="resumo-section-title" style="margin-bottom:4px;">Evolução mensal — ${yearFilter} (todas as origens somadas)</div>
-      <svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="overflow:visible;">${bars}</svg>
-    </div>
-  `;
+  /* O título e a moldura vêm do painel que envolve o gráfico. */
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="overflow:visible;display:block;">${bars}</svg>`;
 }
 
 function renderParceirosSection(){
@@ -2429,9 +2546,8 @@ function renderParceirosSection(){
   const partnerBreakdown = getPartnerBreakdown();
   const maskOr = (v) => partnersValuesRevealed ? fmtMoney(v) : '••••';
 
-  const metasPanelHtml = partnerMonthFilter === "Todos" ? '' : `
-    <div class="resumo-section-title">Metas de ${esc(partnerMonthFilter)}/${yearFilter}</div>
-    <div class="metas-panel">
+  const metasPanelInner = partnerMonthFilter === "Todos" ? '' : `
+    <div class="metas-panel" style="border:none;box-shadow:none;padding:0;margin:0;">
       ${sellersForCurrentUser().map(s => {
         const meta = getMeta(yearFilter, partnerMonthFilter, s.label);
         const earned = Object.values(sellerBreakdown[s.label] || {}).reduce((a,b)=>a+b,0);
@@ -2447,6 +2563,9 @@ function renderParceirosSection(){
       }).join('')}
     </div>
   `;
+  const metasPanelHtml = metasPanelInner
+    ? panel('resumo-metas', `Metas de ${esc(partnerMonthFilter)}/${yearFilter}`, metasPanelInner)
+    : '';
 
   const isMonthClosedNow = partnerMonthFilter !== "Todos" && isMonthClosed(yearFilter, partnerMonthFilter);
   const closeButtonHtml = partnerMonthFilter === "Todos" ? '' : `
@@ -2556,15 +2675,16 @@ function renderParceirosSection(){
 
     ${isMonthClosedNow ? `<div class="storage-warning">🔒 ${esc(partnerMonthFilter)}/${yearFilter} está FECHADO — nenhuma edição é permitida em nenhuma aba para esse mês até reabrir aqui.</div>` : ''}
 
-    ${renderMonthlyChart()}
+    ${sectionsToolbarHtml()}
+
+    ${panel('resumo-grafico', `Evolução mensal — ${yearFilter}`, renderMonthlyChart(), {meta: 'todas as origens somadas'})}
 
     ${metasPanelHtml}
 
-    <div class="resumo-section-title">Vendedoras — ganhos totais (Sistema + Consultoria + Órgãos Públicos + Cursos + Bônus)</div>
-    <div class="kpis">${sellerKpiCardsHtml}</div>
-    <div class="table-card" style="margin-bottom:26px;">
+    ${panel('resumo-vendedoras', 'Vendedoras — ganhos totais', `
+      <div class="kpis" style="margin:0 16px 14px;">${sellerKpiCardsHtml}</div>
       <div class="table-scroll">
-        <table>
+        <table class="table-plain">
           <thead>
             <tr>
               <th>Vendedora</th>
@@ -2579,13 +2699,12 @@ function renderParceirosSection(){
           <tbody>${sellerBreakdownRowsHtml}</tbody>
         </table>
       </div>
-    </div>
+    `, {flush: true, meta: `Sistema + Consultoria + Órgãos Públicos + Cursos + Bônus`})}
 
-    <div class="resumo-section-title">Parceiros — honorários por origem</div>
-    <div class="kpis">${kpiCardsHtml}</div>
-    <div class="table-card" style="margin-bottom:26px;">
+    ${panel('resumo-parceiros', 'Parceiros — honorários por origem', `
+      <div class="kpis" style="margin:0 16px 14px;">${kpiCardsHtml}</div>
       <div class="table-scroll">
-        <table>
+        <table class="table-plain">
           <thead>
             <tr>
               <th>Parceiro</th>
@@ -2599,17 +2718,15 @@ function renderParceirosSection(){
           <tbody>${partnerBreakdownRowsHtml}</tbody>
         </table>
       </div>
-    </div>
+    `, {flush: true, meta: `${fmtMoney(totalHonorarios)} no total`})}
 
-    <div class="resumo-section-title">Detalhamento — lançamento a lançamento (parceiros)</div>
-    <div class="toolbar">
-      <div class="count"><b>${entries.length}</b> honorário${entries.length===1?"":"s"} ${partnerMonthFilter!=="Todos" ? "em <b>"+esc(partnerMonthFilter)+"</b>" : ""}</div>
-      <button class="btn-add" onclick="addPartner()">+ Parceiro</button>
-    </div>
-
-    <div class="table-card">
+    ${panel('resumo-detalhamento', 'Detalhamento — lançamento a lançamento', `
+      <div class="toolbar" style="margin:0 16px 4px;">
+        <div class="count">Cada honorário de parceiro, por lançamento</div>
+        <button class="btn-add" onclick="addPartner()">+ Parceiro</button>
+      </div>
       <div class="table-scroll">
-        <table>
+        <table class="table-plain">
           <thead>
             <tr>
               <th style="width:58px">Mês</th>
@@ -2624,7 +2741,7 @@ function renderParceirosSection(){
           <tbody>${rowsHtml}</tbody>
         </table>
       </div>
-    </div>
+    `, {flush: true, meta: `<b>${entries.length}</b> honorário${entries.length===1?"":"s"}${partnerMonthFilter!=="Todos" ? " em <b>"+esc(partnerMonthFilter)+"</b>" : ""}`})}
 
     <div class="footnote" style="text-align:left;color:var(--ink-faint);font-size:12px;">
       Este resumo é somente leitura — para editar um lançamento, vá até a aba de origem dele (Sistema, Consultoria, Órgãos Públicos, Cursos ou Bônus e Metas). O filtro de mês acima vale para as duas seções.
@@ -3010,15 +3127,7 @@ function renderVendasSection(){
       <input id="search-vendas-colaborador" class="search-input" type="text" placeholder="🔍 Buscar colaborador..." value="${esc(searchColaborador)}" oninput="onVendasSearchInput(this,'colaborador')" />
     </div>
 
-    <div class="toolbar">
-      <div class="count" id="count-label"><b>${visible.length}</b> venda${visible.length===1?"":"s"} ${filter!=="Todos" ? "em <b>"+esc(filter)+"</b>" : ""}${visible.filter(isVendasRowPending).length ? ` · <span style="color:#B45309;">⚠️ ${visible.filter(isVendasRowPending).length} incompleta${visible.filter(isVendasRowPending).length===1?'':'s'}</span>` : ''}${visible.filter(isVendasRowDuplicate).length ? ` · <span style="color:#6D28D9;">🔁 ${visible.filter(isVendasRowDuplicate).length} duplicado${visible.filter(isVendasRowDuplicate).length===1?'':'s'}</span>` : ''}</div>
-      <div class="btn-row">
-        <button class="btn-add btn-secondary" onclick="showManageSellersModal()">+ Vendedoras</button>
-        <button class="btn-add" onclick="addRow()">+ Nova venda</button>
-      </div>
-    </div>
-
-    <div class="table-card">
+    ${panel('vendas-lancamentos', 'Lançamentos do Sistema', `
       <div class="table-scroll">
         <table>
           <thead>
@@ -3039,7 +3148,14 @@ function renderVendasSection(){
           <tbody>${rowsHtml}</tbody>
         </table>
       </div>
-    </div>
+    `, {
+      flush: true,
+      meta: `<span id="count-label"><b>${visible.length}</b> venda${visible.length===1?"":"s"}${filter!=="Todos" ? " em <b>"+esc(filter)+"</b>" : ""}${visible.filter(isVendasRowPending).length ? ` · <span style="color:#B45309;">⚠️ ${visible.filter(isVendasRowPending).length} incompleta${visible.filter(isVendasRowPending).length===1?'':'s'}</span>` : ''}${visible.filter(isVendasRowDuplicate).length ? ` · <span style="color:#6D28D9;">🔁 ${visible.filter(isVendasRowDuplicate).length} duplicado${visible.filter(isVendasRowDuplicate).length===1?'':'s'}</span>` : ''}</span>`,
+      actions: `<div class="btn-row">
+        <button class="btn-add btn-secondary" onclick="showManageSellersModal()">+ Vendedoras</button>
+        <button class="btn-add" onclick="addRow()">+ Nova venda</button>
+      </div>`,
+    })}
 
     <div class="footnote">
       <button class="reset-link" onclick="resetToOriginal()">Restaurar dados originais</button>
@@ -3506,15 +3622,7 @@ function renderEntitySection(key){
       <input id="search-${key}-colaborador" class="search-input" type="text" placeholder="🔍 Buscar colaborador..." value="${esc(st.search.colaborador)}" oninput="onEntitySearchInput(this,'${key}','colaborador')" />
     </div>
 
-    <div class="toolbar">
-      <div class="count" id="count-${key}"><b>${visible.length}</b> ${cfg.itemLabel}${visible.length===1?"":"s"} ${st.filter!=="Todos" ? "em <b>"+esc(st.filter)+"</b>" : ""}${visible.filter(isEntityRowPending).length ? ` · <span style="color:#B45309;">⚠️ ${visible.filter(isEntityRowPending).length} incompleto${visible.filter(isEntityRowPending).length===1?'':'s'}</span>` : ''}${visible.filter(r=>isEntityRowDuplicate(key,r)).length ? ` · <span style="color:#6D28D9;">🔁 ${visible.filter(r=>isEntityRowDuplicate(key,r)).length} duplicado${visible.filter(r=>isEntityRowDuplicate(key,r)).length===1?'':'s'}</span>` : ''}</div>
-      <div class="btn-row">
-        <button class="btn-add btn-secondary" onclick="addEntityVendor('${key}')">+ Vendedor</button>
-        <button class="btn-add" onclick="addEntityRow('${key}')">+ Novo lançamento</button>
-      </div>
-    </div>
-
-    <div class="table-card">
+    ${panel('entity-'+key, esc(cfg.tabLabel), `
       <div class="table-scroll">
         <table>
           <thead>
@@ -3534,7 +3642,14 @@ function renderEntitySection(key){
           <tbody>${rowsHtml}</tbody>
         </table>
       </div>
-    </div>
+    `, {
+      flush: true,
+      meta: `<span id="count-${key}"><b>${visible.length}</b> ${cfg.itemLabel}${visible.length===1?"":"s"}${st.filter!=="Todos" ? " em <b>"+esc(st.filter)+"</b>" : ""}${visible.filter(isEntityRowPending).length ? ` · <span style="color:#B45309;">⚠️ ${visible.filter(isEntityRowPending).length} incompleto${visible.filter(isEntityRowPending).length===1?'':'s'}</span>` : ''}${visible.filter(r=>isEntityRowDuplicate(key,r)).length ? ` · <span style="color:#6D28D9;">🔁 ${visible.filter(r=>isEntityRowDuplicate(key,r)).length} duplicado${visible.filter(r=>isEntityRowDuplicate(key,r)).length===1?'':'s'}</span>` : ''}</span>`,
+      actions: `<div class="btn-row">
+        <button class="btn-add btn-secondary" onclick="addEntityVendor('${key}')">+ Vendedor</button>
+        <button class="btn-add" onclick="addEntityRow('${key}')">+ Novo lançamento</button>
+      </div>`,
+    })}
   `;
 }
 
