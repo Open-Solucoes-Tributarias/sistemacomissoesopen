@@ -945,6 +945,23 @@ const READ_VIEWS = {
   lancamentos: 'lancamentos_safe',
   lancamentos_extra_vendedores: 'lancamentos_extra_vendedores_safe',
 };
+/* Colunas numéricas no Postgres não aceitam "" — e um único campo vazio
+   derruba o POST inteiro, fazendo a aba parar de salvar. Tudo que vai para
+   coluna numérica passa por aqui. */
+/* Cada coleção só pode apagar linhas no banco depois de ter lido o banco
+   com sucesso. Sem isso, uma leitura que falha (token expirado, rede caindo)
+   deixa a lista local vazia e o próximo salvamento apaga tudo. */
+const carregouDoBanco = {};
+
+function numOrNull(v){
+  if(v === null || v === undefined) return null;
+  if(typeof v === 'number') return isFinite(v) ? v : null;
+  const t = String(v).trim().replace(',', '.');
+  if(t === '') return null;
+  const n = parseFloat(t);
+  return isNaN(n) ? null : n;
+}
+
 function sbSelect(table, query){
   const source = READ_VIEWS[table] || table;
   return sb('/rest/v1/' + source + (query ? '?' + query : ''), { method: 'GET' });
@@ -984,7 +1001,7 @@ function persist(){
         const dbRows = rows.map(function(r){
           return {
             id: r.id, ano: r.ano||2026, mes: r.mes, cliente: r.cliente||'', venda: r.venda||'',
-            valor: r.valor, parceiro: r.parceiro||'', participacao: r.participacao,
+            valor: numOrNull(r.valor), parceiro: r.parceiro||'', participacao: numOrNull(r.participacao),
             forma_pagamento: r.formaPagamento||'', colaborador: r.colaborador||'', observacoes: r.observacoes||'',
             vendedor2: r.vendedor2||'', vendedor3: r.vendedor3||'', pago: !!r.pago, mes_pagamento: r.mesPagamento||null,
             parcela_label: r.parcelaLabel || null,
@@ -992,7 +1009,7 @@ function persist(){
         });
         await sbUpsert('vendas', dbRows, 'id');
 
-        const existing = (await sbSelect('vendas','select=id')) || [];
+        const existing = carregouDoBanco.vendas ? ((await sbSelect('vendas','select=id')) || []) : [];
         const localIds = rows.map(function(r){ return r.id; });
         const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
         if(toDelete.length) await sbDeleteIn('vendas','id', toDelete);
@@ -1001,7 +1018,7 @@ function persist(){
         rows.forEach(function(r){
           Object.keys(r).forEach(function(k){
             if(VENDA_NON_SELLER_FIELDS.has(k)) return;
-            comissaoRows.push({ venda_id: r.id, seller_key: k, valor: (r[k]===undefined?null:r[k]) });
+            comissaoRows.push({ venda_id: r.id, seller_key: k, valor: numOrNull(r[k]) });
           });
         });
         if(comissaoRows.length) await sbUpsert('vendas_comissoes', comissaoRows, 'venda_id,seller_key');
@@ -1020,6 +1037,7 @@ async function tryLoadFromStorageAsync(){
   try{
     const dbRows = await sbSelect('vendas', 'select=*&order=id.asc');
     const comissoes = await sbSelect('vendas_comissoes', 'select=*');
+    carregouDoBanco.vendas = true;
     if(dbRows && dbRows.length){
       const bySellerByVenda = {};
       (comissoes||[]).forEach(function(c){
@@ -1060,19 +1078,19 @@ function persistEntityRows(key){
         const dbRows = state[key].rows.map(function(r){
           const row = {
             id: r.id, entidade: key, ano: r.ano||2026, mes: r.mes,
-            comissao_percent: r.comissaoPercent, vendedor: r.vendedor||'',
-            comissao_percent2: r.comissaoPercent2, vendedor2: r.vendedor2||'',
-            comissao_percent3: r.comissaoPercent3, vendedor3: r.vendedor3||'',
+            comissao_percent: numOrNull(r.comissaoPercent), vendedor: r.vendedor||'',
+            comissao_percent2: numOrNull(r.comissaoPercent2), vendedor2: r.vendedor2||'',
+            comissao_percent3: numOrNull(r.comissaoPercent3), vendedor3: r.vendedor3||'',
             parcela_label: r.parcelaLabel || null,
             nome:'', valor_contrato:null, tipo:null, parceiro:'', participacao:null,
             forma_pagamento:'', colaborador:'', observacoes:'',
             pago:false, mes_pagamento:null,
           };
           cfg.fields.forEach(function(f){
-            if(f.key === 'valorContrato') row.valor_contrato = r.valorContrato;
+            if(f.key === 'valorContrato') row.valor_contrato = numOrNull(r.valorContrato);
             else if(f.key === 'tipo') row.tipo = r.tipo;
             else if(f.key === 'parceiro') row.parceiro = r.parceiro||'';
-            else if(f.key === 'participacao') row.participacao = r.participacao;
+            else if(f.key === 'participacao') row.participacao = numOrNull(r.participacao);
             else if(f.key === 'formaPagamento') row.forma_pagamento = r.formaPagamento||'';
             else if(f.key === 'colaborador') row.colaborador = r.colaborador||'';
             else if(f.key === 'observacoes') row.observacoes = r.observacoes||'';
@@ -1083,7 +1101,7 @@ function persistEntityRows(key){
         });
         await sbUpsert('lancamentos', dbRows, 'id');
 
-        const existing = (await sbSelect('lancamentos','select=id&entidade=eq.'+key)) || [];
+        const existing = carregouDoBanco['lanc-'+key] ? ((await sbSelect('lancamentos','select=id&entidade=eq.'+key)) || []) : [];
         const localIds = state[key].rows.map(function(r){ return r.id; });
         const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
         if(toDelete.length) await sbDeleteIn('lancamentos','id', toDelete);
@@ -1094,7 +1112,7 @@ function persistEntityRows(key){
         const extraRows = [];
         state[key].rows.forEach(function(r){
           (r.extraVendedores||[]).forEach(function(ev){
-            extraRows.push({ id: ev.id, lancamento_id: r.id, vendedor: ev.vendedor||'', percent: ev.percent });
+            extraRows.push({ id: ev.id, lancamento_id: r.id, vendedor: ev.vendedor||'', percent: numOrNull(ev.percent) });
           });
         });
         if(extraRows.length) await sbUpsert('lancamentos_extra_vendedores', extraRows, 'id');
@@ -1117,6 +1135,7 @@ function persistEntityVendors(key){
   entityTimers[tk] = setTimeout(function(){
     (async function(){
       try{
+        if(!carregouDoBanco['lanc-'+key]) return;    // nunca apagar sem ter lido antes
         await sbDeleteAll('entity_vendors', 'entidade=eq.'+key);
         const rows2 = state[key].vendors.map(function(v){ return { entidade:key, vendor_name:v }; });
         if(rows2.length) await sbUpsert('entity_vendors', rows2, 'entidade,vendor_name');
@@ -1133,6 +1152,7 @@ async function tryLoadEntityFromStorageAsync(key){
     const dbRows = await sbSelect('lancamentos', 'select=*&entidade=eq.'+key+'&order=id.asc');
     const extras = await sbSelect('lancamentos_extra_vendedores', 'select=*');
     const vendorsDb = await sbSelect('entity_vendors', 'select=vendor_name&entidade=eq.'+key+'&order=id.asc');
+    carregouDoBanco['lanc-'+key] = true;
     if(dbRows && dbRows.length){
       const extrasByLanc = {};
       (extras||[]).forEach(function(e){
@@ -1179,9 +1199,9 @@ function persistBonus(){
   bonusTimer = setTimeout(function(){
     (async function(){
       try{
-        const dbRows = bonusRows.map(function(r){ return { id:r.id, ano:r.ano||2026, mes:r.mes, vendedor:r.vendedor||'', descricao:r.descricao||'', valor:r.valor, meta_id: r.metaId || null }; });
+        const dbRows = bonusRows.map(function(r){ return { id:r.id, ano:r.ano||2026, mes:r.mes, vendedor:r.vendedor||'', descricao:r.descricao||'', valor:numOrNull(r.valor), meta_id: r.metaId || null }; });
         await sbUpsert('bonus', dbRows, 'id');
-        const existing = (await sbSelect('bonus','select=id')) || [];
+        const existing = carregouDoBanco.bonus ? ((await sbSelect('bonus','select=id')) || []) : [];
         const localIds = bonusRows.map(function(r){ return r.id; });
         const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
         if(toDelete.length) await sbDeleteIn('bonus','id',toDelete);
@@ -1194,6 +1214,7 @@ function persistBonus(){
 async function tryLoadBonusFromStorageAsync(){
   try{
     const dbRows = await sbSelect('bonus','select=*&order=id.asc');
+    carregouDoBanco.bonus = true;
     if(dbRows && dbRows.length){
       bonusRows = dbRows.map(function(d){ return { id:d.id, ano:d.ano, mes:d.mes, vendedor:d.vendedor||'', descricao:d.descricao||'', valor:d.valor, metaId: d.meta_id || null }; });
       migrateYear(bonusRows, 2026);
@@ -1212,7 +1233,7 @@ function persistVendaProducts(){
     (async function(){
       try{
         if(vendaProducts.length) await sbUpsert('venda_products', vendaProducts.map(function(n){ return {name:n}; }), 'name');
-        const existing = (await sbSelect('venda_products','select=name')) || [];
+        const existing = carregouDoBanco.venda_products ? ((await sbSelect('venda_products','select=name')) || []) : [];
         const localSet = new Set(vendaProducts);
         const toDelete = existing.map(function(x){ return x.name; }).filter(function(n){ return !localSet.has(n); });
         if(toDelete.length) await sbDeleteIn('venda_products','name', toDelete);
@@ -1225,6 +1246,7 @@ function persistVendaProducts(){
 async function tryLoadVendaProductsFromStorageAsync(){
   try{
     const dbRows = await sbSelect('venda_products','select=name&order=name.asc');
+    carregouDoBanco.venda_products = true;
     if(dbRows && dbRows.length){ vendaProducts = dbRows.map(function(d){ return d.name; }); render(); }
   } catch(e){ console.error(e); }
 }
@@ -1237,7 +1259,7 @@ function persistPartners(){
     (async function(){
       try{
         if(partners.length) await sbUpsert('partners', partners.map(function(n){ return {name:n}; }), 'name');
-        const existing = (await sbSelect('partners','select=name')) || [];
+        const existing = carregouDoBanco.partners ? ((await sbSelect('partners','select=name')) || []) : [];
         const localSet = new Set(partners);
         const toDelete = existing.map(function(x){ return x.name; }).filter(function(n){ return !localSet.has(n); });
         if(toDelete.length) await sbDeleteIn('partners','name', toDelete);
@@ -1250,6 +1272,7 @@ function persistPartners(){
 async function tryLoadPartnersFromStorageAsync(){
   try{
     const dbRows = await sbSelect('partners','select=name&order=name.asc');
+    carregouDoBanco.partners = true;
     if(dbRows && dbRows.length){ partners = dbRows.map(function(d){ return d.name; }); render(); }
   } catch(e){ console.error(e); }
 }
@@ -1263,7 +1286,7 @@ function persistSistemaSellers(){
       try{
         const dbRows = SELLERS.map(function(s,i){ return { key:s.key, label:s.label, color:s.color, sort_order:i }; });
         if(dbRows.length) await sbUpsert('sellers', dbRows, 'key');
-        const existing = (await sbSelect('sellers','select=key')) || [];
+        const existing = carregouDoBanco.sellers ? ((await sbSelect('sellers','select=key')) || []) : [];
         const localSet = new Set(SELLERS.map(function(s){ return s.key; }));
         const toDelete = existing.map(function(x){ return x.key; }).filter(function(k){ return !localSet.has(k); });
         if(toDelete.length) await sbDeleteIn('sellers','key', toDelete);
@@ -1276,6 +1299,7 @@ function persistSistemaSellers(){
 async function tryLoadSistemaSellersFromStorageAsync(){
   try{
     const dbRows = await sbSelect('sellers','select=*&order=sort_order.asc');
+    carregouDoBanco.sellers = true;
     if(dbRows && dbRows.length){
       SELLERS = dbRows.map(function(d){ return { key:d.key, label:d.label, color:d.color }; });
       render();
@@ -1291,6 +1315,7 @@ function persistClosedMonths(){
   closedMonthsTimer = setTimeout(function(){
     (async function(){
       try{
+        if(!carregouDoBanco.closed_months) return;   // nunca apagar sem ter lido antes
         await sbDeleteAll('closed_months', 'id=gt.0');
         const dbRows = closedMonths.map(function(k){
           const idx = k.indexOf('-');
@@ -1306,6 +1331,7 @@ function persistClosedMonths(){
 async function tryLoadClosedMonthsFromStorageAsync(){
   try{
     const dbRows = await sbSelect('closed_months','select=*');
+    carregouDoBanco.closed_months = true;
     if(dbRows){ closedMonths = dbRows.map(function(d){ return d.ano+'-'+d.mes; }); render(); }
   } catch(e){ console.error(e); }
 }
@@ -1320,12 +1346,12 @@ function persistMetas(){
         const dbRows = metas.map(function(m){
           return {
             id: m.id, ano: m.ano, mes: m.mes, vendedor: m.vendedor, origem: m.origem,
-            alvo: m.alvo, premio_tipo: m.premioTipo, premio_valor: m.premioValor,
+            alvo: numOrNull(m.alvo), premio_tipo: m.premioTipo, premio_valor: numOrNull(m.premioValor),
             descricao: m.descricao || '',
           };
         });
         await sbUpsert('metas', dbRows, 'id');
-        const existing = (await sbSelect('metas','select=id')) || [];
+        const existing = carregouDoBanco.metas ? ((await sbSelect('metas','select=id')) || []) : [];
         const localIds = metas.map(function(m){ return m.id; });
         const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
         if(toDelete.length) await sbDeleteIn('metas','id', toDelete);
@@ -1338,6 +1364,7 @@ function persistMetas(){
 async function tryLoadMetasFromStorageAsync(){
   try{
     const dbRows = await sbSelect('metas','select=*&order=id.asc');
+    carregouDoBanco.metas = true;
     if(dbRows){
       metas = dbRows.map(function(d){
         return {
@@ -1361,7 +1388,7 @@ function persistExtraYears(){
     (async function(){
       try{
         if(extraYears.length) await sbUpsert('extra_years', extraYears.map(function(a){ return {ano:a}; }), 'ano');
-        const existing = (await sbSelect('extra_years','select=ano')) || [];
+        const existing = carregouDoBanco.extra_years ? ((await sbSelect('extra_years','select=ano')) || []) : [];
         const localSet = new Set(extraYears);
         const toDelete = existing.map(function(x){ return x.ano; }).filter(function(a){ return !localSet.has(a); });
         if(toDelete.length) await sbDeleteIn('extra_years','ano', toDelete);
@@ -1374,6 +1401,7 @@ function persistExtraYears(){
 async function tryLoadExtraYearsFromStorageAsync(){
   try{
     const dbRows = await sbSelect('extra_years','select=ano&order=ano.asc');
+    carregouDoBanco.extra_years = true;
     if(dbRows && dbRows.length){ extraYears = dbRows.map(function(d){ return d.ano; }); render(); }
   } catch(e){ console.error(e); }
 }
@@ -3241,7 +3269,7 @@ function addRow(){
     return;
   }
   const newRow = {id: nextId++, mes, ano: yearFilter, cliente:"", venda:"", valor:null,
-                   parceiro:"", participacao:"", formaPagamento:"", colaborador:"", vendedor2:"", vendedor3:"",
+                   parceiro:"", participacao:null, formaPagamento:"", colaborador:"", vendedor2:"", vendedor3:"",
                    pago:false, mesPagamento:null, observacoes:"",
                    soraya:null, angela:null, rios:null, uilma:null, luciana:null};
   if(sellerFilter !== "Todas"){
@@ -3602,7 +3630,12 @@ function addEntityRow(key){
   }
   const row = {id: st.nextId++, mes, ano: yearFilter, comissaoPercent:null, vendedor: st.vendorFilter!=="Todos" ? st.vendorFilter : "", comissaoPercent2:null, vendedor2:"", comissaoPercent3:null, vendedor3:""};
   if(cfg.hasPagamento){ row.pago = false; row.mesPagamento = null; }
-  cfg.fields.forEach(f => { row[f.key] = f.type==="select" ? f.options[0] : (f.type==="number" ? null : ""); });
+  // participacao vira coluna numérica no banco, então nasce null e não ""
+  const CAMPOS_NUMERICOS = new Set(["valorContrato","participacao"]);
+  cfg.fields.forEach(f => {
+    row[f.key] = f.type==="select" ? f.options[0]
+      : ((f.type==="number" || CAMPOS_NUMERICOS.has(f.key)) ? null : "");
+  });
   st.rows.unshift(row);
   persistEntityRows(key);
   render();
