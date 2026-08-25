@@ -192,31 +192,15 @@ create or replace function public.name_matches(a text, b text)
 returns boolean
 language sql
 immutable
+set search_path = ''
 as $$
-  select a is not null and b is not null and trim(a) <> '' and lower(trim(a)) = lower(trim(b));
+  select a is not null and b is not null and btrim(a) <> '' and lower(btrim(a)) = lower(btrim(b));
 $$;
 
--- Ajudam a evitar recursão de RLS entre lancamentos <-> lancamentos_extra_vendedores.
-create or replace function public.lancamento_matches_person(lanc_id bigint, pname text)
-returns boolean
-language sql
-security definer
-set search_path = public
-stable
-as $$
-  select exists (
-    select 1 from lancamentos l
-    where l.id = lanc_id
-      and (
-        name_matches(l.vendedor, pname)
-        or name_matches(l.vendedor2, pname)
-        or name_matches(l.vendedor3, pname)
-        or name_matches(l.colaborador, pname)
-      )
-  );
-$$;
-
-create or replace function public.lancamento_has_extra_vendedor(lanc_id bigint, pname text)
+-- Responde apenas sobre a PESSOA LOGADA. Não recebe nome por parâmetro de
+-- propósito: assim ninguém consegue usá-la via /rest/v1/rpc/ como oráculo
+-- ("fulano participa do lançamento X?").
+create or replace function public.lancamento_tem_extra_vendedor_meu(lanc_id bigint)
 returns boolean
 language sql
 security definer
@@ -226,20 +210,21 @@ as $$
   select exists (
     select 1 from lancamentos_extra_vendedores ev
     where ev.lancamento_id = lanc_id
-      and name_matches(ev.vendedor, pname)
+      and name_matches(ev.vendedor, current_user_person_name())
   );
 $$;
 
-revoke all on function public.current_user_is_admin() from public;
-revoke all on function public.current_user_person_name() from public;
-revoke all on function public.name_matches(text,text) from public;
-revoke all on function public.lancamento_matches_person(bigint,text) from public;
-revoke all on function public.lancamento_has_extra_vendedor(bigint,text) from public;
+-- Nada disso deve ser alcançável sem login (papel `anon`).
+revoke all on function public.current_user_is_admin() from public, anon;
+revoke all on function public.current_user_person_name() from public, anon;
+revoke all on function public.name_matches(text,text) from public, anon;
+revoke all on function public.lancamento_tem_extra_vendedor_meu(bigint) from public, anon;
+-- `authenticated` precisa destas: as políticas de RLS as avaliam no
+-- contexto de quem está consultando.
 grant execute on function public.current_user_is_admin() to authenticated;
 grant execute on function public.current_user_person_name() to authenticated;
 grant execute on function public.name_matches(text,text) to authenticated;
-grant execute on function public.lancamento_matches_person(bigint,text) to authenticated;
-grant execute on function public.lancamento_has_extra_vendedor(bigint,text) to authenticated;
+grant execute on function public.lancamento_tem_extra_vendedor_meu(bigint) to authenticated;
 
 alter table sellers enable row level security;
 alter table partners enable row level security;
@@ -345,7 +330,7 @@ where current_user_is_admin()
    or name_matches(vendedor2, current_user_person_name())
    or name_matches(vendedor3, current_user_person_name())
    or name_matches(colaborador, current_user_person_name())
-   or lancamento_has_extra_vendedor(id, current_user_person_name());
+   or lancamento_tem_extra_vendedor_meu(id);
 
 create or replace view lancamentos_extra_vendedores_safe with (security_barrier = true) as
 select id, lancamento_id, vendedor, percent
@@ -367,10 +352,15 @@ where current_user_is_admin()
    or name_matches(vendedor3, current_user_person_name())
    or name_matches(colaborador, current_user_person_name())
    or exists (
+     -- valor nulo = linha em branco que o app cria pra toda vendedora em
+     -- toda venda; não significa que a pessoa participou daquela venda.
      select 1 from vendas_comissoes vc join sellers s on s.key = vc.seller_key
-     where vc.venda_id = vendas.id and name_matches(s.label, current_user_person_name())
+     where vc.venda_id = vendas.id
+       and vc.valor is not null
+       and name_matches(s.label, current_user_person_name())
    );
 
+revoke all on lancamentos_safe, lancamentos_extra_vendedores_safe, vendas_safe from anon;
 grant select on lancamentos_safe, lancamentos_extra_vendedores_safe, vendas_safe to authenticated;
 
 -- Depois de rodar isto, cadastre cada pessoa em app_user_access, ex:
