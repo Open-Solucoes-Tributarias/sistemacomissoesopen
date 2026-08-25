@@ -125,7 +125,7 @@ Pronto, o código está no GitHub. Agora é só seguir o passo "Deploy no Vercel
 
 ## Comissão liberada x a receber
 
-A equipe de consultoria só recebe quando o **cliente paga a nota** — contrato fechado e nota emitida ainda não valem. A aba **Pagamentos Realizados** separa os dois casos, por pessoa:
+A equipe de consultoria só recebe quando o **cliente paga a nota** — contrato fechado e nota emitida ainda não valem. A aba **Pagamentos Realizados** abre com os pagamentos que entraram e, logo abaixo, separa a comissão em dois casos, por pessoa:
 
 | Quadro | O que mostra |
 |---|---|

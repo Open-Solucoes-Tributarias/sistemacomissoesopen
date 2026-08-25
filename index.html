@@ -125,10 +125,6 @@
   tr.row-pending{background:#FFF8E8;}
   tr.row-pending:hover{background:#FFF2D6;}
   tr.row-locked{background:#F3F3F6;}
-  tr.aging-yellow{background:#FFF8E1;}
-  tr.aging-orange{background:#FFEDD5;}
-  tr.aging-red{background:#FEE2E2;}
-  tr.aging-red td{color:#991B1B;}
   tr.row-locked input, tr.row-locked select{color:var(--ink-faint);}
   .pending-badge{margin-left:4px;font-size:11px;vertical-align:middle;}
   .parcela-badge{
@@ -670,7 +666,6 @@ let metas = [];      // regras de meta: gatilho da empresa que premia uma pessoa
 let metasNextId = 1;
 let pagamentosMonthFilter = "Todos";
 let aReceberMonthFilter = "Todos";   // filtra "a receber" pelo mês da VENDA
-let agingThresholdMonths = 1;
 
 const state = {};
 ENTITY_KEYS.forEach(k => {
@@ -2113,44 +2108,8 @@ function getPagamentosRealizados(){
   return out;
 }
 
-function monthsElapsedSince(mes, ano){
-  const idx = MONTHS.indexOf(mes);
-  if(idx === -1) return 0;
-  const now = new Date();
-  const nowMonthIdx = now.getMonth();
-  const nowYear = now.getFullYear();
-  return (nowYear - (ano||2026))*12 + (nowMonthIdx - idx);
-}
 
-function setAgingThreshold(el){
-  const v = parseInt(el.value, 10);
-  agingThresholdMonths = (!v || v < 0) ? 0 : v;
-  render();
-}
 
-function getPendingPayments(){
-  const out = [];
-  rows.forEach(r => {
-    if(r.pago) return;
-    const hasContent = (r.cliente && r.cliente.trim()) || (r.venda && r.venda.trim());
-    if(!hasContent) return;
-    if(!r.valor || Number(r.valor) <= 0) return;
-    out.push({origem:"Sistema", mes:r.mes, ano:r.ano||2026, label:r.cliente||r.venda, valor:Number(r.valor)||0});
-  });
-  ENTITY_KEYS.forEach(key => {
-    if(!ENTITIES[key].hasPagamento) return;
-    const mainField = ENTITIES[key].fields[0].key;
-    state[key].rows.forEach(r => {
-      if(r.pago) return;
-      if(!r[mainField] || !r[mainField].trim()) return;
-      if(!r.valorContrato || Number(r.valorContrato) <= 0) return;
-      out.push({origem:ENTITIES[key].tabLabel, mes:r.mes, ano:r.ano||2026, label:r[mainField], valor:Number(r.valorContrato)||0});
-    });
-  });
-  out.forEach(e => { e.monthsElapsed = monthsElapsedSince(e.mes, e.ano); });
-  out.sort((a,b) => b.monthsElapsed - a.monthsElapsed);
-  return out;
-}
 
 /* ---------------- Comissões por status de recebimento ----------------
    A consultoria só recebe quando o cliente paga a nota. Como cada
@@ -2314,53 +2273,6 @@ function renderPagamentosSection(){
   const entries = getPagamentosRealizados();
   const total = entries.reduce((s,e) => s+e.valor, 0);
 
-  const pending = getPendingPayments();
-  const pendingOverThreshold = pending.filter(e => e.monthsElapsed >= agingThresholdMonths);
-  const totalPending = pending.reduce((s,e) => s+e.valor, 0);
-
-  const agingClass = (m) => m >= 6 ? 'aging-red' : (m >= 3 ? 'aging-orange' : (m >= 1 ? 'aging-yellow' : ''));
-  const agingLabel = (m) => m <= 0 ? 'este mês' : (m === 1 ? '1 mês' : m+' meses');
-
-  const pendingRowsHtml = pendingOverThreshold.length === 0
-    ? `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhum pagamento pendente há mais de ${agingThresholdMonths} mês${agingThresholdMonths===1?'':'es'}. 🎉</td></tr>`
-    : pendingOverThreshold.map(e => `
-      <tr class="${agingClass(e.monthsElapsed)}">
-        <td>${esc(e.origem)}</td>
-        <td>${esc(e.label)}</td>
-        <td>${monthNumber(e.mes)}/${e.ano}</td>
-        <td class="num" style="font-weight:800;">${agingLabel(e.monthsElapsed)}</td>
-        <td class="num col-valor">${fmtMoney(e.valor)}</td>
-      </tr>
-    `).join('');
-
-  const agingSectionHtml = panel('pag-pendentes', '⏳ Pendentes de recebimento', `
-      <div class="toolbar" style="margin:0 16px 4px;">
-        <div class="count">Mostrando os que estão em aberto há <b>${agingThresholdMonths}</b> mês(es) ou mais</div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:12.5px;color:var(--ink-soft);font-weight:600;">Em aberto há mais de</span>
-          <input type="number" min="0" value="${agingThresholdMonths}" onchange="setAgingThreshold(this)" style="width:50px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;" />
-          <span style="font-size:12.5px;color:var(--ink-soft);font-weight:600;">mês(es)</span>
-        </div>
-      </div>
-      <div class="table-scroll">
-        <table class="table-plain">
-          <thead>
-            <tr>
-              <th>Origem</th>
-              <th>Cliente / Empresa / Órgão</th>
-              <th>Mês da venda</th>
-              <th class="num">Em aberto há</th>
-              <th class="num col-valor">Valor</th>
-            </tr>
-          </thead>
-          <tbody>${pendingRowsHtml}</tbody>
-        </table>
-      </div>
-  `, {
-    flush: true,
-    meta: `<b>${pendingOverThreshold.length}</b> de <b>${pending.length}</b> · ${fmtMoney(totalPending)} em aberto`,
-  });
-
   const pillsHtml = ['Todos', ...MONTHS].map(m => {
     const active = m === pagamentosMonthFilter ? ' active' : '';
     return `<button class="pill${active}" onclick="setPagamentosMonthFilter('${m}')">${m}</button>`;
@@ -2409,10 +2321,9 @@ function renderPagamentosSection(){
 
   return `
     ${sectionsToolbarHtml()}
+    ${realizadosHtml}
     ${renderComissoesLiberadas()}
     ${renderComissoesAguardando()}
-    ${agingSectionHtml}
-    ${realizadosHtml}
 
     <div class="footnote" style="text-align:left;color:var(--ink-faint);font-size:12px;">
       Este resumo é somente leitura — para editar, vá até a aba de origem do lançamento e mexa na coluna "Pagamento".
