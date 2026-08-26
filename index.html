@@ -676,6 +676,7 @@ let metas = [];      // regras de meta: gatilho da empresa que premia uma pessoa
 let metasNextId = 1;
 let pagamentosMonthFilter = "Todos";
 let aReceberMonthFilter = "Todos";   // filtra "a receber" pelo mês da VENDA
+let vendasOrdem = "padrao";          // ordenação da aba Sistema (só exibição)
 
 const state = {};
 ENTITY_KEYS.forEach(k => {
@@ -3377,6 +3378,7 @@ function wipeAllData(){
 
 function setFilter(m){ filter = m; render(); }
 function setSellerFilter(key){ sellerFilter = key; render(); }
+function setVendasOrdem(el){ vendasOrdem = el.value; render(); }
 function getVisibleSellers(){
   let list = sellerFilter === "Todas" ? SELLERS : SELLERS.filter(s => s.key === sellerFilter);
   if(!isAdmin && currentPersonName){
@@ -3416,7 +3418,7 @@ function getVisible(){
     const q = searchColaborador.trim().toLowerCase();
     list = list.filter(r => (r.colaborador||"").toLowerCase().includes(q));
   }
-  return list;
+  return ordenarEntityRows(list, vendasOrdem, 'cliente', 'valor');
 }
 function onVendasSearchInput(el, field){
   const pos = el.selectionStart;
@@ -3611,6 +3613,16 @@ function renderVendasSection(){
       flush: true,
       meta: `<span id="count-label"><b>${visible.length}</b> venda${visible.length===1?"":"s"}${filter!=="Todos" ? " em <b>"+esc(filter)+"</b>" : ""}${visible.filter(isVendasRowPending).length ? ` · <span style="color:#B45309;">⚠️ ${visible.filter(isVendasRowPending).length} incompleta${visible.filter(isVendasRowPending).length===1?'':'s'}</span>` : ''}${visible.filter(isVendasRowDuplicate).length ? ` · <span style="color:#6D28D9;">🔁 ${visible.filter(isVendasRowDuplicate).length} duplicado${visible.filter(isVendasRowDuplicate).length===1?'':'s'}</span>` : ''}</span>`,
       actions: `<div class="btn-row">
+        <label class="ordem-wrap">
+          <span>Ordenar</span>
+          <select onchange="setVendasOrdem(this)">
+            <option value="padrao" ${vendasOrdem==='padrao'?'selected':''}>Mês de lançamento</option>
+            <option value="az" ${vendasOrdem==='az'?'selected':''}>Cliente — A a Z</option>
+            <option value="za" ${vendasOrdem==='za'?'selected':''}>Cliente — Z a A</option>
+            <option value="maior" ${vendasOrdem==='maior'?'selected':''}>Maior valor de contrato</option>
+            <option value="menor" ${vendasOrdem==='menor'?'selected':''}>Menor valor de contrato</option>
+          </select>
+        </label>
         <button class="btn-add btn-secondary" onclick="showManageSellersModal()">+ Vendedoras</button>
         <button class="btn-add" onclick="addRow()">+ Nova venda</button>
       </div>`,
@@ -3834,11 +3846,11 @@ function getEntityVisible(key){
 /* Ordena só o que aparece na tela — a ordem guardada no banco não muda.
    localeCompare com 'pt-BR' resolve acento e maiúscula (Ácua vem antes de
    Alfa, e "alfa" e "Alfa" ficam juntos). */
-function ordenarEntityRows(list, ordem, mainField){
+function ordenarEntityRows(list, ordem, mainField, campoValor){
   if(!ordem || ordem === "padrao") return list;
   const copia = list.slice();
   const nome = r => String(r[mainField] || "").trim();
-  const valor = r => Number(r.valorContrato) || 0;
+  const valor = r => Number(r[campoValor || 'valorContrato']) || 0;
   if(ordem === "az" || ordem === "za"){
     const dir = ordem === "az" ? 1 : -1;
     copia.sort((a,b) => {
