@@ -724,6 +724,19 @@
     padding:10px 12px;font-size:12.5px;font-weight:600;line-height:1.5;margin-bottom:14px;
   }
 
+  .painel-topo-acoes{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .painel-equipe-nota{font-size:12.5px;color:var(--ink-soft);font-weight:600;line-height:1.5;margin-bottom:12px;}
+  .painel-equipe-lista{display:flex;flex-wrap:wrap;gap:8px;}
+  .painel-equipe-item{
+    display:inline-flex;align-items:center;gap:8px;cursor:pointer;
+    border:1.5px solid var(--border);border-radius:999px;padding:7px 14px 7px 11px;
+    font-size:13px;font-weight:600;color:var(--ink-soft);background:var(--surface);
+    transition:all .13s;
+  }
+  .painel-equipe-item:hover{border-color:var(--ring);color:var(--ink);}
+  .painel-equipe-item.on{border-color:var(--primary);background:var(--primary-soft);color:var(--primary);}
+  .painel-equipe-item input{width:15px;height:15px;accent-color:var(--primary);cursor:pointer;margin:0;}
+
   .sections-toolbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
   .panel-body{padding:16px;}
   .panel-body-flush{padding:0;}
@@ -1730,6 +1743,14 @@ function fmtMoney(v){
 function esc(s){
   if(s===null||s===undefined) return "";
   return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+}
+
+/* Nome que vai virar string JS dentro de um atributo HTML (onclick="f('...')").
+   Sem escapar a aspa simples, um nome com apóstrofo — D'Ávila — quebra o
+   atributo; escapamos primeiro pro JS e depois pro HTML. */
+function escJs(s){
+  if(s===null||s===undefined) return "";
+  return esc(String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"));
 }
 
 /* ---------------- Painéis recolhíveis ----------------
@@ -4473,8 +4494,82 @@ function renderEntitySection(key){
 /* ---------------- Painel da Equipe: dados e ações ---------------- */
 
 /* O painel mostra a equipe toda, inclusive para contas restritas: os
-   totais vêm de uma view que expõe só os agregados, sem os contratos. */
-function vendedoresDoPainel(){ return SELLERS.map(s => s.label); }
+   totais vêm de uma view que expõe só os agregados, sem os contratos.
+
+   Quem aparece aqui é uma lista PRÓPRIA do painel, não a lista de
+   vendedoras do sistema: este painel acompanha só a equipe comercial que
+   lança andamento, e não todo mundo que aparece nos lançamentos. A lista
+   fica no banco (entity_vendors, entidade='painel') e quem é admin edita
+   pelo botão "Quem aparece", sem mexer em nenhuma outra aba. */
+const PAINEL_VENDEDORAS_PADRAO = ['Angela','Rios','Uilma','Luciana'];
+let painelVendedoras = null;
+let painelEditandoEquipe = false;
+
+function vendedoresDoPainel(){
+  return (painelVendedoras || PAINEL_VENDEDORAS_PADRAO).slice();
+}
+
+/* Todo mundo que o sistema conhece, pra montar a lista de marcar/desmarcar. */
+function pessoasConhecidas(){
+  const out = [], vistos = {};
+  const push = function(n){
+    const t = String(n === null || n === undefined ? '' : n).trim();
+    if(!t) return;
+    const k = t.toLowerCase();
+    if(vistos[k]) return;
+    vistos[k] = true; out.push(t);
+  };
+  SELLERS.forEach(function(x){ push(x.label); });
+  ENTITY_KEYS.forEach(function(k){ (state[k].vendors || []).forEach(push); });
+  vendedoresDoPainel().forEach(push);
+  return out.sort(function(a,b){ return a.localeCompare(b, 'pt-BR', {sensitivity:'base'}); });
+}
+
+function setPainelEditandoEquipe(v){ painelEditandoEquipe = !!v; render(); }
+
+function togglePessoaPainel(nome){
+  if(!isAdmin) return;
+  const lista = vendedoresDoPainel();
+  const i = lista.findIndex(function(v){ return name_matches_client(v, nome); });
+  if(i >= 0){
+    if(lista.length === 1){
+      showAlert('O painel precisa de pelo menos uma pessoa. Marque outra antes de tirar esta.');
+      render();
+      return;
+    }
+    lista.splice(i, 1);
+  } else {
+    lista.push(String(nome).trim());
+  }
+  painelVendedoras = lista;
+  persistPainelVendedoras();
+  render();
+}
+
+function persistPainelVendedoras(){
+  saving = true; updateSaveStatus();
+  if(entityTimers['painel-vendors']) clearTimeout(entityTimers['painel-vendors']);
+  entityTimers['painel-vendors'] = setTimeout(function(){
+    (async function(){
+      try{
+        if(!carregouDoBanco['painel-vendors']) return;   // nunca apagar sem ter lido antes
+        await sbDeleteAll('entity_vendors', 'entidade=eq.painel');
+        const linhas = (painelVendedoras || []).map(function(v){ return { entidade:'painel', vendor_name:v }; });
+        if(linhas.length) await sbUpsert('entity_vendors', linhas, 'entidade,vendor_name');
+        saveError = false;
+      } catch(e){ console.error(e); saveError = true; }
+      finally { saving = false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+
+async function tryLoadPainelVendedorasAsync(){
+  try{
+    const db = await sbSelect('entity_vendors', 'select=vendor_name&entidade=eq.painel&order=id.asc');
+    carregouDoBanco['painel-vendors'] = true;
+    if(db && db.length) painelVendedoras = db.map(function(v){ return v.vendor_name; });
+  }catch(e){ console.error(e); }
+}
 
 /* Valor de um indicador para uma pessoa num mês. Os manuais vêm do que foi
    lançado; os de venda vêm calculados pelo banco. */
@@ -4640,7 +4735,7 @@ function graficoLinhaPainel(vends){
 function renderPainelSection(){
   const vends = vendedoresDoPainel();
   if(vends.length === 0){
-    return `<div class="meta-empty" style="padding:24px;">Nenhuma vendedora disponível para este painel.</div>`;
+    return `<div class="meta-empty" style="padding:24px;">Nenhuma pessoa marcada para aparecer neste painel.${isAdmin ? ' Use o botão "Quem aparece" para escolher.' : ''}</div>`;
   }
   if(!painelVendedor || vends.indexOf(painelVendedor) === -1){
     painelVendedor = vends[0];
@@ -4652,6 +4747,23 @@ function renderPainelSection(){
       <button class="painel-aba${painelAba==='lancamento'?' active':''}" onclick="setPainelAba('lancamento')">Lançamento</button>
       <button class="painel-aba${painelAba==='dashboard'?' active':''}" onclick="setPainelAba('dashboard')">Dashboard</button>
     </div>` : '';
+  const btnEquipe = isAdmin ? `
+    <button class="eye-toggle" onclick="setPainelEditandoEquipe(${painelEditandoEquipe ? 'false' : 'true'})"
+            title="Escolhe quem aparece neste painel — não mexe nas outras abas">
+      ${painelEditandoEquipe ? '✕ Fechar' : '👥 Quem aparece'}
+    </button>` : '';
+  const editorEquipe = (isAdmin && painelEditandoEquipe) ? panel('painel-equipe', 'Quem aparece neste painel', `
+    <div class="painel-equipe-nota">Marque as pessoas que este painel acompanha. Desmarcar alguém só tira do painel — os lançamentos, as comissões e as outras abas continuam iguais.</div>
+    <div class="painel-equipe-lista">
+      ${pessoasConhecidas().map(function(n){
+        const on = vends.some(function(v){ return name_matches_client(v, n); });
+        return `<label class="painel-equipe-item${on?' on':''}">
+          <input type="checkbox" ${on?'checked':''} onchange="togglePessoaPainel('${escJs(n)}')" />
+          <span>${esc(n)}</span>
+        </label>`;
+      }).join('')}
+    </div>
+  `) : '';
   const conteudo = (isAdmin && painelAba === 'lancamento')
     ? renderPainelLancamento(vends)
     : renderPainelDashboard(vends);
@@ -4661,8 +4773,9 @@ function renderPainelSection(){
         <div class="painel-titulo">Painel de relatórios mensais · ${yearFilter}</div>
         <div class="painel-sub">Andamento da equipe comercial — indicadores lançados a cada mês.</div>
       </div>
-      ${abas}
+      <div class="painel-topo-acoes">${abas}${btnEquipe}</div>
     </div>
+    ${editorEquipe}
     ${conteudo}
   `;
 }
@@ -4672,7 +4785,7 @@ function renderPainelLancamento(vends){
 
   const chips = vends.map(v => `
     <button class="painel-chip${name_matches_client(v,painelVendedor)?' active':''}"
-            style="--vc:${esc(corDoVendedor(v))}" onclick="setPainelVendedor('${esc(v)}')">${esc(v)}</button>
+            style="--vc:${esc(corDoVendedor(v))}" onclick="setPainelVendedor('${escJs(v)}')">${esc(v)}</button>
   `).join('');
 
   const campos = METRICAS_MANUAIS.map(m => `
@@ -4738,8 +4851,8 @@ function renderPainelLancamento(vends){
                   <td class="num">${fmtMoney(valorMetrica(v, r.mes, 'vendasCursos'))}</td>
                   <td class="del-cell">
                     <div class="row-actions" style="opacity:1;">
-                      <button class="action-btn" title="Editar este mês" onclick="editarPainelLancamento('${esc(v)}','${r.mes}')">✎</button>
-                      <button class="action-btn danger" title="Excluir este mês" onclick="excluirPainelLancamento('${esc(v)}','${r.mes}')">✕</button>
+                      <button class="action-btn" title="Editar este mês" onclick="editarPainelLancamento('${escJs(v)}','${escJs(r.mes)}')">✎</button>
+                      <button class="action-btn danger" title="Excluir este mês" onclick="excluirPainelLancamento('${escJs(v)}','${escJs(r.mes)}')">✕</button>
                     </div>
                   </td>
                 </tr>
@@ -4969,6 +5082,7 @@ function boot(){
     tryLoadMetasFromStorageAsync(),
     tryLoadRelatoriosFromStorageAsync(),
     tryLoadPainelTotaisAsync(),
+    tryLoadPainelVendedorasAsync(),
   ];
   Promise.allSettled(loaders).then(function(){
     initialDataLoaded = true;

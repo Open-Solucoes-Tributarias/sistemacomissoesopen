@@ -77,7 +77,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 4. Rode `supabase_column_masking_migration.sql` — cria as views `_safe` e fecha a leitura direta das tabelas base.
 5. Rode `supabase_hardening_migration.sql` — correções encontradas na conferência do banco.
 6. Rode `supabase_metas_migration.sql` — novo formato das metas (recria a tabela `metas`).
-7. Rode `supabase_painel_equipe_migration.sql` — cria a tabela do Painel da Equipe e a view `painel_equipe_totais`, que calcula os indicadores de venda.
+7. Rode `supabase_painel_equipe_migration.sql` — cria a tabela do Painel da Equipe, a view `painel_equipe_totais` (que calcula os indicadores de venda) e a lista de quem aparece no painel.
 8. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
 9. Só depois publique esta versão atualizada do `index.html`.
 
@@ -97,7 +97,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `partners` | Parceiros cadastrados |
 | `venda_products` | Catálogo de produtos da aba Sistema |
 | `sellers` | Vendedoras do Sistema (lista editável) |
-| `entity_vendors` | Vendedores(as) cadastrados por aba (Consultoria / Órgãos Públicos / Cursos) |
+| `entity_vendors` | Vendedores(as) por aba (Consultoria / Órgãos Públicos / Cursos) e quem aparece no Painel da Equipe (`entidade='painel'`) |
 | `closed_months` | Meses fechados para edição |
 | `extra_years` | Anos adicionados manualmente |
 | `app_user_access` | Nível de acesso de cada conta de login (admin ou restrita + nome pra filtrar) |
@@ -185,7 +185,9 @@ São nove indicadores por vendedora, por mês, divididos em dois grupos:
 
 **Dashboard** — cartões com o total do ano por pessoa, **ranking do mês** (quem liderou cada indicador, mais uma pontuação combinada: 1º lugar soma N pontos, 2º soma N−1, e vence quem somar mais nos nove), gráfico de barras comparando as pessoas num indicador, evolução mensal em linhas ao longo dos 12 meses, e a tabela de totais anuais.
 
-O painel usa a **lista de vendedoras do sistema** e o **ano selecionado** no topo — não tem lista nem ano fixos.
+**Quem aparece** — o painel tem a **própria lista de pessoas**, separada da lista de vendedoras do sistema, porque ele acompanha só a equipe comercial que lança andamento. Hoje são **Angela, Rios, Uilma e Luciana**. Quem é admin muda isso pelo botão **"Quem aparece"** no topo do painel, marcando ou desmarcando nomes — desmarcar alguém só tira do painel, não mexe em lançamento, comissão nem em nenhuma outra aba. A lista fica no banco (`entity_vendors` com `entidade='painel'`), então vale para todo mundo.
+
+O ano vem do filtro no topo da página — não é fixo.
 
 > **Contas restritas veem o ranking e o comparativo**, com os números de todo mundo — foi uma escolha de quem administra o sistema, para o painel funcionar como placar da equipe. O que elas continuam **não** vendo é o que está por trás desses números: cliente, contrato, percentual e comissão dos colegas seguem escondidos, porque a view `painel_equipe_totais` devolve só os totais por pessoa/mês. Lançar e editar continua sendo exclusivo de admin.
 

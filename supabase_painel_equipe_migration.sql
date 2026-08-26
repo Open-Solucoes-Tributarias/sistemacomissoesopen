@@ -133,3 +133,23 @@ group by btrim(vendedor), ano, mes;
 alter view painel_equipe_totais owner to postgres;
 revoke all on painel_equipe_totais from anon;
 grant select on painel_equipe_totais to authenticated;
+
+-- ============================================================
+-- Quem aparece no painel
+-- ============================================================
+-- O painel acompanha só a equipe comercial que lança andamento — não
+-- todo mundo que aparece nos lançamentos. Essa lista fica em
+-- entity_vendors com entidade='painel' (a mesma tabela das vendedoras
+-- por aba, que já tem leitura liberada para quem está logado e escrita
+-- só para admin). Quem é admin edita pelo botão "Quem aparece" no
+-- próprio painel, sem mexer em nenhuma outra aba.
+-- ============================================================
+
+alter table entity_vendors drop constraint if exists entity_vendors_entidade_check;
+alter table entity_vendors add constraint entity_vendors_entidade_check
+  check (entidade in ('consultoria','publicos','cursos','painel'));
+
+-- Equipe acompanhada hoje (ajuste os nomes conforme a sua):
+insert into entity_vendors (entidade, vendor_name)
+values ('painel','Angela'),('painel','Rios'),('painel','Uilma'),('painel','Luciana')
+on conflict (entidade, vendor_name) do nothing;
