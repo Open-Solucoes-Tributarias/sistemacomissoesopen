@@ -1,5 +1,5 @@
 -- ============================================================
--- Migração 7: quem EFETIVAMENTE fez a venda
+-- Migração 7: quem EFETIVAMENTE fez a venda (Sistema e Cursos)
 -- ============================================================
 -- O PROBLEMA
 -- Na aba Sistema a comissão de uma venda é dividida entre várias
@@ -20,6 +20,13 @@
 -- painel, e o sistema mostra quantas estão assim para serem preenchidas.
 -- Como nenhuma venda antiga tem uma vendedora única, não dá para
 -- preencher isso automaticamente — a informação não existe nos dados.
+--
+-- A ABA CURSOS TEM O MESMO PROBLEMA, em outro formato: lá os campos
+-- "Vendedor / Vendedor 2 / Vendedor 3" também dizem quem ganha comissão.
+-- Nos dados reais a mesma pessoa aparece como vendedora em 10 dos 12
+-- cursos, com 1% em todos — é o papel dela na comissão, não a venda.
+-- Por isso lancamentos ganha a mesma coluna, e também não é preenchida
+-- automaticamente: copiar o campo "Vendedor" repetiria justamente o erro.
 -- ============================================================
 
 alter table vendas add column if not exists vendedor_responsavel text;
@@ -58,10 +65,38 @@ revoke all on vendas_safe from anon;
 grant select on vendas_safe to authenticated;
 
 -- ------------------------------------------------------------
--- painel_equipe_totais: o trecho de "sistemas vendidos" passa a olhar a
--- responsável, e não mais a lista de quem ganha comissão. Cursos segue
--- creditando todas as vendedoras do lançamento (lá o rateio ainda não
--- tem uma responsável marcada).
+-- lancamentos_safe: mesma máscara para o nome da responsável do curso.
+-- ------------------------------------------------------------
+alter table lancamentos add column if not exists vendedor_responsavel text;
+
+create or replace view lancamentos_safe with (security_barrier = true) as
+select
+  id, entidade, ano, mes, nome, valor_contrato, tipo, parceiro, participacao,
+  forma_pagamento, observacoes,
+  case when current_user_is_admin() or name_matches(colaborador, current_user_person_name()) then colaborador else null end as colaborador,
+  case when current_user_is_admin() or name_matches(vendedor,  current_user_person_name()) then vendedor  else null end as vendedor,
+  case when current_user_is_admin() or name_matches(vendedor,  current_user_person_name()) then comissao_percent  else null end as comissao_percent,
+  case when current_user_is_admin() or name_matches(vendedor2, current_user_person_name()) then vendedor2 else null end as vendedor2,
+  case when current_user_is_admin() or name_matches(vendedor2, current_user_person_name()) then comissao_percent2 else null end as comissao_percent2,
+  case when current_user_is_admin() or name_matches(vendedor3, current_user_person_name()) then vendedor3 else null end as vendedor3,
+  case when current_user_is_admin() or name_matches(vendedor3, current_user_person_name()) then comissao_percent3 else null end as comissao_percent3,
+  pago, mes_pagamento, parcela_label, created_at, updated_at,
+  case when current_user_is_admin() or name_matches(vendedor_responsavel, current_user_person_name()) then vendedor_responsavel else null end as vendedor_responsavel
+from lancamentos
+where current_user_is_admin()
+   or name_matches(vendedor,  current_user_person_name())
+   or name_matches(vendedor2, current_user_person_name())
+   or name_matches(vendedor3, current_user_person_name())
+   or name_matches(colaborador, current_user_person_name())
+   or name_matches(vendedor_responsavel, current_user_person_name())
+   or lancamento_tem_extra_vendedor_meu(id);
+
+revoke all on lancamentos_safe from anon;
+grant select on lancamentos_safe to authenticated;
+
+-- ------------------------------------------------------------
+-- painel_equipe_totais: uma venda, uma vendedora — vale para os dois
+-- lados, sistemas e cursos.
 -- ------------------------------------------------------------
 create or replace view painel_equipe_totais with (security_barrier = true) as
 select
@@ -86,19 +121,11 @@ from (
 
   union all
 
-  -- 2. cursos vendidos (todas as vendedoras do lançamento)
-  select x.vendedor, x.ano, x.mes, 0,0,0,0,0,0, x.valor_contrato, 0, 0
-    from (
-      select distinct l.id, btrim(v.vendedor) as vendedor, l.ano, l.mes, l.valor_contrato
-        from lancamentos l
-        cross join lateral (values (l.vendedor), (l.vendedor2), (l.vendedor3)) v(vendedor)
-       where l.entidade = 'cursos' and coalesce(btrim(v.vendedor), '') <> ''
-      union
-      select distinct l.id, btrim(ev.vendedor), l.ano, l.mes, l.valor_contrato
-        from lancamentos l
-        join lancamentos_extra_vendedores ev on ev.lancamento_id = l.id
-       where l.entidade = 'cursos' and coalesce(btrim(ev.vendedor), '') <> ''
-    ) x
+  -- 2. cursos vendidos: um lançamento, uma vendedora
+  select btrim(l.vendedor_responsavel), l.ano, l.mes, 0,0,0,0,0,0, l.valor_contrato, 0, 0
+    from lancamentos l
+   where l.entidade = 'cursos'
+     and coalesce(btrim(l.vendedor_responsavel), '') <> ''
 
   union all
 
@@ -113,13 +140,21 @@ alter view painel_equipe_totais owner to postgres;
 revoke all on painel_equipe_totais from anon;
 grant select on painel_equipe_totais to authenticated;
 
--- Quantas vendas ainda estão sem responsável, por mês.
+-- Quantos lançamentos ainda estão sem responsável, por mês.
 create or replace view vendas_sem_responsavel with (security_barrier = true) as
 select ano, mes, count(*) as qtd, sum(valor) as valor
   from vendas
  where coalesce(btrim(vendedor_responsavel), '') = ''
  group by ano, mes;
 
-alter view vendas_sem_responsavel owner to postgres;
-revoke all on vendas_sem_responsavel from anon;
-grant select on vendas_sem_responsavel to authenticated;
+create or replace view cursos_sem_responsavel with (security_barrier = true) as
+select ano, mes, count(*) as qtd, sum(valor_contrato) as valor
+  from lancamentos
+ where entidade = 'cursos'
+   and coalesce(btrim(vendedor_responsavel), '') = ''
+ group by ano, mes;
+
+alter view vendas_sem_responsavel  owner to postgres;
+alter view cursos_sem_responsavel  owner to postgres;
+revoke all on vendas_sem_responsavel, cursos_sem_responsavel from anon;
+grant select on vendas_sem_responsavel, cursos_sem_responsavel to authenticated;

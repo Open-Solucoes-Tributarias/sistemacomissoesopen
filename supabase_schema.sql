@@ -84,6 +84,8 @@ create table lancamentos (
   vendedor2 text default '',
   comissao_percent3 numeric,
   vendedor3 text default '',
+  -- quem EFETIVAMENTE vendeu (≠ os "vendedor" acima, que dizem quem ganha comissão)
+  vendedor_responsavel text,
   pago boolean not null default false,
   mes_pagamento text,
   parcela_label text,
@@ -343,13 +345,15 @@ select
   case when current_user_is_admin() or name_matches(vendedor2, current_user_person_name()) then comissao_percent2 else null end as comissao_percent2,
   case when current_user_is_admin() or name_matches(vendedor3, current_user_person_name()) then vendedor3         else null end as vendedor3,
   case when current_user_is_admin() or name_matches(vendedor3, current_user_person_name()) then comissao_percent3 else null end as comissao_percent3,
-  pago, mes_pagamento, parcela_label, created_at, updated_at
+  pago, mes_pagamento, parcela_label, created_at, updated_at,
+  case when current_user_is_admin() or name_matches(vendedor_responsavel, current_user_person_name()) then vendedor_responsavel else null end as vendedor_responsavel
 from lancamentos
 where current_user_is_admin()
    or name_matches(vendedor,  current_user_person_name())
    or name_matches(vendedor2, current_user_person_name())
    or name_matches(vendedor3, current_user_person_name())
    or name_matches(colaborador, current_user_person_name())
+   or name_matches(vendedor_responsavel, current_user_person_name())
    or lancamento_tem_extra_vendedor_meu(id);
 
 create or replace view lancamentos_extra_vendedores_safe with (security_barrier = true) as

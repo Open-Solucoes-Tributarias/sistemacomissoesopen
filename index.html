@@ -847,6 +847,9 @@ const ENTITIES = {
     ],
     commissionLabel: "Valor da Comissão",
     defaultVendors: ["Soraya","Angela","Rios","Uilma","Luciana"],
+    // Os campos "Vendedor" abaixo dizem quem GANHA comissão. Quem vendeu
+    // de fato é outra coisa, e é o que o Painel da Equipe conta.
+    hasResponsavel: true,
   },
 };
 const ENTITY_KEYS = ["consultoria","publicos","cursos"];
@@ -1369,6 +1372,7 @@ function persistEntityRows(key){
             comissao_percent2: numOrNull(r.comissaoPercent2), vendedor2: r.vendedor2||'',
             comissao_percent3: numOrNull(r.comissaoPercent3), vendedor3: r.vendedor3||'',
             parcela_label: r.parcelaLabel || null,
+            vendedor_responsavel: cfg.hasResponsavel ? (r.vendedorResponsavel || '') : null,
             nome:'', valor_contrato:null, tipo:null, parceiro:'', participacao:null,
             forma_pagamento:'', colaborador:'', observacoes:'',
             pago:false, mes_pagamento:null,
@@ -1455,6 +1459,7 @@ async function tryLoadEntityFromStorageAsync(key){
           extraVendedores: extrasByLanc[d.id] || [],
           parcelaLabel: d.parcela_label,
         };
+        if(cfg.hasResponsavel) r.vendedorResponsavel = d.vendedor_responsavel || '';
         if(cfg.hasPagamento){ r.pago = d.pago; r.mesPagamento = d.mes_pagamento; }
         cfg.fields.forEach(function(f){
           if(f.key === 'valorContrato') r.valorContrato = d.valor_contrato;
@@ -4024,6 +4029,7 @@ function addEntityRow(key){
     return;
   }
   const row = {id: st.nextId++, mes, ano: yearFilter, comissaoPercent:null, vendedor: st.vendorFilter!=="Todos" ? st.vendorFilter : "", comissaoPercent2:null, vendedor2:"", comissaoPercent3:null, vendedor3:""};
+  if(cfg.hasResponsavel) row.vendedorResponsavel = "";
   if(cfg.hasPagamento){ row.pago = false; row.mesPagamento = null; }
   // participacao vira coluna numérica no banco, então nasce null e não ""
   const CAMPOS_NUMERICOS = new Set(["valorContrato","participacao"]);
@@ -4325,6 +4331,20 @@ function onEntityTextInput(el){
   const key = el.dataset.entity, id = Number(el.dataset.id), field = el.dataset.field;
   updateEntityCell(key, id, field, el.value);
 }
+/* Quem efetivamente vendeu o curso — diferente dos campos "Vendedor",
+   que dizem quem ganha comissão. É essa que o Painel da Equipe conta. */
+function onEntityResponsavelSelect(el){
+  updateEntityCell(el.dataset.entity, Number(el.dataset.id), 'vendedorResponsavel', el.value);
+  render();
+}
+
+function entityRowsSemResponsavel(key){
+  if(!ENTITIES[key].hasResponsavel) return [];
+  return (state[key].rows || []).filter(function(r){
+    return (r.ano||2026) === yearFilter && !String(r.vendedorResponsavel||'').trim();
+  });
+}
+
 function onEntitySelectField(el){
   const key = el.dataset.entity, id = Number(el.dataset.id), field = el.dataset.field;
   updateEntityCell(key, id, field, el.value);
@@ -4410,12 +4430,21 @@ function renderEntitySection(key){
     : `Nenhum lançamento ainda. Clique em "+ Novo lançamento" para começar.`;
 
   const maxExtra = visible.reduce((max,r) => Math.max(max, Array.isArray(r.extraVendedores)?r.extraVendedores.length:0), 0);
-  const colCount = 2 + cfg.fields.length + 7 + (maxExtra*2) + (cfg.hasPagamento?1:0);
+  const colCount = 2 + cfg.fields.length + 7 + (maxExtra*2) + (cfg.hasPagamento?1:0) + (cfg.hasResponsavel?1:0);
   const rowsHtml = visible.length === 0
     ? `<tr class="empty-row"><td colspan="${colCount}"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
     : visible.map(row => {
         let cells = `<td><select data-entity="${key}" data-id="${row.id}" onchange="onEntityMonthSelect(this)" title="${esc(row.mes)}">${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthNumber(m)}</option>`).join('')}</select>${isEntityRowPending(row) ? '<span class="pending-badge" title="Lançamento incompleto: falta valor ou percentual">⚠️</span>' : ''}${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}${isEntityRowDuplicate(key,row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo nome neste mês — confira se não é duplicado">🔁 Duplicado</span>` : ''}</td>`;
-        cfg.fields.forEach(f => {
+        cfg.fields.forEach((f, fi) => {
+          if(fi === 1 && cfg.hasResponsavel){
+            cells += `<td class="resp-cell">
+              <select class="${(row.vendedorResponsavel||'').trim() ? '' : 'sem-resp'}" data-entity="${key}" data-id="${row.id}" onchange="onEntityResponsavelSelect(this)"
+                      title="Quem efetivamente vendeu este curso — é essa pessoa que o Painel da Equipe conta">
+                <option value="">— quem vendeu?</option>
+                ${entityVendorsForCurrentUser(key).map(v => `<option value="${esc(v)}" ${name_matches_client(row.vendedorResponsavel, v)?'selected':''}>${esc(v)}</option>`).join('')}
+              </select>
+            </td>`;
+          }
           if(f.key === "parceiro"){
             cells += `<td><select data-entity="${key}" data-id="${row.id}" onchange="onEntityParceiroSelect(this)">${partnerOptionsHtml(row.parceiro)}</select></td>`;
           } else if(f.key === "participacao"){
@@ -4484,7 +4513,16 @@ function renderEntitySection(key){
         return `<tr class="${isEntityRowPending(row) ? 'row-pending' : ''}${isMonthClosed(row.ano||2026,row.mes) ? ' row-locked' : ''}${isEntityRowDuplicate(key,row) ? ' row-duplicate' : ''}">${cells}</tr>`;
       }).join('');
 
+  const semRespEnt = isAdmin ? entityRowsSemResponsavel(key) : [];
+  const avisoRespEnt = semRespEnt.length ? `
+    <div class="storage-warning aviso-resp">
+      🧭 <b>${semRespEnt.length}</b> ${cfg.itemLabel}${semRespEnt.length===1?'':'s'} de ${yearFilter} ainda sem <b>quem vendeu</b>.
+      Os campos “Vendedor” abaixo dizem quem <b>ganha comissão</b> — preencha a coluna <b>“Quem vendeu”</b>
+      para ${semRespEnt.length===1?'esse':'esses'} ${semRespEnt.length===1?'entrar':'entrarem'} no Painel da Equipe.
+    </div>` : '';
+
   return `
+    ${avisoRespEnt}
     ${kpiToggleHtml}
     <div class="kpis">${kpiCardsHtml}</div>
 
@@ -4507,7 +4545,7 @@ function renderEntitySection(key){
           <thead>
             <tr>
               <th style="width:58px">Mês</th>
-              ${cfg.fields.map(f => `<th${f.key==='valorContrato'?' class="num col-valor"':(f.key==='participacao'?' class="num col-pct"':(f.type==='number'?' class="num"':''))}>${f.label}</th>${f.key==='formaPagamento'&&cfg.hasPagamento?'<th style="width:110px">Pagamento</th>':''}`).join('')}
+              ${cfg.fields.map((f,fi) => `<th${f.key==='valorContrato'?' class="num col-valor"':(f.key==='participacao'?' class="num col-pct"':(f.type==='number'?' class="num"':''))}>${f.label}</th>${fi===0&&cfg.hasResponsavel?'<th style="width:140px">Quem vendeu</th>':''}${f.key==='formaPagamento'&&cfg.hasPagamento?'<th style="width:110px">Pagamento</th>':''}`).join('')}
               <th class="num">% Comissão</th>
               <th>Vendedor</th>
               <th class="num">% Comissão V2</th>
@@ -4818,11 +4856,15 @@ function renderPainelSection(){
   const conteudo = (isAdmin && painelAba === 'lancamento')
     ? renderPainelLancamento(vends)
     : renderPainelDashboard(vends);
-  const semRespPainel = isAdmin ? vendasSemResponsavel() : [];
-  const avisoPainel = semRespPainel.length ? `
+  const faltaSistema = isAdmin ? vendasSemResponsavel().length : 0;
+  const faltaCursos  = isAdmin ? entityRowsSemResponsavel('cursos').length : 0;
+  const partes = [];
+  if(faltaSistema) partes.push(`<b>${faltaSistema}</b> venda${faltaSistema===1?'':'s'} na aba Sistema`);
+  if(faltaCursos)  partes.push(`<b>${faltaCursos}</b> lançamento${faltaCursos===1?'':'s'} na aba Cursos`);
+  const avisoPainel = partes.length ? `
     <div class="storage-warning aviso-resp">
-      🧭 <b>${semRespPainel.length}</b> venda${semRespPainel.length===1?'':'s'} de sistema em ${yearFilter} ainda não ${semRespPainel.length===1?'diz':'dizem'} <b>quem vendeu</b>, então ${semRespPainel.length===1?'não está contada':'não estão contadas'} aqui.
-      Preencha a coluna “Quem vendeu” na aba <b>Sistema</b> — a comissão é dividida entre várias pessoas, mas a venda é de uma só.
+      🧭 ${partes.join(' e ')} de ${yearFilter} ainda não ${(faltaSistema+faltaCursos)===1?'diz':'dizem'} <b>quem vendeu</b>, então não ${(faltaSistema+faltaCursos)===1?'está contado':'estão contados'} aqui.
+      A comissão é dividida entre várias pessoas, mas a venda é de uma só — preencha a coluna “Quem vendeu” na aba de origem.
     </div>` : '';
 
   return `

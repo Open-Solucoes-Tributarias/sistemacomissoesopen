@@ -27,7 +27,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_hardening_migration.sql     → migração 4: correções da conferência (ver "Segurança")
 ├── supabase_metas_migration.sql         → migração 5: metas viram regras configuráveis
 ├── supabase_painel_equipe_migration.sql → migração 6: painel de relatórios mensais da equipe
-├── supabase_vendedor_responsavel_migration.sql → migração 7: quem efetivamente fez cada venda do Sistema
+├── supabase_vendedor_responsavel_migration.sql → migração 7: quem efetivamente vendeu (Sistema e Cursos)
 └── .gitignore
 ```
 
@@ -79,7 +79,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 5. Rode `supabase_hardening_migration.sql` — correções encontradas na conferência do banco.
 6. Rode `supabase_metas_migration.sql` — novo formato das metas (recria a tabela `metas`).
 7. Rode `supabase_painel_equipe_migration.sql` — cria a tabela do Painel da Equipe, a view `painel_equipe_totais` (que calcula os indicadores de venda) e a lista de quem aparece no painel.
-8. Rode `supabase_vendedor_responsavel_migration.sql` — cria a coluna "Quem vendeu" e faz o painel contar uma venda por pessoa.
+8. Rode `supabase_vendedor_responsavel_migration.sql` — cria a coluna "Quem vendeu" nas abas Sistema e Cursos, e faz o painel contar uma venda por pessoa.
 9. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
 10. Só depois publique esta versão atualizada do `index.html`.
 
@@ -91,7 +91,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 |---|---|
 | `vendas` | Lançamentos da aba Sistema (inclui `vendedor_responsavel` — quem efetivamente fez a venda) |
 | `vendas_comissoes` | Comissão de cada vendedor(a) por lançamento do Sistema |
-| `lancamentos` | Lançamentos de Consultoria, Consultoria Órgãos Públicos e Cursos (uma tabela só, filtrada pela coluna `entidade`) |
+| `lancamentos` | Lançamentos de Consultoria, Consultoria Órgãos Públicos e Cursos (uma tabela só, filtrada pela coluna `entidade`; inclui `vendedor_responsavel` — quem efetivamente vendeu) |
 | `lancamentos_extra_vendedores` | Vendedores extras (4º em diante) por lançamento |
 | `bonus` | Bônus e metas batidas |
 | `metas` | Regras de meta: gatilho da empresa + prêmio de quem bate |
@@ -183,18 +183,26 @@ São nove indicadores por vendedora, por mês, divididos em dois grupos:
 
 **Os três indicadores de venda não são mais digitados.** Quem faz a soma é a view `painel_equipe_totais` no banco:
 
-- **Vendas de sistemas** e **Qtd. sistemas vendidos** — cada venda da aba Sistema conta para **uma pessoa só**: a que estiver marcada na coluna **"Quem vendeu"** daquele lançamento. Venda sem essa marcação não conta para ninguém, e o sistema avisa quantas estão assim (veja abaixo).
-- **Vendas de cursos** — o valor do contrato entra para cada vendedora que participa do lançamento (campo principal, 2º/3º vendedor ou lista de extras). Um contrato dividido aparece para as duas, e nunca conta duas vezes para a mesma pessoa.
+Os três saem da coluna **"Quem vendeu"** dos lançamentos: cada venda conta para **uma pessoa só**, a que estiver marcada ali. Lançamento sem essa marcação não conta para ninguém, e o sistema avisa quantos estão assim.
 
-### Quem vendeu (aba Sistema)
+### Quem vendeu ≠ quem ganha comissão
 
-Na aba Sistema, a comissão de uma venda é **dividida entre várias vendedoras** — mas a venda foi feita por uma só. Sem essa distinção, o painel creditava o contrato inteiro (e mais uma unidade em "sistemas vendidos") para cada pessoa com comissão na venda. No banco real isso dava **R$ 4.336.963,30 e 123 sistemas "vendidos"**, contra **R$ 984.411,80 e 36 vendas de verdade**.
+Essa é a distinção que faz o painel bater com a realidade.
 
-Por isso cada lançamento do Sistema tem a coluna **"Quem vendeu"**, logo depois de "Venda". O painel conta essa pessoa, uma vez. A coluna vem destacada em amarelo enquanto estiver vazia, e a aba mostra um aviso com quantas vendas ainda faltam preencher.
+Nas abas **Sistema** e **Cursos**, a comissão de uma venda é **dividida entre várias pessoas** — mas quem fez a venda foi uma só. Os campos de vendedor desses lançamentos dizem quem **ganha comissão**, não quem vendeu. Antes o painel tratava as duas coisas como a mesma, e creditava o contrato inteiro a cada nome que aparecia:
 
-> Vendas antigas nascem sem essa marcação e **não são chutadas**: nenhuma delas tinha uma vendedora única (todas eram divididas entre 2 e 6 pessoas), então a informação simplesmente não existe nos dados — só quem lançou sabe. Vá preenchendo pela aba Sistema; conforme preenche, os números do painel vão se formando.
+| Aba | O painel contava | O real |
+|---|---|---|
+| Sistema | R$ 4.336.963,30 · 123 sistemas | **R$ 984.411,80 · 36 vendas** |
+| Cursos | R$ 386.166 contados em dobro nos lançamentos divididos | — |
 
-O nome da responsável tem a mesma máscara de vendedor2/vendedor3: conta restrita só lê se for ela mesma.
+Por isso as duas abas têm a coluna **"Quem vendeu"** (no Sistema, depois de "Venda"; em Cursos, depois de "Nome do Curso"). O painel conta essa pessoa, uma vez. A coluna vem destacada em amarelo enquanto estiver vazia, e a aba mostra um aviso com quantos lançamentos ainda faltam preencher.
+
+> **Nada foi preenchido automaticamente, de propósito.** No Sistema, nenhuma venda tinha uma vendedora única — todas eram divididas entre 2 e 6 pessoas. Em Cursos, a mesma pessoa aparece como vendedora em 10 dos 12 lançamentos, com 1% em todos: é o papel dela na comissão, não a venda. Copiar esses campos repetiria exatamente o erro que a coluna existe para corrigir. Vá preenchendo pelas abas de origem; conforme preenche, os números do painel vão se formando.
+
+O nome de quem vendeu tem a mesma máscara dos outros vendedores: conta restrita só lê se for ela mesma.
+
+A aba **Consultoria** e a de **Órgãos Públicos** não têm essa coluna — o painel não conta essas duas origens.
 
 **Lançamento** — escolhe a vendedora, o mês e preenche os **seis** campos de andamento. Logo abaixo, um bloco cinza mostra os três indicadores de venda já calculados daquele mês, só para conferência. Se aquele mês já foi lançado, o formulário abre preenchido e o botão vira "Atualizar". Ao lado, cada vendedora tem um quadro com os meses já lançados, com atalhos para editar ou excluir.
 
