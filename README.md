@@ -206,7 +206,12 @@ A aba **Consultoria** e a de **Órgãos Públicos** não têm essa coluna — o 
 
 **Lançamento** — escolhe a vendedora, o mês e preenche os **seis** campos de andamento. Logo abaixo, um bloco cinza mostra os três indicadores de venda já calculados daquele mês, só para conferência. Se aquele mês já foi lançado, o formulário abre preenchido e o botão vira "Atualizar". Ao lado, cada vendedora tem um quadro com os meses já lançados, com atalhos para editar ou excluir.
 
-**Dashboard** — cartões com o total do ano por pessoa, **ranking do mês** (quem liderou cada indicador, mais uma pontuação combinada: 1º lugar soma N pontos, 2º soma N−1, e vence quem somar mais nos nove), gráfico de barras comparando as pessoas num indicador, evolução mensal em linhas ao longo dos 12 meses, e a tabela de totais anuais.
+**Dashboard** — cartões com o total do ano por pessoa, **ranking do mês**, gráfico de barras comparando as pessoas num indicador, evolução mensal em linhas ao longo dos 12 meses, e a tabela de totais anuais.
+
+No ranking, cada indicador mostra quem liderou; **quem empata aparece junto**, com o valor uma vez só. A pontuação combinada dá N pontos ao 1º lugar, N−1 ao 2º e assim por diante, com duas regras:
+
+- **Empate divide a posição** e rende os mesmos pontos às duas (1º, 1º, 3º…). Se o empate for no topo geral, o quadro mostra as duas como melhores do mês.
+- **Quem está zerado num indicador não pontua nele** — senão um indicador que ninguém lançou acabava decidindo o ranking pela ordem da lista.
 
 **Quem aparece** — o painel tem a **própria lista de pessoas**, separada da lista de vendedoras do sistema, porque ele acompanha só a equipe comercial que lança andamento. Hoje são **Angela, Rios, Uilma e Luciana**. Quem é admin muda isso pelo botão **"Quem aparece"** no topo do painel, marcando ou desmarcando nomes — desmarcar alguém só tira do painel, não mexe em lançamento, comissão nem em nenhuma outra aba. A lista fica no banco (`entity_vendors` com `entidade='painel'`), então vale para todo mundo.
 
