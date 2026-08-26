@@ -20,6 +20,7 @@ Sistema de controle de vendas, comissões, parceiros e pagamentos da equipe come
 ├── supabase_column_masking_migration.sql → migração 3: esconde os dados dos colegas dentro de um lançamento compartilhado
 ├── supabase_hardening_migration.sql     → migração 4: correções da conferência (ver "Segurança")
 ├── supabase_metas_migration.sql         → migração 5: metas viram regras configuráveis
+├── supabase_painel_equipe_migration.sql → migração 6: painel de relatórios mensais da equipe
 └── .gitignore
 ```
 
@@ -70,8 +71,9 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 4. Rode `supabase_column_masking_migration.sql` — cria as views `_safe` e fecha a leitura direta das tabelas base.
 5. Rode `supabase_hardening_migration.sql` — correções encontradas na conferência do banco.
 6. Rode `supabase_metas_migration.sql` — novo formato das metas (recria a tabela `metas`).
-7. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
-8. Só depois publique esta versão atualizada do `index.html`.
+7. Rode `supabase_painel_equipe_migration.sql` — cria a tabela do Painel da Equipe.
+8. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
+9. Só depois publique esta versão atualizada do `index.html`.
 
 ⚠️ A partir da migração 3, o `index.html` lê pelas views `_safe`. Uma versão antiga do front, apontando para as tabelas base, mostraria tudo vazio para as contas restritas — publique o `index.html` desta versão junto.
 
@@ -85,6 +87,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `lancamentos_extra_vendedores` | Vendedores extras (4º em diante) por lançamento |
 | `bonus` | Bônus e metas batidas |
 | `metas` | Regras de meta: gatilho da empresa + prêmio de quem bate |
+| `relatorios_equipe` | Indicadores mensais de andamento da equipe (Painel da Equipe) |
 | `partners` | Parceiros cadastrados |
 | `venda_products` | Catálogo de produtos da aba Sistema |
 | `sellers` | Vendedoras do Sistema (lista editável) |
@@ -118,7 +121,7 @@ Pronto — a Vercel te dá uma URL pública (tipo `seu-projeto.vercel.app`) que 
 1. Crie uma conta no [github.com](https://github.com) se ainda não tiver.
 2. Clique em **New repository** (botão verde no canto superior direito).
 3. Dê um nome (ex: `comissoes-open-tributarias`), marque como **Private** (recomendado, já que tem dados comerciais) e clique em **Create repository**.
-4. Na tela que aparece, clique em **uploading an existing file** e arraste os arquivos deste projeto (`index.html`, `README.md`, `.gitignore`, `supabase_schema.sql`, `supabase_security_migration.sql`, `supabase_row_access_migration.sql`, `supabase_column_masking_migration.sql`, `supabase_hardening_migration.sql`, `supabase_metas_migration.sql`).
+4. Na tela que aparece, clique em **uploading an existing file** e arraste os arquivos deste projeto (`index.html`, `README.md`, `.gitignore`, `supabase_schema.sql`, `supabase_security_migration.sql`, `supabase_row_access_migration.sql`, `supabase_column_masking_migration.sql`, `supabase_hardening_migration.sql`, `supabase_metas_migration.sql`, `supabase_painel_equipe_migration.sql`).
 5. Clique em **Commit changes**.
 
 Pronto, o código está no GitHub. Agora é só seguir o passo "Deploy no Vercel" acima.
@@ -158,6 +161,20 @@ Os dois quadros já descontam a participação do parceiro antes de calcular a c
 Cada vendedor(a) logado enxerga **apenas as próprias linhas** — é o mesmo corte de acesso do resto do sistema, feito no banco. Admin vê todo mundo, agrupado por pessoa e com subtotal.
 
 > **Cursos não tem controle de pagamento.** As abas Sistema, Consultoria e Órgãos Públicos têm a coluna "Pago"; a de Cursos não, então lançamentos de curso não aparecem nesses dois quadros. Se a equipe de cursos também passar a receber só depois do pagamento, dá pra ativar o controle lá.
+
+## Painel da Equipe
+
+Aba própria, para acompanhar o **andamento** da equipe — o esforço, não só o resultado financeiro. Ao contrário do resto do sistema, aqui os números são **lançados à mão** todo mês.
+
+Nove indicadores por vendedora, por mês: Interação, Propostas, Prospecção zero, Prospecção, Negócios abertos, Reuniões realizadas, Vendas de cursos, Vendas de sistemas e Qtd. sistemas vendidos.
+
+**Lançamento** — escolhe a vendedora, o mês e preenche os nove campos. Se aquele mês já foi lançado, o formulário abre preenchido e o botão vira "Atualizar". Ao lado, cada vendedora tem um quadro com os meses já lançados, com atalhos para editar ou excluir.
+
+**Dashboard** — cartões com o total do ano por pessoa, **ranking do mês** (quem liderou cada indicador, mais uma pontuação combinada: 1º lugar soma N pontos, 2º soma N−1, e vence quem somar mais nos nove), gráfico de barras comparando as pessoas num indicador, evolução mensal em linhas ao longo dos 12 meses, e a tabela de totais anuais.
+
+O painel usa a **lista de vendedoras do sistema** e o **ano selecionado** no topo — não tem lista nem ano fixos.
+
+> **Contas restritas** veem só os próprios números, sem o formulário, sem o ranking e sem o comparativo entre pessoas — esses blocos só fazem sentido com os dados de todo mundo, que elas não podem ver.
 
 ## Metas e bônus
 

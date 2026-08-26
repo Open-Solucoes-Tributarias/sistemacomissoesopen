@@ -498,6 +498,79 @@
   .ordem-wrap select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
   .read-only-mode .ordem-wrap{display:inline-flex !important;}
 
+  /* ---------- Painel da Equipe ---------- */
+  .painel-topo{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;}
+  .painel-titulo{font-size:16px;font-weight:800;color:var(--ink);letter-spacing:-0.01em;}
+  .painel-sub{font-size:13px;color:var(--ink-soft);font-weight:500;margin-top:2px;}
+  .painel-abas{display:flex;gap:3px;background:var(--border-soft);border-radius:10px;padding:3px;}
+  .painel-aba{
+    font-family:var(--font);font-size:13px;font-weight:700;border:none;cursor:pointer;
+    background:transparent;color:var(--ink-soft);padding:8px 15px;border-radius:8px;transition:all .15s;
+  }
+  .painel-aba:hover{color:var(--ink);}
+  .painel-aba.active{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm);}
+
+  .painel-grid{display:grid;grid-template-columns:minmax(300px,2fr) 3fr;gap:18px;align-items:start;}
+  @media (max-width:900px){ .painel-grid{grid-template-columns:1fr;} }
+
+  .painel-chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:6px;margin-bottom:14px;}
+  .painel-chip{
+    font-family:var(--font);font-size:12.5px;font-weight:700;cursor:pointer;
+    padding:9px 6px;border-radius:9px;border:1px solid var(--border);
+    background:var(--surface);color:var(--ink-soft);transition:all .15s;
+  }
+  .painel-chip:hover{border-color:var(--ink-faint);color:var(--ink);}
+  .painel-chip.active{background:var(--vc);border-color:transparent;color:#fff;}
+
+  .painel-campo{display:block;margin-bottom:12px;}
+  .painel-campo > span{display:block;font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:5px;}
+  .painel-campo select, .painel-campo input{
+    width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);
+    font-family:var(--font);font-size:13.5px;color:var(--ink);background:var(--surface);outline:none;
+    font-variant-numeric:tabular-nums;
+  }
+  .painel-campo select:focus, .painel-campo input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+  .painel-campos{display:grid;grid-template-columns:1fr 1fr;gap:0 12px;}
+  @media (max-width:520px){ .painel-campos{grid-template-columns:1fr;} }
+  .painel-salvar{
+    width:100%;margin-top:6px;padding:11px;border:none;border-radius:var(--radius-sm);
+    background:var(--ink);color:#fff;font-family:var(--font);font-size:13.5px;font-weight:700;
+    cursor:pointer;transition:opacity .15s;
+  }
+  .painel-salvar:hover{opacity:.9;}
+
+  .painel-duplo{display:flex;gap:20px;align-items:flex-end;}
+  .painel-num{font-size:22px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.1;}
+  .painel-num-rot{font-size:11px;color:var(--ink-faint);font-weight:600;margin-top:2px;}
+
+  .painel-ranking-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+  @media (max-width:640px){ .painel-ranking-grid{grid-template-columns:1fr;} }
+  .painel-ranking-item{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:9px 12px;border-radius:9px;background:var(--border-soft);border:1px solid var(--border-soft);
+  }
+  .painel-ranking-item > span:first-child{font-size:12.5px;color:var(--ink-soft);font-weight:600;}
+  .painel-lider{
+    font-size:11.5px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;
+    background:color-mix(in srgb, var(--vc) 14%, white);color:var(--vc);border:1px solid color-mix(in srgb, var(--vc) 35%, white);
+  }
+  .painel-sem{font-size:11.5px;color:var(--ink-faint);font-weight:600;}
+  .painel-melhor{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+    padding:14px 16px;border-radius:var(--radius-md);
+    border:2px solid var(--vc);background:color-mix(in srgb, var(--vc) 6%, white);
+  }
+  .painel-melhor-rot{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--ink-soft);}
+  .painel-melhor-nome{font-size:19px;font-weight:800;color:var(--vc);margin-top:2px;}
+  .painel-melhor-pontos{text-align:right;}
+  .painel-melhor-pontos > div:last-child{display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-end;margin-top:4px;}
+  .painel-melhor-pontos span{font-size:12px;font-weight:600;color:var(--ink-faint);}
+  .painel-melhor-pontos span.destaque{color:var(--ink);font-weight:800;}
+  .painel-nota{font-size:11.5px;color:var(--ink-faint);font-weight:600;line-height:1.5;margin-top:10px;}
+  .painel-legenda{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;}
+  .painel-legenda span{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-soft);font-weight:600;}
+  .painel-legenda i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+
   /* ---------- Metas ---------- */
   .metas-lista{display:flex;flex-direction:column;gap:12px;}
   .meta-empty{color:var(--ink-soft);font-size:13.5px;line-height:1.5;padding:6px 2px;}
@@ -645,6 +718,7 @@ const TABS = [
   {key:"bonus", label:"Bônus e Metas"},
   {key:"parceiros", label:"Resumo Geral"},
   {key:"pagamentos", label:"Pagamentos Realizados"},
+  {key:"painel", label:"Painel da Equipe"},
 ];
 
 let activeTab = "vendas";
@@ -677,6 +751,29 @@ let metasNextId = 1;
 let pagamentosMonthFilter = "Todos";
 let aReceberMonthFilter = "Todos";   // filtra "a receber" pelo mês da VENDA
 let vendasOrdem = "padrao";          // ordenação da aba Sistema (só exibição)
+
+/* ---------------- Painel de relatórios mensais da equipe ----------------
+   Indicadores de andamento que a pessoa lança à mão, mês a mês — diferente
+   do resto do sistema, que calcula em cima dos lançamentos de venda. */
+const METRICAS = [
+  {key:'interacao',       col:'interacao',        label:'Interação'},
+  {key:'propostas',       col:'propostas',        label:'Propostas'},
+  {key:'prospeccaoZero',  col:'prospeccao_zero',  label:'Prospecção zero'},
+  {key:'prospeccao',      col:'prospeccao',       label:'Prospecção'},
+  {key:'negociosAbertos', col:'negocios_abertos', label:'Negócios abertos'},
+  {key:'reunioes',        col:'reunioes',         label:'Reuniões realizadas'},
+  {key:'vendasCursos',    col:'vendas_cursos',    label:'Vendas de cursos'},
+  {key:'vendasSistemas',  col:'vendas_sistemas',  label:'Vendas de sistemas'},
+  {key:'qtdSistemas',     col:'qtd_sistemas',     label:'Qtd. sistemas vendidos'},
+];
+let relatorios = [];            // {id, ano, mes, vendedor, <metricas>}
+let relatoriosNextId = 1;
+let painelAba = 'lancamento';   // 'lancamento' | 'dashboard'
+let painelVendedor = '';        // quem está sendo lançado
+let painelMes = MONTHS[0];
+let painelForm = {};            // rascunho do formulário
+let painelMetricaFoco = 'vendasSistemas';
+let painelMesRanking = MONTHS[0];
 
 const state = {};
 ENTITY_KEYS.forEach(k => {
@@ -1385,6 +1482,46 @@ async function tryLoadMetasFromStorageAsync(){
         };
       });
       metasNextId = metas.length ? Math.max.apply(null, metas.map(function(m){ return m.id||0; })) + 1 : 1;
+      render();
+    }
+  } catch(e){ console.error(e); }
+}
+
+/* ---------- Relatórios mensais da equipe ---------- */
+let relatoriosTimer = null;
+function persistRelatorios(){
+  saving = true; updateSaveStatus();
+  if(relatoriosTimer) clearTimeout(relatoriosTimer);
+  relatoriosTimer = setTimeout(function(){
+    (async function(){
+      try{
+        const dbRows = relatorios.map(function(r){
+          const row = { id: r.id, ano: r.ano, mes: r.mes, vendedor: r.vendedor };
+          METRICAS.forEach(function(m){ row[m.col] = numOrNull(r[m.key]) || 0; });
+          return row;
+        });
+        await sbUpsert('relatorios_equipe', dbRows, 'id');
+        const existing = carregouDoBanco.relatorios ? ((await sbSelect('relatorios_equipe','select=id')) || []) : [];
+        const localIds = relatorios.map(function(r){ return r.id; });
+        const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
+        if(toDelete.length) await sbDeleteIn('relatorios_equipe','id', toDelete);
+        saveError = false;
+      } catch(e){ console.error(e); saveError = true; }
+      finally { saving = false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+async function tryLoadRelatoriosFromStorageAsync(){
+  try{
+    const dbRows = await sbSelect('relatorios_equipe','select=*&order=id.asc');
+    carregouDoBanco.relatorios = true;
+    if(dbRows){
+      relatorios = dbRows.map(function(d){
+        const r = { id: d.id, ano: d.ano, mes: d.mes, vendedor: d.vendedor || '' };
+        METRICAS.forEach(function(m){ r[m.key] = Number(d[m.col]) || 0; });
+        return r;
+      });
+      relatoriosNextId = relatorios.length ? Math.max.apply(null, relatorios.map(function(r){ return r.id||0; })) + 1 : 1;
       render();
     }
   } catch(e){ console.error(e); }
@@ -4169,6 +4306,362 @@ function renderEntitySection(key){
   `;
 }
 
+/* ---------------- Painel da Equipe: dados e ações ---------------- */
+
+function vendedoresDoPainel(){ return sellersForCurrentUser().map(s => s.label); }
+function corDoVendedor(nome){
+  const s = SELLERS.find(x => name_matches_client(x.label, nome));
+  return s ? s.color : VENDOR_PALETTE[0];
+}
+function relatoriosDoAno(){ return relatorios.filter(r => r.ano === yearFilter); }
+function getRelatorio(vendedor, mes){
+  return relatoriosDoAno().find(r => name_matches_client(r.vendedor, vendedor) && r.mes === mes);
+}
+function mesesLancados(vendedor){
+  return relatoriosDoAno()
+    .filter(r => name_matches_client(r.vendedor, vendedor))
+    .sort((a,b) => MONTHS.indexOf(a.mes) - MONTHS.indexOf(b.mes));
+}
+function totaisPorVendedorPainel(){
+  const out = {};
+  vendedoresDoPainel().forEach(v => {
+    const t = {};
+    METRICAS.forEach(m => { t[m.key] = 0; });
+    mesesLancados(v).forEach(r => { METRICAS.forEach(m => { t[m.key] += Number(r[m.key])||0; }); });
+    out[v] = t;
+  });
+  return out;
+}
+
+function painelFormVazio(){
+  const f = {};
+  METRICAS.forEach(m => { f[m.key] = ''; });
+  return f;
+}
+function carregarFormPainel(){
+  const existente = getRelatorio(painelVendedor, painelMes);
+  if(existente){
+    const f = {};
+    METRICAS.forEach(m => { f[m.key] = existente[m.key] === 0 ? '0' : String(existente[m.key] ?? ''); });
+    painelForm = f;
+  } else {
+    painelForm = painelFormVazio();
+  }
+}
+function setPainelAba(a){ painelAba = a; render(); }
+function setPainelVendedor(v){ painelVendedor = v; carregarFormPainel(); render(); }
+function setPainelMes(el){ painelMes = el.value; carregarFormPainel(); render(); }
+function onPainelFormInput(el, key){ painelForm[key] = el.value; }   // sem render, pra não perder o foco
+function setPainelMetricaFoco(el){ painelMetricaFoco = el.value; render(); }
+function setPainelMesRanking(el){ painelMesRanking = el.value; render(); }
+
+function salvarPainelLancamento(){
+  if(!painelVendedor){ showAlert("Escolha a vendedora antes de salvar."); return; }
+  const existente = getRelatorio(painelVendedor, painelMes);
+  const dados = {};
+  METRICAS.forEach(m => { dados[m.key] = numOrNull(painelForm[m.key]) || 0; });
+  if(existente){
+    Object.assign(existente, dados);
+  } else {
+    relatorios.push(Object.assign({ id: relatoriosNextId++, ano: yearFilter, mes: painelMes, vendedor: painelVendedor }, dados));
+  }
+  persistRelatorios();
+  render();
+}
+function editarPainelLancamento(vendedor, mes){
+  painelVendedor = vendedor; painelMes = mes; painelAba = 'lancamento';
+  carregarFormPainel(); render();
+}
+function excluirPainelLancamento(vendedor, mes){
+  showConfirm(
+    `Excluir o relatório de ${vendedor} em ${mes}/${yearFilter}? Os números daquele mês serão perdidos.`,
+    () => {
+      relatorios = relatorios.filter(r => !(r.ano === yearFilter && r.mes === mes && name_matches_client(r.vendedor, vendedor)));
+      persistRelatorios();
+      if(name_matches_client(painelVendedor, vendedor) && painelMes === mes) carregarFormPainel();
+      render();
+    },
+    "Excluir"
+  );
+}
+
+/* Ranking do mês: em cada indicador, quem lidera soma N pontos, o segundo
+   N-1, e assim por diante. Vence quem somar mais no conjunto. */
+function rankingDoMes(mes){
+  const vends = vendedoresDoPainel();
+  const pontos = {};
+  vends.forEach(v => { pontos[v] = 0; });
+  const porMetrica = METRICAS.map(m => {
+    const valores = vends
+      .map(v => ({ vendedor: v, valor: Number(getRelatorio(v, mes)?.[m.key]) || 0 }))
+      .sort((a,b) => b.valor - a.valor);
+    valores.forEach((item, idx) => { pontos[item.vendedor] += (vends.length - idx); });
+    return { metrica: m.label, lider: valores[0], todos: valores };
+  });
+  const geral = vends.map(v => ({ vendedor: v, pontos: pontos[v] })).sort((a,b) => b.pontos - a.pontos);
+  return { porMetrica, geral };
+}
+
+/* ---------------- Painel da Equipe: gráficos em SVG ---------------- */
+
+function graficoBarrasPainel(dados){
+  const w = 760, h = 240, padBottom = 30, padTop = 12, padLeft = 44, gap = 18;
+  const max = Math.max(1, ...dados.map(d => d.valor));
+  const plotH = h - padBottom - padTop;
+  const plotW = w - padLeft - 12;
+  const barW = Math.min(70, (plotW / Math.max(dados.length,1)) - gap);
+  const grade = [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const y = padTop + plotH - f*plotH;
+    return `<line x1="${padLeft}" y1="${y}" x2="${w-12}" y2="${y}" stroke="#F1F5F9" stroke-width="1"/>
+            <text x="${padLeft-8}" y="${y+4}" text-anchor="end" font-size="10" fill="#94A3B8">${Math.round(max*f).toLocaleString('pt-BR')}</text>`;
+  }).join('');
+  const barras = dados.map((d,i) => {
+    const bh = max > 0 ? (d.valor/max)*plotH : 0;
+    const x = padLeft + (plotW/dados.length)*i + (plotW/dados.length - barW)/2;
+    const y = padTop + plotH - bh;
+    return `<rect x="${x}" y="${y}" width="${barW}" height="${Math.max(bh,1)}" rx="5" fill="${esc(corDoVendedor(d.vendedor))}"><title>${esc(d.vendedor)}: ${d.valor.toLocaleString('pt-BR')}</title></rect>
+            <text x="${x+barW/2}" y="${y-6}" text-anchor="middle" font-size="11" font-weight="700" fill="#475569">${d.valor ? d.valor.toLocaleString('pt-BR') : ''}</text>
+            <text x="${x+barW/2}" y="${h-10}" text-anchor="middle" font-size="11" fill="#64748B">${esc(d.vendedor)}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">${grade}${barras}</svg>`;
+}
+
+function graficoLinhaPainel(vends){
+  const w = 760, h = 260, padBottom = 28, padTop = 12, padLeft = 44;
+  const plotH = h - padBottom - padTop;
+  const plotW = w - padLeft - 12;
+  const serie = v => MONTHS.map(m => Number(getRelatorio(v, m)?.[painelMetricaFoco]) || 0);
+  const todos = vends.flatMap(serie);
+  const max = Math.max(1, ...todos);
+  const px = i => padLeft + (plotW/11)*i;
+  const py = val => padTop + plotH - (val/max)*plotH;
+  const grade = [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const y = padTop + plotH - f*plotH;
+    return `<line x1="${padLeft}" y1="${y}" x2="${w-12}" y2="${y}" stroke="#F1F5F9" stroke-width="1"/>
+            <text x="${padLeft-8}" y="${y+4}" text-anchor="end" font-size="10" fill="#94A3B8">${Math.round(max*f).toLocaleString('pt-BR')}</text>`;
+  }).join('');
+  const rotulos = MONTHS.map((m,i) =>
+    `<text x="${px(i)}" y="${h-8}" text-anchor="middle" font-size="10" fill="#94A3B8">${monthNumber(m)}</text>`).join('');
+  const linhas = vends.map(v => {
+    const vals = serie(v);
+    const pontos = vals.map((val,i) => `${px(i)},${py(val)}`).join(' ');
+    const cor = esc(corDoVendedor(v));
+    const bolinhas = vals.map((val,i) =>
+      `<circle cx="${px(i)}" cy="${py(val)}" r="2.5" fill="${cor}"><title>${esc(v)} · ${MONTHS[i]}: ${val.toLocaleString('pt-BR')}</title></circle>`).join('');
+    return `<polyline points="${pontos}" fill="none" stroke="${cor}" stroke-width="2" stroke-linejoin="round"/>${bolinhas}`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">${grade}${rotulos}${linhas}</svg>`;
+}
+
+/* ---------------- Painel da Equipe: telas ---------------- */
+
+function renderPainelSection(){
+  const vends = vendedoresDoPainel();
+  if(vends.length === 0){
+    return `<div class="meta-empty" style="padding:24px;">Nenhuma vendedora disponível para este painel.</div>`;
+  }
+  if(!painelVendedor || vends.indexOf(painelVendedor) === -1){
+    painelVendedor = vends[0];
+    carregarFormPainel();
+  }
+  // Conta restrita não lança nem compara: só acompanha os próprios números.
+  const abas = isAdmin ? `
+    <div class="painel-abas">
+      <button class="painel-aba${painelAba==='lancamento'?' active':''}" onclick="setPainelAba('lancamento')">Lançamento</button>
+      <button class="painel-aba${painelAba==='dashboard'?' active':''}" onclick="setPainelAba('dashboard')">Dashboard</button>
+    </div>` : '';
+  const conteudo = (isAdmin && painelAba === 'lancamento')
+    ? renderPainelLancamento(vends)
+    : renderPainelDashboard(vends);
+  return `
+    <div class="painel-topo">
+      <div>
+        <div class="painel-titulo">Painel de relatórios mensais · ${yearFilter}</div>
+        <div class="painel-sub">Andamento da equipe comercial — indicadores lançados a cada mês.</div>
+      </div>
+      ${abas}
+    </div>
+    ${conteudo}
+  `;
+}
+
+function renderPainelLancamento(vends){
+  const jaExiste = !!getRelatorio(painelVendedor, painelMes);
+
+  const chips = vends.map(v => `
+    <button class="painel-chip${name_matches_client(v,painelVendedor)?' active':''}"
+            style="--vc:${esc(corDoVendedor(v))}" onclick="setPainelVendedor('${esc(v)}')">${esc(v)}</button>
+  `).join('');
+
+  const campos = METRICAS.map(m => `
+    <label class="painel-campo">
+      <span>${esc(m.label)}</span>
+      <input type="number" min="0" step="1" inputmode="numeric" placeholder="0"
+             value="${esc(painelForm[m.key] ?? '')}" oninput="onPainelFormInput(this,'${m.key}')" />
+    </label>
+  `).join('');
+
+  const formulario = panel('painel-form', 'Lançar mês', `
+    <label class="painel-campo"><span>Vendedora</span></label>
+    <div class="painel-chips">${chips}</div>
+    <label class="painel-campo">
+      <span>Mês</span>
+      <select onchange="setPainelMes(this)">
+        ${MONTHS.map(m => `<option value="${m}" ${painelMes===m?'selected':''}>${m} de ${yearFilter}</option>`).join('')}
+      </select>
+    </label>
+    <div class="painel-campos">${campos}</div>
+    <button class="painel-salvar" onclick="salvarPainelLancamento()">
+      ${jaExiste ? 'Atualizar lançamento' : 'Salvar lançamento'}
+    </button>
+  `, { meta: jaExiste ? '<span class="meta-tag ok">mês já lançado</span>' : '' });
+
+  const listas = vends.map(v => {
+    const meses = mesesLancados(v);
+    const corpo = meses.length === 0
+      ? `<div class="meta-empty" style="padding:10px 16px 14px;">Nenhum mês lançado ainda para ${esc(v)}.</div>`
+      : `<div class="table-scroll">
+          <table class="table-plain">
+            <thead>
+              <tr>
+                <th>Mês</th>
+                <th class="num">Reuniões</th>
+                <th class="num">Sistemas</th>
+                <th class="num">Qtd. sist.</th>
+                <th class="num">Cursos</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${meses.map(r => `
+                <tr>
+                  <td>${esc(r.mes)}</td>
+                  <td class="num">${(Number(r.reunioes)||0).toLocaleString('pt-BR')}</td>
+                  <td class="num">${(Number(r.vendasSistemas)||0).toLocaleString('pt-BR')}</td>
+                  <td class="num">${(Number(r.qtdSistemas)||0).toLocaleString('pt-BR')}</td>
+                  <td class="num">${(Number(r.vendasCursos)||0).toLocaleString('pt-BR')}</td>
+                  <td class="del-cell">
+                    <div class="row-actions" style="opacity:1;">
+                      <button class="action-btn" title="Editar este mês" onclick="editarPainelLancamento('${esc(v)}','${r.mes}')">✎</button>
+                      <button class="action-btn danger" title="Excluir este mês" onclick="excluirPainelLancamento('${esc(v)}','${r.mes}')">✕</button>
+                    </div>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    return panel('painel-lista-'+slug(v), esc(v), corpo, {
+      flush: true,
+      meta: `<b>${meses.length}</b> de 12 meses lançados`,
+    });
+  }).join('');
+
+  return `<div class="painel-grid">
+    <div class="painel-col-form">${formulario}</div>
+    <div class="painel-col-listas">${listas}</div>
+  </div>`;
+}
+
+function renderPainelDashboard(vends){
+  const totais = totaisPorVendedorPainel();
+  const metricaLabel = (METRICAS.find(m => m.key === painelMetricaFoco) || {}).label || '';
+
+  const cartoes = panel('painel-cartoes', 'Totais do ano por vendedora', `
+    <div class="kpis" style="margin:0;">
+      ${vends.map(v => `
+        <div class="kpi-card" style="--kc:${esc(corDoVendedor(v))}">
+          <div class="kpi-label"><span class="kpi-dot"></span>${esc(v)}</div>
+          <div class="painel-duplo">
+            <div>
+              <div class="painel-num">${(totais[v]?.vendasSistemas||0).toLocaleString('pt-BR')}</div>
+              <div class="painel-num-rot">sistemas vendidos</div>
+            </div>
+            <div>
+              <div class="painel-num">${(totais[v]?.vendasCursos||0).toLocaleString('pt-BR')}</div>
+              <div class="painel-num-rot">cursos vendidos</div>
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `);
+
+  // O ranking compara pessoas — só admin vê.
+  let ranking = '';
+  if(isAdmin){
+    const semLancamento = vends.every(v => !getRelatorio(v, painelMesRanking));
+    const rk = rankingDoMes(painelMesRanking);
+    const corpo = semLancamento
+      ? `<div class="meta-empty">Nenhum lançamento registrado para ${esc(painelMesRanking)} ainda.</div>`
+      : `
+        <div class="painel-ranking-grid">
+          ${rk.porMetrica.map(item => `
+            <div class="painel-ranking-item">
+              <span>${esc(item.metrica)}</span>
+              ${item.lider && item.lider.valor > 0
+                ? `<span class="painel-lider" style="--vc:${esc(corDoVendedor(item.lider.vendedor))}">${esc(item.lider.vendedor)} · ${item.lider.valor.toLocaleString('pt-BR')}</span>`
+                : `<span class="painel-sem">sem dados</span>`}
+            </div>
+          `).join('')}
+        </div>
+        <div class="painel-melhor" style="--vc:${esc(corDoVendedor(rk.geral[0].vendedor))}">
+          <div>
+            <div class="painel-melhor-rot">Melhor do mês · visão geral</div>
+            <div class="painel-melhor-nome">${esc(rk.geral[0].vendedor)}</div>
+          </div>
+          <div class="painel-melhor-pontos">
+            <div class="painel-melhor-rot">Pontuação combinada</div>
+            <div>${rk.geral.map((g,i) => `<span class="${i===0?'destaque':''}">${i+1}º ${esc(g.vendedor)} (${g.pontos})</span>`).join('')}</div>
+          </div>
+        </div>
+        <div class="painel-nota">Em cada indicador, o 1º lugar soma ${vends.length} pontos, o 2º soma ${vends.length-1}, e assim por diante. Vence quem somar mais nos ${METRICAS.length} indicadores.</div>
+      `;
+    ranking = panel('painel-ranking', 'Ranking do mês', corpo, {
+      actions: `<label class="ordem-wrap"><span>Mês</span>
+        <select onchange="setPainelMesRanking(this)">
+          ${MONTHS.map(m => `<option value="${m}" ${painelMesRanking===m?'selected':''}>${m}</option>`).join('')}
+        </select></label>`,
+    });
+  }
+
+  const seletorMetrica = `<label class="ordem-wrap"><span>Indicador</span>
+    <select onchange="setPainelMetricaFoco(this)">
+      ${METRICAS.map(m => `<option value="${m.key}" ${painelMetricaFoco===m.key?'selected':''}>${esc(m.label)}</option>`).join('')}
+    </select></label>`;
+
+  const barras = isAdmin ? panel('painel-barras', 'Comparativo por indicador',
+    graficoBarrasPainel(vends.map(v => ({vendedor: v, valor: totais[v]?.[painelMetricaFoco] || 0})))
+    + `<div class="painel-nota">Totais de ${yearFilter}, por ${esc(metricaLabel.toLowerCase())}.</div>`,
+    { actions: seletorMetrica }) : '';
+
+  const linha = panel('painel-linha', `Evolução mensal — ${esc(metricaLabel)}`,
+    graficoLinhaPainel(vends)
+    + `<div class="painel-legenda">${vends.map(v => `
+        <span><i style="background:${esc(corDoVendedor(v))}"></i>${esc(v)}</span>`).join('')}</div>`,
+    { actions: isAdmin ? '' : seletorMetrica });
+
+  const tabela = panel('painel-totais', 'Totais anuais por indicador', `
+    <div class="table-scroll">
+      <table class="table-plain">
+        <thead>
+          <tr><th>Indicador</th>${vends.map(v => `<th class="num">${esc(v)}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+          ${METRICAS.map(m => `
+            <tr>
+              <td>${esc(m.label)}</td>
+              ${vends.map(v => `<td class="num">${(totais[v]?.[m.key]||0).toLocaleString('pt-BR')}</td>`).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `, { flush: true });
+
+  return sectionsToolbarHtml() + cartoes + ranking + barras + linha + tabela;
+}
+
 /* ---------------- App shell ---------------- */
 
 function setTab(t){ activeTab = t; render(); }
@@ -4185,6 +4678,7 @@ function render(){
     : activeTab === "parceiros" ? renderParceirosSection()
     : activeTab === "bonus" ? renderBonusSection()
     : activeTab === "pagamentos" ? renderPagamentosSection()
+    : activeTab === "painel" ? renderPainelSection()
     : renderEntitySection(activeTab);
 
   const tabsHtml = TABS.map(t => {
@@ -4267,6 +4761,7 @@ function boot(){
     tryLoadBonusFromStorageAsync(),
     tryLoadClosedMonthsFromStorageAsync(),
     tryLoadMetasFromStorageAsync(),
+    tryLoadRelatoriosFromStorageAsync(),
   ];
   Promise.allSettled(loaders).then(function(){
     initialDataLoaded = true;
