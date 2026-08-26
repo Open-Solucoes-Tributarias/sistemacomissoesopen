@@ -121,6 +121,10 @@ from (
   union all
 
   -- 3. sistemas vendidos (calculado)
+  --    ATENÇÃO: a migração 7 substitui este trecho. Creditar a venda a toda
+  --    vendedora com comissão multiplicava o mesmo contrato por 2 a 6 pessoas,
+  --    porque toda venda é dividida. Passou a valer quem está marcada como
+  --    responsável no lançamento — veja supabase_vendedor_responsavel_migration.sql.
   select s.label, vd.ano, vd.mes,
          0, 0, 0, 0, 0, 0,
          0, vd.valor, 1

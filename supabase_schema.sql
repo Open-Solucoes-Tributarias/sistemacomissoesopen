@@ -46,6 +46,8 @@ create table vendas (
   observacoes text default '',
   vendedor2 text default '',
   vendedor3 text default '',
+  -- quem EFETIVAMENTE fez a venda (≠ quem ganha comissão nela)
+  vendedor_responsavel text,
   pago boolean not null default false,
   mes_pagamento text,
   parcela_label text,
@@ -363,12 +365,14 @@ select
   case when current_user_is_admin() or name_matches(colaborador, current_user_person_name()) then colaborador else null end as colaborador,
   case when current_user_is_admin() or name_matches(vendedor2,   current_user_person_name()) then vendedor2   else null end as vendedor2,
   case when current_user_is_admin() or name_matches(vendedor3,   current_user_person_name()) then vendedor3   else null end as vendedor3,
-  pago, mes_pagamento, parcela_label, created_at, updated_at
+  pago, mes_pagamento, parcela_label, created_at, updated_at,
+  case when current_user_is_admin() or name_matches(vendedor_responsavel, current_user_person_name()) then vendedor_responsavel else null end as vendedor_responsavel
 from vendas
 where current_user_is_admin()
    or name_matches(vendedor2, current_user_person_name())
    or name_matches(vendedor3, current_user_person_name())
    or name_matches(colaborador, current_user_person_name())
+   or name_matches(vendedor_responsavel, current_user_person_name())
    or exists (
      -- valor nulo = linha em branco que o app cria pra toda vendedora em
      -- toda venda; não significa que a pessoa participou daquela venda.

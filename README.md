@@ -27,6 +27,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_hardening_migration.sql     → migração 4: correções da conferência (ver "Segurança")
 ├── supabase_metas_migration.sql         → migração 5: metas viram regras configuráveis
 ├── supabase_painel_equipe_migration.sql → migração 6: painel de relatórios mensais da equipe
+├── supabase_vendedor_responsavel_migration.sql → migração 7: quem efetivamente fez cada venda do Sistema
 └── .gitignore
 ```
 
@@ -78,8 +79,9 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 5. Rode `supabase_hardening_migration.sql` — correções encontradas na conferência do banco.
 6. Rode `supabase_metas_migration.sql` — novo formato das metas (recria a tabela `metas`).
 7. Rode `supabase_painel_equipe_migration.sql` — cria a tabela do Painel da Equipe, a view `painel_equipe_totais` (que calcula os indicadores de venda) e a lista de quem aparece no painel.
-8. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
-9. Só depois publique esta versão atualizada do `index.html`.
+8. Rode `supabase_vendedor_responsavel_migration.sql` — cria a coluna "Quem vendeu" e faz o painel contar uma venda por pessoa.
+9. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
+10. Só depois publique esta versão atualizada do `index.html`.
 
 ⚠️ A partir da migração 3, o `index.html` lê pelas views `_safe`. Uma versão antiga do front, apontando para as tabelas base, mostraria tudo vazio para as contas restritas — publique o `index.html` desta versão junto.
 
@@ -87,7 +89,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 
 | Tabela | Conteúdo |
 |---|---|
-| `vendas` | Lançamentos da aba Sistema |
+| `vendas` | Lançamentos da aba Sistema (inclui `vendedor_responsavel` — quem efetivamente fez a venda) |
 | `vendas_comissoes` | Comissão de cada vendedor(a) por lançamento do Sistema |
 | `lancamentos` | Lançamentos de Consultoria, Consultoria Órgãos Públicos e Cursos (uma tabela só, filtrada pela coluna `entidade`) |
 | `lancamentos_extra_vendedores` | Vendedores extras (4º em diante) por lançamento |
@@ -179,7 +181,20 @@ São nove indicadores por vendedora, por mês, divididos em dois grupos:
 | Andamento | Interação, Propostas, Prospecção zero, Prospecção, Negócios abertos, Reuniões realizadas | **digitado à mão** todo mês |
 | Vendas | Vendas de cursos (R$), Vendas de sistemas (R$), Qtd. sistemas vendidos | **calculado sozinho** pelos lançamentos que já existem no sistema |
 
-**Os três indicadores de venda não são mais digitados.** Assim que um lançamento de curso é registrado com o nome da vendedora — no campo principal, no 2º/3º vendedor ou na lista de vendedores extras — o valor do contrato já entra no painel dela naquele mês. O mesmo vale para a aba Sistema: cada venda soma o valor em "Vendas de sistemas" e conta 1 em "Qtd. sistemas vendidos" para quem tiver comissão preenchida naquela venda. Um contrato dividido entre duas pessoas aparece para as duas, e nunca conta duas vezes para a mesma pessoa. Quem faz a soma é a view `painel_equipe_totais` no banco.
+**Os três indicadores de venda não são mais digitados.** Quem faz a soma é a view `painel_equipe_totais` no banco:
+
+- **Vendas de sistemas** e **Qtd. sistemas vendidos** — cada venda da aba Sistema conta para **uma pessoa só**: a que estiver marcada na coluna **"Quem vendeu"** daquele lançamento. Venda sem essa marcação não conta para ninguém, e o sistema avisa quantas estão assim (veja abaixo).
+- **Vendas de cursos** — o valor do contrato entra para cada vendedora que participa do lançamento (campo principal, 2º/3º vendedor ou lista de extras). Um contrato dividido aparece para as duas, e nunca conta duas vezes para a mesma pessoa.
+
+### Quem vendeu (aba Sistema)
+
+Na aba Sistema, a comissão de uma venda é **dividida entre várias vendedoras** — mas a venda foi feita por uma só. Sem essa distinção, o painel creditava o contrato inteiro (e mais uma unidade em "sistemas vendidos") para cada pessoa com comissão na venda. No banco real isso dava **R$ 4.336.963,30 e 123 sistemas "vendidos"**, contra **R$ 984.411,80 e 36 vendas de verdade**.
+
+Por isso cada lançamento do Sistema tem a coluna **"Quem vendeu"**, logo depois de "Venda". O painel conta essa pessoa, uma vez. A coluna vem destacada em amarelo enquanto estiver vazia, e a aba mostra um aviso com quantas vendas ainda faltam preencher.
+
+> Vendas antigas nascem sem essa marcação e **não são chutadas**: nenhuma delas tinha uma vendedora única (todas eram divididas entre 2 e 6 pessoas), então a informação simplesmente não existe nos dados — só quem lançou sabe. Vá preenchendo pela aba Sistema; conforme preenche, os números do painel vão se formando.
+
+O nome da responsável tem a mesma máscara de vendedor2/vendedor3: conta restrita só lê se for ela mesma.
 
 **Lançamento** — escolhe a vendedora, o mês e preenche os **seis** campos de andamento. Logo abaixo, um bloco cinza mostra os três indicadores de venda já calculados daquele mês, só para conferência. Se aquele mês já foi lançado, o formulário abre preenchido e o botão vira "Atualizar". Ao lado, cada vendedora tem um quadro com os meses já lançados, com atalhos para editar ou excluir.
 
