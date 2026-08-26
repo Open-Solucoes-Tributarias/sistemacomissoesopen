@@ -123,6 +123,18 @@ Pronto — a Vercel te dá uma URL pública (tipo `seu-projeto.vercel.app`) que 
 
 Pronto, o código está no GitHub. Agora é só seguir o passo "Deploy no Vercel" acima.
 
+## Ordenação dos lançamentos
+
+Nas abas **Consultoria**, **Órgãos Públicos** e **Cursos**, o cabeçalho do painel tem um seletor **"Ordenar"**:
+
+| Opção | Efeito |
+|---|---|
+| Mês de lançamento | ordem padrão, como foi digitado |
+| Nome — A a Z / Z a A | alfabética pelo nome da empresa, órgão ou curso |
+| Maior / menor valor de contrato | ordem por valor |
+
+A ordenação é só de exibição — não muda nada no banco, e cada pessoa escolhe a sua. Acentos e maiúsculas são tratados pela regra do português: "ácua" vem antes de "alfa", que vem antes de "Beta", e "Ômega" ordena como "O". Um lançamento recém-criado, ainda sem nome, fica no topo para não sumir de vista.
+
 ## Comissão liberada x a receber
 
 A equipe de consultoria só recebe quando o **cliente paga a nota** — contrato fechado e nota emitida ainda não valem. A aba **Pagamentos Realizados** abre com os pagamentos que entraram e, logo abaixo, separa a comissão em dois casos, por pessoa:
