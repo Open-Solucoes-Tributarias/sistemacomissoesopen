@@ -8,6 +8,12 @@ Sistema de controle de vendas, comissões, parceiros e pagamentos da equipe come
 - **Banco de dados**: [Supabase](https://supabase.com) (Postgres).
 - **Hospedagem**: qualquer serviço de site estático (Vercel, Netlify, GitHub Pages...).
 
+## Visual
+
+O sistema segue o mesmo padrão do **Gestão de Logística da Open**: barra lateral fixa com o menu agrupado (Visão geral / Lançamentos / Equipe), faixa de título em degradê marinho→azul no topo de cada aba, fundo azulado claro e cartões brancos de borda azul com cantos arredondados. Os cartões de indicador ficam levemente tingidos com a cor da pessoa ou do indicador.
+
+Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola na horizontal, e o conteúdo ocupa a largura toda. Na impressão o menu some e a faixa sai em preto no branco.
+
 ## Estrutura do projeto
 
 ```

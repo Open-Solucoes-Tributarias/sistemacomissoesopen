@@ -11,21 +11,25 @@
 <div id="root"></div>
 <style>
   :root{
-    --bg:#F6F7FB;
+    /* Mesma linguagem visual do sistema de Gestão de Logística da Open:
+       fundo azulado claro, cartões brancos de borda azul, faixa em degradê
+       marinho e azul de destaque. */
+    --bg:#F4F7FC;
     --surface:#FFFFFF;
-    --ink:#14162B;
-    --ink-soft:#6B7280;
-    --ink-faint:#9CA3AF;
-    --border:#E7E9F3;
-    --border-soft:#F0F1F8;
-    --primary:#5046E5;
-    --primary-hover:#4038CC;
-    --primary-soft:#EEECFE;
-    --ring:#C7C2FB;
+    --ink:#152238;
+    --ink-soft:#5B6B82;
+    --ink-faint:#93A1B5;
+    --border:#DCE6F3;
+    --border-soft:#EDF2F9;
+    --navy:#12335E;
+    --primary:#1D4ED8;
+    --primary-hover:#1A43B8;
+    --primary-soft:#E7EFFC;
+    --ring:#B6CDF3;
     --danger:#EF4444;
     --danger-soft:#FEECEC;
-    --shadow-sm:0 1px 2px rgba(20,22,43,.04), 0 1px 1px rgba(20,22,43,.03);
-    --shadow-md:0 4px 14px rgba(20,22,43,.06), 0 1px 3px rgba(20,22,43,.04);
+    --shadow-sm:0 1px 2px rgba(21,34,56,.04), 0 1px 1px rgba(21,34,56,.03);
+    --shadow-md:0 4px 14px rgba(21,34,56,.06), 0 1px 3px rgba(21,34,56,.04);
     --radius-lg:18px;
     --radius-md:12px;
     --radius-sm:8px;
@@ -38,10 +42,90 @@
     color:var(--ink);
     font-family:var(--font);
     min-height:100vh;
-    padding:24px 16px 60px;
+    padding:0;
     -webkit-font-smoothing:antialiased;
   }
   .wrap{max-width:100%;margin:0 auto;}
+
+  /* ---------- Casca: barra lateral + conteúdo ---------- */
+  .shell{display:flex;align-items:stretch;min-height:100vh;}
+  .sidebar{
+    width:238px;flex:none;background:var(--surface);
+    border-right:1px solid var(--border);
+    padding:18px 14px 20px;
+    position:sticky;top:0;height:100vh;overflow-y:auto;
+    display:flex;flex-direction:column;
+  }
+  .brand{display:flex;align-items:center;gap:10px;padding:2px 6px 6px;}
+  .brand-mark{
+    width:36px;height:36px;border-radius:10px;flex:none;
+    background:linear-gradient(135deg,var(--navy) 0%,var(--primary) 100%);
+    color:#fff;font-weight:800;font-size:13.5px;letter-spacing:-.02em;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .brand-text{min-width:0;}
+  .brand-title{font-size:13.5px;font-weight:800;color:var(--ink);line-height:1.2;}
+  .brand-sub{font-size:10.5px;font-weight:600;color:var(--ink-faint);line-height:1.3;margin-top:2px;}
+  .nav{margin-top:6px;}
+  .nav-group-label{
+    font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--ink-faint);padding:0 9px;margin:16px 0 6px;
+  }
+  .nav-item{
+    display:flex;align-items:center;gap:9px;width:100%;
+    font-family:var(--font);font-size:13px;font-weight:600;color:var(--ink-soft);
+    background:none;border:none;cursor:pointer;text-align:left;line-height:1.3;
+    padding:8px 9px;border-radius:8px;margin-bottom:1px;
+    transition:background .13s,color .13s;
+  }
+  .nav-item svg{flex:none;width:16px;height:16px;opacity:.7;}
+  .nav-item:hover{background:var(--border-soft);color:var(--ink);}
+  .nav-item.active{background:var(--primary-soft);color:var(--primary);font-weight:700;}
+  .nav-item.active svg{opacity:1;}
+  .sidebar-foot{
+    margin-top:auto;padding-top:14px;border-top:1px solid var(--border-soft);
+    font-size:11.5px;color:var(--ink-faint);font-weight:600;
+  }
+  .sidebar-foot .sidebar-user{
+    display:block;color:var(--ink-soft);word-break:break-all;line-height:1.4;margin-bottom:8px;
+  }
+  .sidebar-foot .logout-btn{
+    background:none;border:1px solid var(--border);border-radius:8px;
+    color:var(--ink-soft);cursor:pointer;font-family:var(--font);
+    font-weight:700;font-size:12px;padding:6px 12px;transition:all .13s;
+  }
+  .sidebar-foot .logout-btn:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-soft);}
+  .main{flex:1;min-width:0;padding:20px 22px 60px;}
+
+  /* Faixa de título em degradê */
+  .hero{
+    background:linear-gradient(100deg,var(--navy) 0%,#1E5FA8 62%,#2E7AC4 100%);
+    border-radius:var(--radius-lg);color:#fff;padding:24px 28px;margin-bottom:18px;
+    display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;
+  }
+  .hero h1{font-size:23px;font-weight:800;letter-spacing:-.02em;margin:0;color:#fff;}
+  .hero-sub{font-size:13px;font-weight:500;color:rgba(255,255,255,.8);margin-top:5px;}
+  .hero-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
+  .hero .save-chip{
+    background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.24);
+    color:rgba(255,255,255,.92);box-shadow:none;
+  }
+
+  @media (max-width:900px){
+    .shell{flex-direction:column;}
+    .sidebar{
+      width:auto;height:auto;position:static;border-right:none;
+      border-bottom:1px solid var(--border);padding:12px 14px;
+    }
+    .nav{display:flex;gap:5px;overflow-x:auto;margin-top:10px;padding-bottom:2px;}
+    .nav-group{display:contents;}
+    .nav-group-label{display:none;}
+    .nav-item{width:auto;white-space:nowrap;margin-bottom:0;}
+    .sidebar-foot{margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+    .sidebar-foot .sidebar-user{margin-bottom:0;}
+    .main{padding:16px 14px 60px;}
+    .hero{padding:20px 18px;}
+  }
 
   /* Header */
   .topbar{
@@ -59,6 +143,7 @@
   .title-block .sub{font-size:14px;color:var(--ink-soft);font-weight:500;}
   .topbar-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
   .year-row{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;}
+  .year-row .topbar-actions{margin-left:auto;}
   .year-row-label{font-size:12.5px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
   .year-pill{font-weight:800;}
   .year-pill.year-add{color:var(--primary);}
@@ -150,6 +235,10 @@
       display:none !important;
     }
     body, #root{ background:#fff; }
+    .sidebar{ display:none !important; }
+    .main{ padding:0 !important; }
+    .hero{ background:#fff !important; color:#000 !important; padding:0 0 12px !important; }
+    .hero h1, .hero-sub{ color:#000 !important; }
     .table-card, .chart-card, .metas-panel{ box-shadow:none; border:1px solid #999; break-inside:avoid; }
     input, select{ border:none !important; background:transparent !important; color:#000 !important; }
     .kpi-value.masked{ display:none; }
@@ -183,9 +272,16 @@
     background:var(--surface);border:1px solid var(--border);
     border-radius:var(--radius-md);padding:16px 16px 14px;
     box-shadow:var(--shadow-sm);
-    border-left:3px solid var(--kc,var(--primary));
     transition:transform .15s, box-shadow .15s;
     min-width:0;
+  }
+  /* Fundo levemente tingido com a cor da pessoa/indicador; navegador antigo
+     cai no branco da regra acima. */
+  @supports (background:color-mix(in srgb,#000 5%,#fff)){
+    .kpi-card{
+      background:color-mix(in srgb, var(--kc,var(--primary)) 7%, #fff);
+      border-color:color-mix(in srgb, var(--kc,var(--primary)) 24%, #fff);
+    }
   }
   .kpi-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);}
   .kpi-card .kpi-label{
@@ -199,8 +295,8 @@
     font-variant-numeric:tabular-nums;white-space:nowrap;
   }
   .kpi-card.total{
-    background:linear-gradient(135deg,var(--ink) 0%,#2A2D4F 100%);
-    border-left:none;
+    background:linear-gradient(135deg,var(--navy) 0%,#1E5FA8 100%);
+    border-color:var(--navy);
   }
   .kpi-card.total .kpi-label{color:rgba(255,255,255,.55);}
   .kpi-card.total .kpi-value{color:#fff;font-size:20px;}
@@ -232,7 +328,7 @@
   }
   .months.seller-filter{background:var(--border-soft);border-color:var(--border);}
   .seller-pill.active{
-    background:var(--ink);color:#fff;box-shadow:0 2px 8px rgba(20,22,43,.25);
+    background:var(--navy);color:#fff;box-shadow:0 2px 8px rgba(18,51,94,.28);
   }
 
   .search-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
@@ -252,7 +348,7 @@
     transition:all .15s;white-space:nowrap;
   }
   .pill:hover{color:var(--ink);background:var(--border-soft);}
-  .pill.active{background:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(80,70,229,.35);}
+  .pill.active{background:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(29,78,216,.32);}
 
   /* Toolbar */
   .toolbar{
@@ -266,7 +362,7 @@
     font-family:var(--font);font-weight:700;font-size:13.5px;
     background:var(--primary);color:#fff;border:none;border-radius:var(--radius-sm);
     padding:10px 18px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;
-    box-shadow:0 2px 10px rgba(80,70,229,.30);
+    box-shadow:0 2px 10px rgba(29,78,216,.28);
     transition:background .15s, transform .1s;
   }
   .btn-add:hover{background:var(--primary-hover);}
@@ -295,7 +391,7 @@
   thead th .th-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle;}
   tbody td{padding:0;border-bottom:1px solid var(--border-soft);vertical-align:middle;}
   tbody tr{transition:background .1s;}
-  tbody tr:hover{background:#FAFAFE;}
+  tbody tr:hover{background:#F7FAFE;}
   tbody tr:last-child td{border-bottom:none;}
   tbody td input, tbody td select{
     width:100%;border:none;background:transparent;
@@ -372,7 +468,7 @@
 
   /* Modal (replaces native confirm/prompt/alert, which can be blocked in sandboxed iframes) */
   .modal-backdrop{
-    position:fixed;inset:0;background:rgba(20,22,43,.45);
+    position:fixed;inset:0;background:rgba(21,34,56,.45);
     display:flex;align-items:center;justify-content:center;
     z-index:1000;padding:20px;
   }
@@ -446,7 +542,7 @@
     padding:13px 16px;border-bottom:1px solid var(--border-soft);
     transition:border-color .18s, background .15s;
   }
-  .panel-head:hover{background:#FCFCFE;}
+  .panel-head:hover{background:#FAFCFF;}
   .panel.collapsed .panel-head{border-bottom-color:transparent;}
   .panel-toggle{
     display:flex;align-items:center;gap:10px;flex:1;min-width:0;
@@ -466,10 +562,10 @@
   .panel.collapsed .panel-chevron{transform:rotate(-90deg);}
   .panel-toggle:hover .panel-chevron{color:var(--primary);}
   .panel-title{
-    font-size:12.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
-    color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    font-size:13.5px;font-weight:700;letter-spacing:-.005em;
+    color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   }
-  .panel-toggle:hover .panel-title{color:var(--ink);}
+  .panel-toggle:hover .panel-title{color:var(--primary);}
   .panel-head-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
   .panel-meta{font-size:12.5px;color:var(--ink-soft);font-weight:600;white-space:nowrap;}
   .panel-meta b{color:var(--ink);font-weight:800;}
@@ -641,7 +737,7 @@
   /* Tabelas de leitura (resumos): respiram, em vez de parecer print de planilha */
   table.table-plain tbody td{padding:12px 10px;font-size:13px;color:var(--ink);}
   table.table-plain tbody td:first-child{font-weight:700;}
-  table.table-plain tbody tr:hover{background:#FAFAFE;}
+  table.table-plain tbody tr:hover{background:#F7FAFE;}
   table.table-plain td.num{text-align:right;font-variant-numeric:tabular-nums;}
   table.table-plain tfoot td{
     padding:12px 10px;font-size:13px;font-weight:800;color:var(--ink);
@@ -735,6 +831,38 @@ const TABS = [
   {key:"pagamentos", label:"Pagamentos Realizados"},
   {key:"painel", label:"Painel da Equipe"},
 ];
+
+// Como as abas aparecem agrupadas na barra lateral. Cada chave precisa
+// existir em TABS; o rótulo mostrado continua vindo de lá.
+const NAV_GROUPS = [
+  {label:"Visão geral",  keys:["parceiros","pagamentos"]},
+  {label:"Lançamentos",  keys:["vendas","consultoria","publicos","cursos"]},
+  {label:"Equipe",       keys:["bonus","painel"]},
+];
+
+const SVG_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">';
+const NAV_ICONS = {
+  parceiros:   SVG_OPEN + '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+  pagamentos:  SVG_OPEN + '<path d="M21 12V8a2 2 0 0 0-2-2H5a2 2 0 0 1 0-4h13v4"/><path d="M3 6v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/><circle cx="17" cy="14" r="1.4"/></svg>',
+  vendas:      SVG_OPEN + '<rect x="2" y="3.5" width="20" height="13" rx="2"/><path d="M8 20.5h8M12 16.5v4"/></svg>',
+  consultoria: SVG_OPEN + '<rect x="2.5" y="7" width="19" height="13" rx="2"/><path d="M8.5 7V5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2"/><path d="M2.5 12.5h19"/></svg>',
+  publicos:    SVG_OPEN + '<path d="M3 10.5 12 4l9 6.5"/><path d="M5 10.5v8M9.5 10.5v8M14.5 10.5v8M19 10.5v8"/><path d="M3 20.5h18"/></svg>',
+  cursos:      SVG_OPEN + '<path d="M12 4 2.5 8.5 12 13l9.5-4.5L12 4Z"/><path d="M6.5 11v5c0 1.4 2.5 2.6 5.5 2.6s5.5-1.2 5.5-2.6v-5"/></svg>',
+  bonus:       SVG_OPEN + '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg>',
+  painel:      SVG_OPEN + '<path d="M16.5 20.5v-2a4 4 0 0 0-4-4h-6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="3.5"/><path d="M22 20.5v-2a4 4 0 0 0-3-3.87"/><path d="M16.5 3.6a4 4 0 0 1 0 7.75"/></svg>',
+};
+
+function sidebarNavHtml(){
+  return NAV_GROUPS.map(function(g){
+    const itens = g.keys.map(function(k){
+      const t = TABS.find(x => x.key === k);
+      if(!t) return '';
+      const active = t.key === activeTab ? ' active' : '';
+      return `<button class="nav-item${active}" onclick="setTab('${t.key}')">${NAV_ICONS[t.key] || ''}<span>${esc(t.label)}</span></button>`;
+    }).join('');
+    return `<div class="nav-group"><div class="nav-group-label">${esc(g.label)}</div>${itens}</div>`;
+  }).join('');
+}
 
 let activeTab = "vendas";
 let rows = null;
@@ -4750,38 +4878,42 @@ function render(){
     : activeTab === "painel" ? renderPainelSection()
     : renderEntitySection(activeTab);
 
-  const tabsHtml = TABS.map(t => {
-    const active = t.key === activeTab ? ' active' : '';
-    return `<button class="tab-btn${active}" onclick="setTab('${t.key}')">${t.label}</button>`;
-  }).join('');
-
   const years = getKnownYears();
   const yearPillsHtml = years.map(y => {
     const active = y === yearFilter ? ' active' : '';
     return `<button class="pill year-pill${active}" onclick="setYearFilter(${y})">${y}</button>`;
   }).join('') + `<button class="pill year-pill year-add" onclick="addYear()">+ Ano</button>`;
 
+  const abaAtual = TABS.find(t => t.key === activeTab);
+
   root.innerHTML = `
-    <div class="wrap${isAdmin ? '' : ' read-only-mode'}">
-      <div class="topbar">
-        <div class="title-block">
-          <div class="company-name">Open Soluções Tributárias</div>
-          <h1>Comissões — Equipe Comercial</h1>
-          <div class="sub">Controle mensal de vendas e comissões · ${yearFilter}</div>
+    <div class="shell${isAdmin ? '' : ' read-only-mode'}">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">Open</div>
+          <div class="brand-text">
+            <div class="brand-title">Comissões</div>
+            <div class="brand-sub">Open Soluções Tributárias</div>
+          </div>
         </div>
-        <div class="topbar-actions">
-          <button class="eye-toggle" onclick="showExport()" title="Copia todos os dados em texto, pra guardar ou levar pra outro navegador">⬇ Exportar dados</button>
-          <button class="eye-toggle admin-only-btn" onclick="showImport()" title="Cola um texto exportado antes e restaura os dados">⬆ Importar dados</button>
-          <button class="eye-toggle admin-only-btn" onclick="normalizeAllText()" title="Coloca Primeira Letra Maiúscula em todos os textos já lançados">Aa Normalizar textos</button>
-          <button class="eye-toggle danger-toggle admin-only-btn" onclick="wipeAllData()" title="Apaga todos os lançamentos das três abas, mantendo produtos/vendedores/parceiros cadastrados">🗑 Zerar tudo</button>
+        <nav class="nav">${sidebarNavHtml()}</nav>
+        <div class="sidebar-foot">
+          <span class="sidebar-user" title="Conectado como">${esc((authSession.user && authSession.user.email) || '')}</span>
+          ${!isAdmin ? '<span class="read-only-badge" title="Você só vê e não edita os próprios lançamentos">somente leitura</span> ' : ''}
+          <button class="logout-btn" onclick="logout()" title="Sair da conta">Sair</button>
+        </div>
+      </aside>
+
+      <div class="main">
+      <div class="hero">
+        <div>
+          <h1>${esc(abaAtual ? abaAtual.label : 'Comissões')}</h1>
+          <div class="hero-sub">Controle mensal de vendas e comissões · ${yearFilter}</div>
+        </div>
+        <div class="hero-right">
           <div class="save-chip">
             <span id="save-dot" class="dot${saveError?' error':(saving?' saving':'')}"></span>
             <span id="save-label">${saveError?'erro ao salvar':(saving?'salvando':'salvo')}</span>
-          </div>
-          <div class="user-chip">
-            <span title="Conectado como">${esc((authSession.user && authSession.user.email) || '')}</span>
-            ${!isAdmin ? '<span class="read-only-badge" title="Você só vê e não edita os próprios lançamentos">somente leitura</span>' : ''}
-            <button class="logout-btn" onclick="logout()" title="Sair da conta">Sair</button>
           </div>
         </div>
       </div>
@@ -4801,11 +4933,16 @@ function render(){
       <div class="year-row">
         <span class="year-row-label">Ano:</span>
         <div class="months">${yearPillsHtml}</div>
+        <div class="topbar-actions">
+          <button class="eye-toggle" onclick="showExport()" title="Copia todos os dados em texto, pra guardar ou levar pra outro navegador">⬇ Exportar dados</button>
+          <button class="eye-toggle admin-only-btn" onclick="showImport()" title="Cola um texto exportado antes e restaura os dados">⬆ Importar dados</button>
+          <button class="eye-toggle admin-only-btn" onclick="normalizeAllText()" title="Coloca Primeira Letra Maiúscula em todos os textos já lançados">Aa Normalizar textos</button>
+          <button class="eye-toggle danger-toggle admin-only-btn" onclick="wipeAllData()" title="Apaga todos os lançamentos das três abas, mantendo produtos/vendedores/parceiros cadastrados">🗑 Zerar tudo</button>
+        </div>
       </div>
 
-      <div class="tabs-nav">${tabsHtml}</div>
-
       ${sectionHtml}
+      </div>
     </div>
     ${renderModal()}
   `;
