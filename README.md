@@ -28,6 +28,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_metas_migration.sql         → migração 5: metas viram regras configuráveis
 ├── supabase_painel_equipe_migration.sql → migração 6: painel de relatórios mensais da equipe
 ├── supabase_vendedor_responsavel_migration.sql → migração 7: quem efetivamente vendeu (Sistema e Cursos)
+├── supabase_vendas_curso_por_vendedora_migration.sql → migração 8: divide o faturamento do curso entre as vendedoras
 └── .gitignore
 ```
 
@@ -80,8 +81,9 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 6. Rode `supabase_metas_migration.sql` — novo formato das metas (recria a tabela `metas`).
 7. Rode `supabase_painel_equipe_migration.sql` — cria a tabela do Painel da Equipe, a view `painel_equipe_totais` (que calcula os indicadores de venda) e a lista de quem aparece no painel.
 8. Rode `supabase_vendedor_responsavel_migration.sql` — cria a coluna "Quem vendeu" nas abas Sistema e Cursos, e faz o painel contar uma venda por pessoa.
-9. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
-10. Só depois publique esta versão atualizada do `index.html`.
+9. Rode `supabase_vendas_curso_por_vendedora_migration.sql` — troca o "quem vendeu" do curso pela divisão do faturamento por vendedora.
+10. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
+11. Só depois publique esta versão atualizada do `index.html`.
 
 ⚠️ A partir da migração 3, o `index.html` lê pelas views `_safe`. Uma versão antiga do front, apontando para as tabelas base, mostraria tudo vazio para as contas restritas — publique o `index.html` desta versão junto.
 
@@ -91,8 +93,9 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 |---|---|
 | `vendas` | Lançamentos da aba Sistema (inclui `vendedor_responsavel` — quem efetivamente fez a venda) |
 | `vendas_comissoes` | Comissão de cada vendedor(a) por lançamento do Sistema |
-| `lancamentos` | Lançamentos de Consultoria, Consultoria Órgãos Públicos e Cursos (uma tabela só, filtrada pela coluna `entidade`; inclui `vendedor_responsavel` — quem efetivamente vendeu) |
+| `lancamentos` | Lançamentos de Consultoria, Consultoria Órgãos Públicos e Cursos (uma tabela só, filtrada pela coluna `entidade`) |
 | `lancamentos_extra_vendedores` | Vendedores extras (4º em diante) por lançamento |
+| `lancamento_vendas` | Divisão do faturamento de um curso entre quem vendeu (sem relação com comissão) |
 | `bonus` | Bônus e metas batidas |
 | `metas` | Regras de meta: gatilho da empresa + prêmio de quem bate |
 | `relatorios_equipe` | Indicadores mensais de andamento da equipe, digitados (Painel da Equipe) |
@@ -196,11 +199,17 @@ Nas abas **Sistema** e **Cursos**, a comissão de uma venda é **dividida entre 
 | Sistema | R$ 4.336.963,30 · 123 sistemas | **R$ 984.411,80 · 36 vendas** |
 | Cursos | R$ 386.166 contados em dobro nos lançamentos divididos | — |
 
-Por isso as duas abas têm a coluna **"Quem vendeu"** (no Sistema, depois de "Venda"; em Cursos, depois de "Nome do Curso"). O painel conta essa pessoa, uma vez. A coluna vem destacada em amarelo enquanto estiver vazia, e a aba mostra um aviso com quantos lançamentos ainda faltam preencher.
+As duas abas resolvem isso, cada uma do jeito que o dado pede:
 
-> **Nada foi preenchido automaticamente, de propósito.** No Sistema, nenhuma venda tinha uma vendedora única — todas eram divididas entre 2 e 6 pessoas. Em Cursos, a mesma pessoa aparece como vendedora em 10 dos 12 lançamentos, com 1% em todos: é o papel dela na comissão, não a venda. Copiar esses campos repetiria exatamente o erro que a coluna existe para corrigir. Vá preenchendo pelas abas de origem; conforme preenche, os números do painel vão se formando.
+**Sistema — coluna "Quem vendeu"**, depois de "Venda". Cada venda é o contrato de um cliente, feito por uma pessoa: escolhe-se um nome. A coluna fica amarela enquanto estiver vazia.
 
-O nome de quem vendeu tem a mesma máscara dos outros vendedores: conta restrita só lê se for ela mesma.
+**Cursos — coluna "Vendas por vendedora"**, depois de "Nome do Curso". Aqui um nome só não serve: o lançamento é o **faturamento total do curso**, e esse total vem de várias vendedoras — parte uma trouxe, parte outra. O botão abre um quadro onde se informa **quanto cada uma vendeu, em reais**, com uma conferência ao vivo ("Somado: R$ X de R$ Y — falta R$ Z"). O atalho ⤵ joga o que falta na linha escolhida. O botão fica verde quando a divisão fecha com o valor do contrato.
+
+> **A comissão não muda em nada.** Ela continua saindo dos campos "Vendedor / % Comissão" do lançamento. Uma pessoa pode ganhar 1% do total de cursos sem ter vendido nenhum — e vai continuar ganhando, apareça ela na divisão ou não. São duas leituras do mesmo lançamento: **quem ganha** × **quem vendeu**.
+
+> **Nada foi preenchido automaticamente, de propósito.** No Sistema, nenhuma venda tinha uma vendedora única — todas eram divididas entre 2 e 6 pessoas. Em Cursos, a mesma pessoa aparece como vendedora em 10 dos 12 lançamentos, com 1% em todos: é o papel dela na comissão, não a venda. Copiar esses campos repetiria exatamente o erro que a coluna existe para corrigir.
+
+O nome de quem vendeu no Sistema tem a mesma máscara dos outros vendedores: conta restrita só lê se for ela mesma. A divisão dos cursos é só de admin — cada vendedora vê o próprio total pelo Painel da Equipe.
 
 A aba **Consultoria** e a de **Órgãos Públicos** não têm essa coluna — o painel não conta essas duas origens.
 

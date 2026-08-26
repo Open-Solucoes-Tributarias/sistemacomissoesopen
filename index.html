@@ -734,6 +734,47 @@
     padding:10px 12px;font-size:12.5px;font-weight:600;line-height:1.5;margin-bottom:14px;
   }
 
+  .divisao-cell{padding:8px 10px !important;}
+  .divisao-btn{
+    font-family:var(--font);font-size:12.5px;font-weight:700;cursor:pointer;
+    background:#FFF8E8;color:#B45309;border:1.5px solid #F5DFA8;
+    border-radius:var(--radius-sm);padding:7px 12px;width:100%;text-align:left;
+    transition:all .13s;
+  }
+  .divisao-btn:hover{border-color:#E0A93B;}
+  .divisao-btn.ok{background:#F0FDF4;color:#15803D;border-color:#BBF7D0;}
+  .divisao-alerta{color:#B45309 !important;font-weight:700;}
+  .divisao-explica{
+    font-size:12.5px;color:var(--ink-soft);font-weight:500;line-height:1.55;margin-bottom:14px;
+  }
+  .divisao-lista{display:flex;flex-direction:column;gap:8px;}
+  .divisao-linha{display:flex;align-items:center;gap:8px;}
+  .divisao-linha select{
+    flex:1;min-width:0;font-family:var(--font);font-size:13.5px;font-weight:600;color:var(--ink);
+    background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-sm);
+    padding:9px 10px;outline:none;
+  }
+  .divisao-linha select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+  .divisao-money{
+    display:flex;align-items:center;gap:4px;width:150px;flex:none;
+    border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:0 10px;background:var(--surface);
+  }
+  .divisao-money:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+  .divisao-money input{
+    border:none;outline:none;background:transparent;width:100%;text-align:right;
+    font-family:var(--font);font-size:13.5px;font-weight:600;color:var(--ink);padding:9px 0;
+  }
+  .divisao-vazio{
+    font-size:12.5px;color:var(--ink-faint);font-weight:600;line-height:1.5;
+    padding:14px;border:1.5px dashed var(--border);border-radius:var(--radius-sm);text-align:center;
+  }
+  .divisao-conferencia{
+    margin-top:12px;padding:10px 12px;border-radius:var(--radius-sm);
+    font-size:12.5px;font-weight:600;background:#FFF8E8;color:#8A6114;border:1px solid #F5DFA8;
+  }
+  .divisao-conferencia.ok{background:#F0FDF4;color:#15803D;border-color:#BBF7D0;}
+  .read-only-mode .divisao-btn{cursor:default;}
+
   .resp-cell select{font-weight:600;}
   .resp-cell select.sem-resp{
     color:#B45309;background:#FFF8E8;
@@ -849,9 +890,11 @@ const ENTITIES = {
     ],
     commissionLabel: "Valor da Comissão",
     defaultVendors: ["Soraya","Angela","Rios","Uilma","Luciana"],
-    // Os campos "Vendedor" abaixo dizem quem GANHA comissão. Quem vendeu
-    // de fato é outra coisa, e é o que o Painel da Equipe conta.
-    hasResponsavel: true,
+    // Um lançamento de curso é o faturamento TOTAL daquele curso, e esse
+    // total vem de várias vendedoras. Os campos "Vendedor" abaixo dizem
+    // quem GANHA comissão; a divisão de quanto cada uma vendeu é outra
+    // coisa, e é o que o Painel da Equipe conta.
+    hasVendasPorVendedor: true,
   },
 };
 const ENTITY_KEYS = ["consultoria","publicos","cursos"];
@@ -1374,7 +1417,6 @@ function persistEntityRows(key){
             comissao_percent2: numOrNull(r.comissaoPercent2), vendedor2: r.vendedor2||'',
             comissao_percent3: numOrNull(r.comissaoPercent3), vendedor3: r.vendedor3||'',
             parcela_label: r.parcelaLabel || null,
-            vendedor_responsavel: cfg.hasResponsavel ? (r.vendedorResponsavel || '') : null,
             nome:'', valor_contrato:null, tipo:null, parceiro:'', participacao:null,
             forma_pagamento:'', colaborador:'', observacoes:'',
             pago:false, mes_pagamento:null,
@@ -1410,6 +1452,19 @@ function persistEntityRows(key){
         });
         if(extraRows.length) await sbUpsert('lancamentos_extra_vendedores', extraRows, 'id');
 
+        // Divisão do faturamento por vendedora (hoje só a aba Cursos usa)
+        if(cfg.hasVendasPorVendedor && localIds.length){
+          await sbDeleteAll('lancamento_vendas', 'lancamento_id=in.(' + localIds.join(',') + ')');
+          const vendaRows = [];
+          state[key].rows.forEach(function(r){
+            (r.vendasVendedoras||[]).forEach(function(vv){
+              if(!String(vv.vendedor||'').trim()) return;
+              vendaRows.push({ id: vv.id, lancamento_id: r.id, vendedor: vv.vendedor.trim(), valor: numOrNull(vv.valor) });
+            });
+          });
+          if(vendaRows.length) await sbUpsert('lancamento_vendas', vendaRows, 'id');
+        }
+
         saveError = false;
       } catch(e){
         console.error('Falha ao salvar '+key, e);
@@ -1444,6 +1499,7 @@ async function tryLoadEntityFromStorageAsync(key){
     const cfg = ENTITIES[key];
     const dbRows = await sbSelect('lancamentos', 'select=*&entidade=eq.'+key+'&order=id.asc');
     const extras = await sbSelect('lancamentos_extra_vendedores', 'select=*');
+    const divisoes = cfg.hasVendasPorVendedor ? (await sbSelect('lancamento_vendas', 'select=*&order=id.asc')) : [];
     const vendorsDb = await sbSelect('entity_vendors', 'select=vendor_name&entidade=eq.'+key+'&order=id.asc');
     carregouDoBanco['lanc-'+key] = true;
     if(dbRows && dbRows.length){
@@ -1451,6 +1507,11 @@ async function tryLoadEntityFromStorageAsync(key){
       (extras||[]).forEach(function(e){
         if(!extrasByLanc[e.lancamento_id]) extrasByLanc[e.lancamento_id] = [];
         extrasByLanc[e.lancamento_id].push({id: e.id, vendedor: e.vendedor||'', percent: e.percent});
+      });
+      const divisaoByLanc = {};
+      (divisoes||[]).forEach(function(d){
+        if(!divisaoByLanc[d.lancamento_id]) divisaoByLanc[d.lancamento_id] = [];
+        divisaoByLanc[d.lancamento_id].push({id: d.id, vendedor: d.vendedor||'', valor: d.valor});
       });
       state[key].rows = dbRows.map(function(d){
         const r = {
@@ -1461,7 +1522,7 @@ async function tryLoadEntityFromStorageAsync(key){
           extraVendedores: extrasByLanc[d.id] || [],
           parcelaLabel: d.parcela_label,
         };
-        if(cfg.hasResponsavel) r.vendedorResponsavel = d.vendedor_responsavel || '';
+        if(cfg.hasVendasPorVendedor) r.vendasVendedoras = divisaoByLanc[d.id] || [];
         if(cfg.hasPagamento){ r.pago = d.pago; r.mesPagamento = d.mes_pagamento; }
         cfg.fields.forEach(function(f){
           if(f.key === 'valorContrato') r.valorContrato = d.valor_contrato;
@@ -1945,6 +2006,51 @@ function renderModal(){
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
         <div class="modal-box modal-box-wide">
           ${bodyHtml}
+          <div class="modal-actions"><button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button></div>
+        </div>
+      </div>
+    `;
+  }
+  if(m.type === 'divisao-vendas'){
+    const r = divisaoRowAtual();
+    if(!r) return '';
+    const cfg = ENTITIES[m.key];
+    const nome = r[cfg.fields[0].key] || 'este lançamento';
+    const d = resumoDivisao(r);
+    const vendedoras = entityVendorsForCurrentUser(m.key);
+    const linhas = d.lista.length ? d.lista.map(function(item){
+      return `
+        <div class="divisao-linha">
+          <select onchange="updateDivisaoVenda(${item.id},'vendedor',this.value)" ${isAdmin?'':'disabled'}>
+            <option value="">— vendedora —</option>
+            ${vendedoras.map(v => `<option value="${esc(v)}" ${name_matches_client(item.vendedor, v)?'selected':''}>${esc(v)}</option>`).join('')}
+          </select>
+          <div class="divisao-money">
+            <span class="currency-prefix">R$</span>
+            <input class="num" type="number" step="0.01" min="0" placeholder="0,00" ${isAdmin?'':'disabled'}
+                   value="${item.valor===null||item.valor===undefined?'':item.valor}"
+                   oninput="onDivisaoValorInput(this,${item.id})"
+                   onchange="updateDivisaoVenda(${item.id},'valor',this.value)" />
+          </div>
+          ${isAdmin && !d.fecha ? `<button class="action-btn" title="Jogar o que falta nesta linha" onclick="usarValorTotalNaDivisao(${item.id})">⤵</button>` : ''}
+          ${isAdmin ? `<button class="action-btn danger" title="Remover" onclick="removeDivisaoVenda(${item.id})">✕</button>` : ''}
+        </div>`;
+    }).join('') : `<div class="divisao-vazio">Nenhuma vendedora informada ainda. Este curso não está sendo contado no Painel da Equipe.</div>`;
+
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-wide">
+          <div class="modal-msg">Quem vendeu — ${esc(nome)}</div>
+          <div class="divisao-explica">
+            O faturamento deste curso é de <b>${fmtMoney(d.total)}</b>, e veio de mais de uma vendedora.
+            Informe quanto <b>cada uma</b> vendeu. Isso não mexe na comissão: ela continua saindo dos
+            campos “Vendedor / % Comissão” do lançamento.
+          </div>
+          <div class="divisao-lista">${linhas}</div>
+          ${isAdmin ? `<button class="modal-btn modal-btn-ghost" style="width:100%;margin-top:10px;" onclick="addDivisaoVenda()">+ Adicionar vendedora</button>` : ''}
+          <div id="divisao-conferencia" class="divisao-conferencia${d.fecha?' ok':''}">
+            Somado: <b>${fmtMoney(d.somado)}</b> de ${fmtMoney(d.total)}${d.fecha ? ' — confere' : ' — <b>'+esc(d.rotuloDiferenca)+'</b>'}
+          </div>
           <div class="modal-actions"><button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button></div>
         </div>
       </div>
@@ -4031,7 +4137,7 @@ function addEntityRow(key){
     return;
   }
   const row = {id: st.nextId++, mes, ano: yearFilter, comissaoPercent:null, vendedor: st.vendorFilter!=="Todos" ? st.vendorFilter : "", comissaoPercent2:null, vendedor2:"", comissaoPercent3:null, vendedor3:""};
-  if(cfg.hasResponsavel) row.vendedorResponsavel = "";
+  if(cfg.hasVendasPorVendedor) row.vendasVendedoras = [];
   if(cfg.hasPagamento){ row.pago = false; row.mesPagamento = null; }
   // participacao vira coluna numérica no banco, então nasce null e não ""
   const CAMPOS_NUMERICOS = new Set(["valorContrato","participacao"]);
@@ -4333,18 +4439,111 @@ function onEntityTextInput(el){
   const key = el.dataset.entity, id = Number(el.dataset.id), field = el.dataset.field;
   updateEntityCell(key, id, field, el.value);
 }
-/* Quem efetivamente vendeu o curso — diferente dos campos "Vendedor",
-   que dizem quem ganha comissão. É essa que o Painel da Equipe conta. */
-function onEntityResponsavelSelect(el){
-  updateEntityCell(el.dataset.entity, Number(el.dataset.id), 'vendedorResponsavel', el.value);
+/* ---------- Divisão do faturamento de um curso entre as vendedoras ----------
+   Um lançamento de curso é o faturamento TOTAL daquele curso, e ele vem de
+   várias vendedoras: parte uma trouxe, parte outra. Não dá pra resolver com
+   um nome só. Aqui a pessoa informa quanto cada uma vendeu, em reais.
+   Nada disso toca na comissão, que continua saindo dos campos
+   "Vendedor / % Comissão" do lançamento. */
+function resumoDivisao(row){
+  const lista = row.vendasVendedoras || [];
+  const somado = lista.reduce(function(a, x){ return a + (Number(x.valor)||0); }, 0);
+  const total = Number(row.valorContrato) || 0;
+  const diferenca = total - somado;
+  const fecha = lista.length > 0 && Math.abs(diferenca) < 0.005;
+  return {
+    lista: lista, somado: somado, total: total, diferenca: diferenca, fecha: fecha,
+    rotuloDiferenca: diferenca > 0 ? ('falta ' + fmtMoney(diferenca))
+                   : (diferenca < 0 ? (fmtMoney(-diferenca) + ' a mais') : 'confere'),
+  };
+}
+
+function entityRowsSemDivisao(key){
+  if(!ENTITIES[key].hasVendasPorVendedor) return [];
+  return (state[key].rows || []).filter(function(r){
+    return (r.ano||2026) === yearFilter && !resumoDivisao(r).fecha;
+  });
+}
+
+function abrirDivisaoVendas(key, rowId){
+  modalState = { type:'divisao-vendas', key: key, rowId: rowId };
   render();
 }
 
-function entityRowsSemResponsavel(key){
-  if(!ENTITIES[key].hasResponsavel) return [];
-  return (state[key].rows || []).filter(function(r){
-    return (r.ano||2026) === yearFilter && !String(r.vendedorResponsavel||'').trim();
-  });
+function divisaoRowAtual(){
+  if(!modalState || modalState.type !== 'divisao-vendas') return null;
+  return (state[modalState.key].rows || []).find(function(r){ return r.id === modalState.rowId; }) || null;
+}
+
+function addDivisaoVenda(){
+  const r = divisaoRowAtual();
+  if(!r || !isAdmin) return;
+  if(!Array.isArray(r.vendasVendedoras)) r.vendasVendedoras = [];
+  const usados = r.vendasVendedoras.map(function(x){ return String(x.vendedor||'').toLowerCase(); });
+  const livre = entityVendorsForCurrentUser(modalState.key)
+    .find(function(v){ return usados.indexOf(v.toLowerCase()) === -1; });
+  // id grande e único: a mesma convenção dos vendedores extras
+  r.vendasVendedoras.push({ id: Date.now() + r.vendasVendedoras.length, vendedor: livre || '', valor: null });
+  persistEntityRows(modalState.key);
+  render();
+}
+
+function removeDivisaoVenda(itemId){
+  const r = divisaoRowAtual();
+  if(!r || !isAdmin) return;
+  r.vendasVendedoras = (r.vendasVendedoras||[]).filter(function(x){ return x.id !== itemId; });
+  persistEntityRows(modalState.key);
+  render();
+}
+
+function updateDivisaoVenda(itemId, campo, valor){
+  const r = divisaoRowAtual();
+  if(!r || !isAdmin) return;
+  const item = (r.vendasVendedoras||[]).find(function(x){ return x.id === itemId; });
+  if(!item) return;
+  if(campo === 'vendedor'){
+    const repetida = (r.vendasVendedoras||[]).some(function(x){
+      return x.id !== itemId && name_matches_client(x.vendedor, valor);
+    });
+    if(repetida){
+      showAlert('Essa vendedora já está na divisão deste curso. Some os dois valores em uma linha só.');
+      return;
+    }
+    item.vendedor = valor;
+  } else {
+    item.valor = numOrNull(valor);
+  }
+  persistEntityRows(modalState.key);
+  render();
+}
+
+/* Enquanto digita, só atualiza o rodapé de conferência — sem re-render,
+   pra não perder o cursor do campo. */
+function onDivisaoValorInput(el, itemId){
+  const r = divisaoRowAtual();
+  if(!r) return;
+  const item = (r.vendasVendedoras||[]).find(function(x){ return x.id === itemId; });
+  if(!item) return;
+  item.valor = numOrNull(el.value);
+  const d = resumoDivisao(r);
+  const alvo = document.getElementById('divisao-conferencia');
+  if(alvo){
+    alvo.className = 'divisao-conferencia' + (d.fecha ? ' ok' : '');
+    alvo.innerHTML = 'Somado: <b>' + fmtMoney(d.somado) + '</b> de ' + fmtMoney(d.total)
+      + (d.fecha ? ' — confere' : ' — <b>' + d.rotuloDiferenca + '</b>');
+  }
+  persistEntityRows(modalState.key);
+}
+
+function usarValorTotalNaDivisao(itemId){
+  const r = divisaoRowAtual();
+  if(!r || !isAdmin) return;
+  const d = resumoDivisao(r);
+  const item = (r.vendasVendedoras||[]).find(function(x){ return x.id === itemId; });
+  if(!item) return;
+  item.valor = (Number(item.valor)||0) + d.diferenca;
+  persistEntityRows(modalState.key);
+  render();
 }
 
 function onEntitySelectField(el){
@@ -4432,19 +4631,20 @@ function renderEntitySection(key){
     : `Nenhum lançamento ainda. Clique em "+ Novo lançamento" para começar.`;
 
   const maxExtra = visible.reduce((max,r) => Math.max(max, Array.isArray(r.extraVendedores)?r.extraVendedores.length:0), 0);
-  const colCount = 2 + cfg.fields.length + 7 + (maxExtra*2) + (cfg.hasPagamento?1:0) + (cfg.hasResponsavel?1:0);
+  const colCount = 2 + cfg.fields.length + 7 + (maxExtra*2) + (cfg.hasPagamento?1:0) + (cfg.hasVendasPorVendedor?1:0);
   const rowsHtml = visible.length === 0
     ? `<tr class="empty-row"><td colspan="${colCount}"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
     : visible.map(row => {
         let cells = `<td><select data-entity="${key}" data-id="${row.id}" onchange="onEntityMonthSelect(this)" title="${esc(row.mes)}">${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthNumber(m)}</option>`).join('')}</select>${isEntityRowPending(row) ? '<span class="pending-badge" title="Lançamento incompleto: falta valor ou percentual">⚠️</span>' : ''}${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}${isEntityRowDuplicate(key,row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo nome neste mês — confira se não é duplicado">🔁 Duplicado</span>` : ''}</td>`;
         cfg.fields.forEach((f, fi) => {
-          if(fi === 1 && cfg.hasResponsavel){
-            cells += `<td class="resp-cell">
-              <select class="${(row.vendedorResponsavel||'').trim() ? '' : 'sem-resp'}" data-entity="${key}" data-id="${row.id}" onchange="onEntityResponsavelSelect(this)"
-                      title="Quem efetivamente vendeu este curso — é essa pessoa que o Painel da Equipe conta">
-                <option value="">— quem vendeu?</option>
-                ${entityVendorsForCurrentUser(key).map(v => `<option value="${esc(v)}" ${name_matches_client(row.vendedorResponsavel, v)?'selected':''}>${esc(v)}</option>`).join('')}
-              </select>
+          if(fi === 1 && cfg.hasVendasPorVendedor){
+            const d = resumoDivisao(row);
+            cells += `<td class="divisao-cell">
+              <button class="divisao-btn${d.fecha ? ' ok' : ''}" onclick="abrirDivisaoVendas('${key}',${row.id})"
+                      title="Divide o faturamento deste curso entre quem realmente vendeu">
+                ${d.lista.length ? `${d.lista.length} vendedora${d.lista.length===1?'':'s'}` : '— dividir'}
+              </button>
+              ${d.lista.length ? `<div class="calc-value${d.fecha?'':' divisao-alerta'}">${d.fecha ? 'confere' : esc(d.rotuloDiferenca)}</div>` : ''}
             </td>`;
           }
           if(f.key === "parceiro"){
@@ -4515,12 +4715,13 @@ function renderEntitySection(key){
         return `<tr class="${isEntityRowPending(row) ? 'row-pending' : ''}${isMonthClosed(row.ano||2026,row.mes) ? ' row-locked' : ''}${isEntityRowDuplicate(key,row) ? ' row-duplicate' : ''}">${cells}</tr>`;
       }).join('');
 
-  const semRespEnt = isAdmin ? entityRowsSemResponsavel(key) : [];
-  const avisoRespEnt = semRespEnt.length ? `
+  const semDivEnt = isAdmin ? entityRowsSemDivisao(key) : [];
+  const avisoRespEnt = semDivEnt.length ? `
     <div class="storage-warning aviso-resp">
-      🧭 <b>${semRespEnt.length}</b> ${cfg.itemLabel}${semRespEnt.length===1?'':'s'} de ${yearFilter} ainda sem <b>quem vendeu</b>.
-      Os campos “Vendedor” abaixo dizem quem <b>ganha comissão</b> — preencha a coluna <b>“Quem vendeu”</b>
-      para ${semRespEnt.length===1?'esse':'esses'} ${semRespEnt.length===1?'entrar':'entrarem'} no Painel da Equipe.
+      🧭 <b>${semDivEnt.length}</b> ${cfg.itemLabel}${semDivEnt.length===1?'':'s'} de ${yearFilter} com a
+      <b>divisão das vendas</b> em aberto. Cada curso é o faturamento total, vindo de mais de uma vendedora —
+      abra a coluna <b>“Vendas por vendedora”</b> e informe quanto cada uma vendeu.
+      Os campos “Vendedor / % Comissão” continuam como estão.
     </div>` : '';
 
   return `
@@ -4547,7 +4748,7 @@ function renderEntitySection(key){
           <thead>
             <tr>
               <th style="width:58px">Mês</th>
-              ${cfg.fields.map((f,fi) => `<th${f.key==='valorContrato'?' class="num col-valor"':(f.key==='participacao'?' class="num col-pct"':(f.type==='number'?' class="num"':''))}>${f.label}</th>${fi===0&&cfg.hasResponsavel?'<th style="width:140px">Quem vendeu</th>':''}${f.key==='formaPagamento'&&cfg.hasPagamento?'<th style="width:110px">Pagamento</th>':''}`).join('')}
+              ${cfg.fields.map((f,fi) => `<th${f.key==='valorContrato'?' class="num col-valor"':(f.key==='participacao'?' class="num col-pct"':(f.type==='number'?' class="num"':''))}>${f.label}</th>${fi===0&&cfg.hasVendasPorVendedor?'<th style="width:150px">Vendas por vendedora</th>':''}${f.key==='formaPagamento'&&cfg.hasPagamento?'<th style="width:110px">Pagamento</th>':''}`).join('')}
               <th class="num">% Comissão</th>
               <th>Vendedor</th>
               <th class="num">% Comissão V2</th>
@@ -4888,14 +5089,17 @@ function renderPainelSection(){
     ? renderPainelLancamento(vends)
     : renderPainelDashboard(vends);
   const faltaSistema = isAdmin ? vendasSemResponsavel().length : 0;
-  const faltaCursos  = isAdmin ? entityRowsSemResponsavel('cursos').length : 0;
+  const faltaCursos  = isAdmin ? entityRowsSemDivisao('cursos').length : 0;
   const partes = [];
   if(faltaSistema) partes.push(`<b>${faltaSistema}</b> venda${faltaSistema===1?'':'s'} na aba Sistema`);
   if(faltaCursos)  partes.push(`<b>${faltaCursos}</b> lançamento${faltaCursos===1?'':'s'} na aba Cursos`);
+  const comoResolver = faltaCursos
+    ? 'Preencha “Quem vendeu” na aba Sistema e a divisão em “Vendas por vendedora” na aba Cursos.'
+    : 'Preencha a coluna “Quem vendeu” na aba de origem.';
   const avisoPainel = partes.length ? `
     <div class="storage-warning aviso-resp">
       🧭 ${partes.join(' e ')} de ${yearFilter} ainda não ${(faltaSistema+faltaCursos)===1?'diz':'dizem'} <b>quem vendeu</b>, então não ${(faltaSistema+faltaCursos)===1?'está contado':'estão contados'} aqui.
-      A comissão é dividida entre várias pessoas, mas a venda é de uma só — preencha a coluna “Quem vendeu” na aba de origem.
+      Quem ganha comissão não é necessariamente quem vendeu. ${comoResolver}
     </div>` : '';
 
   return `

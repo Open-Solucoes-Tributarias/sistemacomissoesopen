@@ -84,8 +84,6 @@ create table lancamentos (
   vendedor2 text default '',
   comissao_percent3 numeric,
   vendedor3 text default '',
-  -- quem EFETIVAMENTE vendeu (≠ os "vendedor" acima, que dizem quem ganha comissão)
-  vendedor_responsavel text,
   pago boolean not null default false,
   mes_pagamento text,
   parcela_label text,
@@ -100,6 +98,19 @@ create table lancamentos_extra_vendedores (
   vendedor text default '',
   percent numeric
 );
+
+-- Divisão do faturamento de um curso entre quem realmente vendeu.
+-- O lançamento guarda o total; aqui fica quanto cada vendedora trouxe.
+-- Não tem relação com comissão.
+create table lancamento_vendas (
+  id bigserial primary key,
+  lancamento_id bigint not null references lancamentos(id) on delete cascade,
+  vendedor text not null,
+  valor numeric,
+  created_at timestamptz not null default now(),
+  unique(lancamento_id, vendedor)
+);
+create index on lancamento_vendas (lancamento_id);
 
 -- Bônus e metas batidas
 create table bonus (
@@ -254,6 +265,7 @@ alter table vendas enable row level security;
 alter table vendas_comissoes enable row level security;
 alter table lancamentos enable row level security;
 alter table lancamentos_extra_vendedores enable row level security;
+alter table lancamento_vendas enable row level security;
 alter table bonus enable row level security;
 alter table metas enable row level security;
 alter table closed_months enable row level security;
@@ -278,6 +290,14 @@ create policy "select own or admin" on bonus for select to authenticated
 create policy "admin insert" on bonus for insert to authenticated with check (current_user_is_admin());
 create policy "admin update" on bonus for update to authenticated using (current_user_is_admin()) with check (current_user_is_admin());
 create policy "admin delete" on bonus for delete to authenticated using (current_user_is_admin());
+
+-- lancamento_vendas: divisão do faturamento de um curso. É um dado de
+-- gestão da equipe inteira, então só admin lê e escreve; cada vendedora
+-- vê o próprio total pelo Painel da Equipe, que passa por view agregada.
+create policy "select admin only" on lancamento_vendas for select to authenticated using (current_user_is_admin());
+create policy "admin insert" on lancamento_vendas for insert to authenticated with check (current_user_is_admin());
+create policy "admin update" on lancamento_vendas for update to authenticated using (current_user_is_admin()) with check (current_user_is_admin());
+create policy "admin delete" on lancamento_vendas for delete to authenticated using (current_user_is_admin());
 
 -- metas: dependem do faturamento da empresa inteira, que conta restrita
 -- não pode ver, então configurar e acompanhar é exclusivo de admin.
@@ -345,15 +365,13 @@ select
   case when current_user_is_admin() or name_matches(vendedor2, current_user_person_name()) then comissao_percent2 else null end as comissao_percent2,
   case when current_user_is_admin() or name_matches(vendedor3, current_user_person_name()) then vendedor3         else null end as vendedor3,
   case when current_user_is_admin() or name_matches(vendedor3, current_user_person_name()) then comissao_percent3 else null end as comissao_percent3,
-  pago, mes_pagamento, parcela_label, created_at, updated_at,
-  case when current_user_is_admin() or name_matches(vendedor_responsavel, current_user_person_name()) then vendedor_responsavel else null end as vendedor_responsavel
+  pago, mes_pagamento, parcela_label, created_at, updated_at
 from lancamentos
 where current_user_is_admin()
    or name_matches(vendedor,  current_user_person_name())
    or name_matches(vendedor2, current_user_person_name())
    or name_matches(vendedor3, current_user_person_name())
    or name_matches(colaborador, current_user_person_name())
-   or name_matches(vendedor_responsavel, current_user_person_name())
    or lancamento_tem_extra_vendedor_meu(id);
 
 create or replace view lancamentos_extra_vendedores_safe with (security_barrier = true) as
