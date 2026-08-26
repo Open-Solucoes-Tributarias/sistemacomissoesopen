@@ -71,7 +71,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 4. Rode `supabase_column_masking_migration.sql` — cria as views `_safe` e fecha a leitura direta das tabelas base.
 5. Rode `supabase_hardening_migration.sql` — correções encontradas na conferência do banco.
 6. Rode `supabase_metas_migration.sql` — novo formato das metas (recria a tabela `metas`).
-7. Rode `supabase_painel_equipe_migration.sql` — cria a tabela do Painel da Equipe.
+7. Rode `supabase_painel_equipe_migration.sql` — cria a tabela do Painel da Equipe e a view `painel_equipe_totais`, que calcula os indicadores de venda.
 8. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
 9. Só depois publique esta versão atualizada do `index.html`.
 
@@ -87,7 +87,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `lancamentos_extra_vendedores` | Vendedores extras (4º em diante) por lançamento |
 | `bonus` | Bônus e metas batidas |
 | `metas` | Regras de meta: gatilho da empresa + prêmio de quem bate |
-| `relatorios_equipe` | Indicadores mensais de andamento da equipe (Painel da Equipe) |
+| `relatorios_equipe` | Indicadores mensais de andamento da equipe, digitados (Painel da Equipe) |
 | `partners` | Parceiros cadastrados |
 | `venda_products` | Catálogo de produtos da aba Sistema |
 | `sellers` | Vendedoras do Sistema (lista editável) |
@@ -164,17 +164,24 @@ Cada vendedor(a) logado enxerga **apenas as próprias linhas** — é o mesmo co
 
 ## Painel da Equipe
 
-Aba própria, para acompanhar o **andamento** da equipe — o esforço, não só o resultado financeiro. Ao contrário do resto do sistema, aqui os números são **lançados à mão** todo mês.
+Aba própria, para acompanhar o **andamento** da equipe — o esforço, não só o resultado financeiro.
 
-Nove indicadores por vendedora, por mês: Interação, Propostas, Prospecção zero, Prospecção, Negócios abertos, Reuniões realizadas, Vendas de cursos, Vendas de sistemas e Qtd. sistemas vendidos.
+São nove indicadores por vendedora, por mês, divididos em dois grupos:
 
-**Lançamento** — escolhe a vendedora, o mês e preenche os nove campos. Se aquele mês já foi lançado, o formulário abre preenchido e o botão vira "Atualizar". Ao lado, cada vendedora tem um quadro com os meses já lançados, com atalhos para editar ou excluir.
+| Grupo | Indicadores | De onde vem |
+|---|---|---|
+| Andamento | Interação, Propostas, Prospecção zero, Prospecção, Negócios abertos, Reuniões realizadas | **digitado à mão** todo mês |
+| Vendas | Vendas de cursos (R$), Vendas de sistemas (R$), Qtd. sistemas vendidos | **calculado sozinho** pelos lançamentos que já existem no sistema |
+
+**Os três indicadores de venda não são mais digitados.** Assim que um lançamento de curso é registrado com o nome da vendedora — no campo principal, no 2º/3º vendedor ou na lista de vendedores extras — o valor do contrato já entra no painel dela naquele mês. O mesmo vale para a aba Sistema: cada venda soma o valor em "Vendas de sistemas" e conta 1 em "Qtd. sistemas vendidos" para quem tiver comissão preenchida naquela venda. Um contrato dividido entre duas pessoas aparece para as duas, e nunca conta duas vezes para a mesma pessoa. Quem faz a soma é a view `painel_equipe_totais` no banco.
+
+**Lançamento** — escolhe a vendedora, o mês e preenche os **seis** campos de andamento. Logo abaixo, um bloco cinza mostra os três indicadores de venda já calculados daquele mês, só para conferência. Se aquele mês já foi lançado, o formulário abre preenchido e o botão vira "Atualizar". Ao lado, cada vendedora tem um quadro com os meses já lançados, com atalhos para editar ou excluir.
 
 **Dashboard** — cartões com o total do ano por pessoa, **ranking do mês** (quem liderou cada indicador, mais uma pontuação combinada: 1º lugar soma N pontos, 2º soma N−1, e vence quem somar mais nos nove), gráfico de barras comparando as pessoas num indicador, evolução mensal em linhas ao longo dos 12 meses, e a tabela de totais anuais.
 
 O painel usa a **lista de vendedoras do sistema** e o **ano selecionado** no topo — não tem lista nem ano fixos.
 
-> **Contas restritas** veem só os próprios números, sem o formulário, sem o ranking e sem o comparativo entre pessoas — esses blocos só fazem sentido com os dados de todo mundo, que elas não podem ver.
+> **Contas restritas veem o ranking e o comparativo**, com os números de todo mundo — foi uma escolha de quem administra o sistema, para o painel funcionar como placar da equipe. O que elas continuam **não** vendo é o que está por trás desses números: cliente, contrato, percentual e comissão dos colegas seguem escondidos, porque a view `painel_equipe_totais` devolve só os totais por pessoa/mês. Lançar e editar continua sendo exclusivo de admin.
 
 ## Metas e bônus
 

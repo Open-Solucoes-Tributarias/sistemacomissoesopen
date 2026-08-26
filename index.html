@@ -539,6 +539,21 @@
   }
   .painel-salvar:hover{opacity:.9;}
 
+  .painel-calc{
+    background:var(--primary-soft);border:1px solid var(--ring);
+    border-radius:var(--radius-sm);padding:11px 13px;margin:4px 0 14px;
+  }
+  .painel-calc-tit{
+    font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--primary);margin-bottom:7px;
+  }
+  .painel-calc-linha{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    font-size:12.5px;color:var(--ink-soft);font-weight:600;padding:3px 0;
+  }
+  .painel-calc-linha b{color:var(--ink);font-variant-numeric:tabular-nums;}
+  .painel-calc-nota{font-size:11px;color:var(--primary);opacity:.8;font-weight:600;margin-top:6px;line-height:1.45;}
+
   .painel-duplo{display:flex;gap:20px;align-items:flex-end;}
   .painel-num{font-size:22px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.1;}
   .painel-num-rot{font-size:11px;color:var(--ink-faint);font-weight:600;margin-top:2px;}
@@ -755,6 +770,8 @@ let vendasOrdem = "padrao";          // ordenação da aba Sistema (só exibiç�
 /* ---------------- Painel de relatórios mensais da equipe ----------------
    Indicadores de andamento que a pessoa lança à mão, mês a mês — diferente
    do resto do sistema, que calcula em cima dos lançamentos de venda. */
+/* `auto` = o sistema calcula a partir dos lançamentos, ninguém digita.
+   `moeda` = exibir em R$. */
 const METRICAS = [
   {key:'interacao',       col:'interacao',        label:'Interação'},
   {key:'propostas',       col:'propostas',        label:'Propostas'},
@@ -762,11 +779,13 @@ const METRICAS = [
   {key:'prospeccao',      col:'prospeccao',       label:'Prospecção'},
   {key:'negociosAbertos', col:'negocios_abertos', label:'Negócios abertos'},
   {key:'reunioes',        col:'reunioes',         label:'Reuniões realizadas'},
-  {key:'vendasCursos',    col:'vendas_cursos',    label:'Vendas de cursos'},
-  {key:'vendasSistemas',  col:'vendas_sistemas',  label:'Vendas de sistemas'},
-  {key:'qtdSistemas',     col:'qtd_sistemas',     label:'Qtd. sistemas vendidos'},
+  {key:'vendasCursos',    col:'vendas_cursos',    label:'Vendas de cursos',        auto:true, moeda:true},
+  {key:'vendasSistemas',  col:'vendas_sistemas',  label:'Vendas de sistemas',      auto:true, moeda:true},
+  {key:'qtdSistemas',     col:'qtd_sistemas',     label:'Qtd. sistemas vendidos',  auto:true},
 ];
-let relatorios = [];            // {id, ano, mes, vendedor, <metricas>}
+const METRICAS_MANUAIS = METRICAS.filter(m => !m.auto);
+let relatorios = [];            // lançamentos manuais {id, ano, mes, vendedor, ...}
+let painelTotais = [];          // totais consolidados vindos da view (inclui os calculados)
 let relatoriosNextId = 1;
 let painelAba = 'lancamento';   // 'lancamento' | 'dashboard'
 let painelVendedor = '';        // quem está sendo lançado
@@ -1497,7 +1516,7 @@ function persistRelatorios(){
       try{
         const dbRows = relatorios.map(function(r){
           const row = { id: r.id, ano: r.ano, mes: r.mes, vendedor: r.vendedor };
-          METRICAS.forEach(function(m){ row[m.col] = numOrNull(r[m.key]) || 0; });
+          METRICAS_MANUAIS.forEach(function(m){ row[m.col] = numOrNull(r[m.key]) || 0; });
           return row;
         });
         await sbUpsert('relatorios_equipe', dbRows, 'id');
@@ -1511,6 +1530,23 @@ function persistRelatorios(){
     })();
   }, 450);
 }
+/* Totais por pessoa/mês, com os indicadores de venda já calculados pelo
+   banco. Vem de uma view que devolve só os agregados — é o que permite o
+   ranking aparecer para toda a equipe sem abrir contratos e comissões. */
+async function tryLoadPainelTotaisAsync(){
+  try{
+    const dbRows = await sbSelect('painel_equipe_totais','select=*');
+    if(dbRows){
+      painelTotais = dbRows.map(function(d){
+        const r = { ano: d.ano, mes: d.mes, vendedor: d.vendedor || '' };
+        METRICAS.forEach(function(m){ r[m.key] = Number(d[m.col]) || 0; });
+        return r;
+      });
+      render();
+    }
+  } catch(e){ console.error(e); }
+}
+
 async function tryLoadRelatoriosFromStorageAsync(){
   try{
     const dbRows = await sbSelect('relatorios_equipe','select=*&order=id.asc');
@@ -1518,7 +1554,7 @@ async function tryLoadRelatoriosFromStorageAsync(){
     if(dbRows){
       relatorios = dbRows.map(function(d){
         const r = { id: d.id, ano: d.ano, mes: d.mes, vendedor: d.vendedor || '' };
-        METRICAS.forEach(function(m){ r[m.key] = Number(d[m.col]) || 0; });
+        METRICAS_MANUAIS.forEach(function(m){ r[m.key] = Number(d[m.col]) || 0; });
         return r;
       });
       relatoriosNextId = relatorios.length ? Math.max.apply(null, relatorios.map(function(r){ return r.id||0; })) + 1 : 1;
@@ -4308,7 +4344,22 @@ function renderEntitySection(key){
 
 /* ---------------- Painel da Equipe: dados e ações ---------------- */
 
-function vendedoresDoPainel(){ return sellersForCurrentUser().map(s => s.label); }
+/* O painel mostra a equipe toda, inclusive para contas restritas: os
+   totais vêm de uma view que expõe só os agregados, sem os contratos. */
+function vendedoresDoPainel(){ return SELLERS.map(s => s.label); }
+
+/* Valor de um indicador para uma pessoa num mês. Os manuais vêm do que foi
+   lançado; os de venda vêm calculados pelo banco. */
+function valorMetrica(vendedor, mes, key){
+  const t = painelTotais.find(x => x.ano === yearFilter && x.mes === mes
+                                && name_matches_client(x.vendedor, vendedor));
+  if(t) return Number(t[key]) || 0;
+  const r = getRelatorio(vendedor, mes);
+  return r ? (Number(r[key]) || 0) : 0;
+}
+function fmtMetrica(m, valor){
+  return m.moeda ? fmtMoney(valor) : (Number(valor)||0).toLocaleString('pt-BR');
+}
 function corDoVendedor(nome){
   const s = SELLERS.find(x => name_matches_client(x.label, nome));
   return s ? s.color : VENDOR_PALETTE[0];
@@ -4327,7 +4378,7 @@ function totaisPorVendedorPainel(){
   vendedoresDoPainel().forEach(v => {
     const t = {};
     METRICAS.forEach(m => { t[m.key] = 0; });
-    mesesLancados(v).forEach(r => { METRICAS.forEach(m => { t[m.key] += Number(r[m.key])||0; }); });
+    MONTHS.forEach(mes => { METRICAS.forEach(m => { t[m.key] += valorMetrica(v, mes, m.key); }); });
     out[v] = t;
   });
   return out;
@@ -4367,6 +4418,8 @@ function salvarPainelLancamento(){
   }
   persistRelatorios();
   render();
+  // os totais são calculados no banco; relê pra tela refletir na hora
+  setTimeout(tryLoadPainelTotaisAsync, 900);
 }
 function editarPainelLancamento(vendedor, mes){
   painelVendedor = vendedor; painelMes = mes; painelAba = 'lancamento';
@@ -4393,10 +4446,11 @@ function rankingDoMes(mes){
   vends.forEach(v => { pontos[v] = 0; });
   const porMetrica = METRICAS.map(m => {
     const valores = vends
-      .map(v => ({ vendedor: v, valor: Number(getRelatorio(v, mes)?.[m.key]) || 0 }))
+      .map(v => ({ vendedor: v, valor: valorMetrica(v, mes, m.key) }))
       .sort((a,b) => b.valor - a.valor);
     valores.forEach((item, idx) => { pontos[item.vendedor] += (vends.length - idx); });
-    return { metrica: m.label, lider: valores[0], todos: valores };
+    return { metrica: m.label, lider: valores[0], todos: valores,
+             formatado: valores[0] ? fmtMetrica(m, valores[0].valor) : '' };
   });
   const geral = vends.map(v => ({ vendedor: v, pontos: pontos[v] })).sort((a,b) => b.pontos - a.pontos);
   return { porMetrica, geral };
@@ -4430,7 +4484,7 @@ function graficoLinhaPainel(vends){
   const w = 760, h = 260, padBottom = 28, padTop = 12, padLeft = 44;
   const plotH = h - padBottom - padTop;
   const plotW = w - padLeft - 12;
-  const serie = v => MONTHS.map(m => Number(getRelatorio(v, m)?.[painelMetricaFoco]) || 0);
+  const serie = v => MONTHS.map(m => valorMetrica(v, m, painelMetricaFoco));
   const todos = vends.flatMap(serie);
   const max = Math.max(1, ...todos);
   const px = i => padLeft + (plotW/11)*i;
@@ -4493,13 +4547,26 @@ function renderPainelLancamento(vends){
             style="--vc:${esc(corDoVendedor(v))}" onclick="setPainelVendedor('${esc(v)}')">${esc(v)}</button>
   `).join('');
 
-  const campos = METRICAS.map(m => `
+  const campos = METRICAS_MANUAIS.map(m => `
     <label class="painel-campo">
       <span>${esc(m.label)}</span>
       <input type="number" min="0" step="1" inputmode="numeric" placeholder="0"
              value="${esc(painelForm[m.key] ?? '')}" oninput="onPainelFormInput(this,'${m.key}')" />
     </label>
   `).join('');
+
+  // Os indicadores de venda não são digitados: saem dos lançamentos.
+  const calculados = `
+    <div class="painel-calc">
+      <div class="painel-calc-tit">Vem dos lançamentos — não precisa digitar</div>
+      ${METRICAS.filter(m => m.auto).map(m => `
+        <div class="painel-calc-linha">
+          <span>${esc(m.label)}</span>
+          <b>${fmtMetrica(m, valorMetrica(painelVendedor, painelMes, m.key))}</b>
+        </div>
+      `).join('')}
+      <div class="painel-calc-nota">Calculado a partir das abas Sistema e Cursos, para ${esc(painelVendedor)} em ${esc(painelMes)}.</div>
+    </div>`;
 
   const formulario = panel('painel-form', 'Lançar mês', `
     <label class="painel-campo"><span>Vendedora</span></label>
@@ -4511,6 +4578,7 @@ function renderPainelLancamento(vends){
       </select>
     </label>
     <div class="painel-campos">${campos}</div>
+    ${calculados}
     <button class="painel-salvar" onclick="salvarPainelLancamento()">
       ${jaExiste ? 'Atualizar lançamento' : 'Salvar lançamento'}
     </button>
@@ -4536,10 +4604,10 @@ function renderPainelLancamento(vends){
               ${meses.map(r => `
                 <tr>
                   <td>${esc(r.mes)}</td>
-                  <td class="num">${(Number(r.reunioes)||0).toLocaleString('pt-BR')}</td>
-                  <td class="num">${(Number(r.vendasSistemas)||0).toLocaleString('pt-BR')}</td>
-                  <td class="num">${(Number(r.qtdSistemas)||0).toLocaleString('pt-BR')}</td>
-                  <td class="num">${(Number(r.vendasCursos)||0).toLocaleString('pt-BR')}</td>
+                  <td class="num">${valorMetrica(v, r.mes, 'reunioes').toLocaleString('pt-BR')}</td>
+                  <td class="num">${fmtMoney(valorMetrica(v, r.mes, 'vendasSistemas'))}</td>
+                  <td class="num">${valorMetrica(v, r.mes, 'qtdSistemas').toLocaleString('pt-BR')}</td>
+                  <td class="num">${fmtMoney(valorMetrica(v, r.mes, 'vendasCursos'))}</td>
                   <td class="del-cell">
                     <div class="row-actions" style="opacity:1;">
                       <button class="action-btn" title="Editar este mês" onclick="editarPainelLancamento('${esc(v)}','${r.mes}')">✎</button>
@@ -4574,12 +4642,12 @@ function renderPainelDashboard(vends){
           <div class="kpi-label"><span class="kpi-dot"></span>${esc(v)}</div>
           <div class="painel-duplo">
             <div>
-              <div class="painel-num">${(totais[v]?.vendasSistemas||0).toLocaleString('pt-BR')}</div>
-              <div class="painel-num-rot">sistemas vendidos</div>
+              <div class="painel-num">${fmtMoney(totais[v]?.vendasSistemas||0)}</div>
+              <div class="painel-num-rot">em sistemas · ${(totais[v]?.qtdSistemas||0).toLocaleString('pt-BR')} venda${(totais[v]?.qtdSistemas||0)===1?'':'s'}</div>
             </div>
             <div>
-              <div class="painel-num">${(totais[v]?.vendasCursos||0).toLocaleString('pt-BR')}</div>
-              <div class="painel-num-rot">cursos vendidos</div>
+              <div class="painel-num">${fmtMoney(totais[v]?.vendasCursos||0)}</div>
+              <div class="painel-num-rot">em cursos</div>
             </div>
           </div>
         </div>
@@ -4587,10 +4655,11 @@ function renderPainelDashboard(vends){
     </div>
   `);
 
-  // O ranking compara pessoas — só admin vê.
   let ranking = '';
-  if(isAdmin){
-    const semLancamento = vends.every(v => !getRelatorio(v, painelMesRanking));
+  {
+    // "sem dados" tem que olhar os totais consolidados: um mês pode ter
+    // venda registrada mesmo sem ninguém ter lançado os indicadores à mão.
+    const semLancamento = vends.every(v => METRICAS.every(m => valorMetrica(v, painelMesRanking, m.key) === 0));
     const rk = rankingDoMes(painelMesRanking);
     const corpo = semLancamento
       ? `<div class="meta-empty">Nenhum lançamento registrado para ${esc(painelMesRanking)} ainda.</div>`
@@ -4600,7 +4669,7 @@ function renderPainelDashboard(vends){
             <div class="painel-ranking-item">
               <span>${esc(item.metrica)}</span>
               ${item.lider && item.lider.valor > 0
-                ? `<span class="painel-lider" style="--vc:${esc(corDoVendedor(item.lider.vendedor))}">${esc(item.lider.vendedor)} · ${item.lider.valor.toLocaleString('pt-BR')}</span>`
+                ? `<span class="painel-lider" style="--vc:${esc(corDoVendedor(item.lider.vendedor))}">${esc(item.lider.vendedor)} · ${esc(item.formatado)}</span>`
                 : `<span class="painel-sem">sem dados</span>`}
             </div>
           `).join('')}
@@ -4630,16 +4699,16 @@ function renderPainelDashboard(vends){
       ${METRICAS.map(m => `<option value="${m.key}" ${painelMetricaFoco===m.key?'selected':''}>${esc(m.label)}</option>`).join('')}
     </select></label>`;
 
-  const barras = isAdmin ? panel('painel-barras', 'Comparativo por indicador',
+  const barras = panel('painel-barras', 'Comparativo por indicador',
     graficoBarrasPainel(vends.map(v => ({vendedor: v, valor: totais[v]?.[painelMetricaFoco] || 0})))
     + `<div class="painel-nota">Totais de ${yearFilter}, por ${esc(metricaLabel.toLowerCase())}.</div>`,
-    { actions: seletorMetrica }) : '';
+    { actions: seletorMetrica });
 
   const linha = panel('painel-linha', `Evolução mensal — ${esc(metricaLabel)}`,
     graficoLinhaPainel(vends)
     + `<div class="painel-legenda">${vends.map(v => `
         <span><i style="background:${esc(corDoVendedor(v))}"></i>${esc(v)}</span>`).join('')}</div>`,
-    { actions: isAdmin ? '' : seletorMetrica });
+    {});
 
   const tabela = panel('painel-totais', 'Totais anuais por indicador', `
     <div class="table-scroll">
@@ -4651,7 +4720,7 @@ function renderPainelDashboard(vends){
           ${METRICAS.map(m => `
             <tr>
               <td>${esc(m.label)}</td>
-              ${vends.map(v => `<td class="num">${(totais[v]?.[m.key]||0).toLocaleString('pt-BR')}</td>`).join('')}
+              ${vends.map(v => `<td class="num">${fmtMetrica(m, totais[v]?.[m.key]||0)}</td>`).join('')}
             </tr>
           `).join('')}
         </tbody>
@@ -4762,6 +4831,7 @@ function boot(){
     tryLoadClosedMonthsFromStorageAsync(),
     tryLoadMetasFromStorageAsync(),
     tryLoadRelatoriosFromStorageAsync(),
+    tryLoadPainelTotaisAsync(),
   ];
   Promise.allSettled(loaders).then(function(){
     initialDataLoaded = true;
