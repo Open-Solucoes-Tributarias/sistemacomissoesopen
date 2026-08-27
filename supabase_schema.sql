@@ -26,7 +26,7 @@ create table venda_products (
 create table entity_vendors (
   id bigserial primary key,
   -- 'painel' não é aba de lançamento: guarda quem aparece no Painel da Equipe
-  entidade text not null check (entidade in ('consultoria','publicos','cursos','painel')),
+  entidade text not null check (entidade in ('consultoria','publicos','cursos','painel','painel_contratos')),
   vendor_name text not null,
   unique(entidade, vendor_name)
 );

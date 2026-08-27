@@ -786,6 +786,7 @@
   }
 
   .painel-topo-acoes{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .painel-topo-sub{display:flex;justify-content:flex-end;margin-bottom:12px;}
   .painel-equipe-nota{font-size:12.5px;color:var(--ink-soft);font-weight:600;line-height:1.5;margin-bottom:12px;}
   .painel-equipe-lista{display:flex;flex-wrap:wrap;gap:8px;}
   .painel-equipe-item{
@@ -991,6 +992,19 @@ const METRICAS = [
   {key:'qtdSistemas',     col:'qtd_sistemas',     label:'Qtd. sistemas vendidos',  auto:true},
 ];
 const METRICAS_MANUAIS = METRICAS.filter(m => !m.auto);
+
+/* Nem todo mundo do comercial é medido pelos mesmos indicadores. Tem gente
+   — o Davidson é o primeiro caso — acompanhada por dois números só:
+   quantos contratos assinou e quantas reuniões realizou no mês. Essas
+   pessoas ficam numa lista própria, separada da de vendedoras, e não
+   entram no ranking de vendas, que não faz sentido pra elas. */
+const METRICA_CONTRATOS = {key:'contratos', col:'contratos', label:'Contratos assinados'};
+const METRICAS_CONTRATOS = [
+  METRICA_CONTRATOS,
+  METRICAS.find(m => m.key === 'reunioes'),
+];
+/* Tudo que o banco devolve por pessoa/mês (os 9 do painel + contratos). */
+const METRICAS_TODAS = METRICAS.concat([METRICA_CONTRATOS]);
 let relatorios = [];            // lançamentos manuais {id, ano, mes, vendedor, ...}
 let painelTotais = [];          // totais consolidados vindos da view (inclui os calculados)
 let relatoriosNextId = 1;
@@ -1748,6 +1762,7 @@ function persistRelatorios(){
         const dbRows = relatorios.map(function(r){
           const row = { id: r.id, ano: r.ano, mes: r.mes, vendedor: r.vendedor };
           METRICAS_MANUAIS.forEach(function(m){ row[m.col] = numOrNull(r[m.key]) || 0; });
+          row[METRICA_CONTRATOS.col] = numOrNull(r[METRICA_CONTRATOS.key]) || 0;
           return row;
         });
         await sbUpsert('relatorios_equipe', dbRows, 'id');
@@ -1785,7 +1800,7 @@ async function tryLoadPainelTotaisAsync(){
     if(dbRows){
       painelTotais = dbRows.map(function(d){
         const r = { ano: d.ano, mes: d.mes, vendedor: d.vendedor || '' };
-        METRICAS.forEach(function(m){ r[m.key] = Number(d[m.col]) || 0; });
+        METRICAS_TODAS.forEach(function(m){ r[m.key] = Number(d[m.col]) || 0; });
         return r;
       });
       render();
@@ -1801,6 +1816,7 @@ async function tryLoadRelatoriosFromStorageAsync(){
       relatorios = dbRows.map(function(d){
         const r = { id: d.id, ano: d.ano, mes: d.mes, vendedor: d.vendedor || '' };
         METRICAS_MANUAIS.forEach(function(m){ r[m.key] = Number(d[m.col]) || 0; });
+        r[METRICA_CONTRATOS.key] = Number(d[METRICA_CONTRATOS.col]) || 0;
         return r;
       });
       relatoriosNextId = relatorios.length ? Math.max.apply(null, relatorios.map(function(r){ return r.id||0; })) + 1 : 1;
@@ -4832,7 +4848,120 @@ function pessoasConhecidas(){
   SELLERS.forEach(function(x){ push(x.label); });
   ENTITY_KEYS.forEach(function(k){ (state[k].vendors || []).forEach(push); });
   vendedoresDoPainel().forEach(push);
+  pessoasDeContratos().forEach(push);
   return out.sort(function(a,b){ return a.localeCompare(b, 'pt-BR', {sensitivity:'base'}); });
+}
+
+/* ---------- Grupo de contratos e reuniões (Davidson e quem mais entrar) ---------- */
+const PAINEL_CONTRATOS_PADRAO = ['Davidson'];
+let painelContratos = null;
+let painelEditandoContratos = false;
+let painelContratoPessoa = null;
+let painelContratoMes = MONTHS[0];
+let painelContratoForm = { contratos:'', reunioes:'' };
+
+function pessoasDeContratos(){
+  return (painelContratos || PAINEL_CONTRATOS_PADRAO).slice();
+}
+
+async function tryLoadPainelContratosAsync(){
+  try{
+    const db = await sbSelect('entity_vendors', 'select=vendor_name&entidade=eq.painel_contratos&order=id.asc');
+    carregouDoBanco['painel-contratos'] = true;
+    if(db && db.length) painelContratos = db.map(function(v){ return v.vendor_name; });
+  }catch(e){ console.error(e); }
+}
+
+function persistPainelContratos(){
+  saving = true; updateSaveStatus();
+  if(entityTimers['painel-contratos']) clearTimeout(entityTimers['painel-contratos']);
+  entityTimers['painel-contratos'] = setTimeout(function(){
+    (async function(){
+      try{
+        if(!carregouDoBanco['painel-contratos']) return;   // nunca apagar sem ter lido antes
+        await sbDeleteAll('entity_vendors', 'entidade=eq.painel_contratos');
+        const linhas = (painelContratos || []).map(function(v){ return { entidade:'painel_contratos', vendor_name:v }; });
+        if(linhas.length) await sbUpsert('entity_vendors', linhas, 'entidade,vendor_name');
+        saveError = false;
+      } catch(e){ console.error(e); saveError = true; }
+      finally { saving = false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+
+function setPainelEditandoContratos(v){ painelEditandoContratos = !!v; render(); }
+
+function togglePessoaContratos(nome){
+  if(!isAdmin) return;
+  const lista = pessoasDeContratos();
+  const i = lista.findIndex(function(v){ return name_matches_client(v, nome); });
+  if(i >= 0) lista.splice(i, 1); else lista.push(String(nome).trim());
+  painelContratos = lista;
+  if(painelContratoPessoa && lista.indexOf(painelContratoPessoa) === -1) painelContratoPessoa = null;
+  persistPainelContratos();
+  render();
+}
+
+function adicionarPessoaContratos(){
+  if(!isAdmin) return;
+  showPrompt('Nome de quem entra no acompanhamento de contratos e reuniões:', function(nome){
+    if(!nome) return;
+    const t = String(nome).trim();
+    if(!t) return;
+    const lista = pessoasDeContratos();
+    if(lista.some(function(v){ return name_matches_client(v, t); })){
+      showAlert('Essa pessoa já está na lista.');
+      return;
+    }
+    lista.push(t);
+    painelContratos = lista;
+    persistPainelContratos();
+    render();
+  });
+}
+
+function carregarFormContratos(){
+  const r = painelContratoPessoa ? getRelatorio(painelContratoPessoa, painelContratoMes) : null;
+  painelContratoForm = {
+    contratos: r ? (r.contratos ?? '') : '',
+    reunioes:  r ? (r.reunioes  ?? '') : '',
+  };
+}
+function setPainelContratoPessoa(v){ painelContratoPessoa = v; carregarFormContratos(); render(); }
+function setPainelContratoMes(el){ painelContratoMes = el.value; carregarFormContratos(); render(); }
+function onContratoFormInput(el, key){ painelContratoForm[key] = el.value; }  // sem render, pra não perder o foco
+
+function salvarContratoLancamento(){
+  if(!painelContratoPessoa){ showAlert('Escolha a pessoa antes de salvar.'); return; }
+  const existente = getRelatorio(painelContratoPessoa, painelContratoMes);
+  const dados = {};
+  METRICAS_CONTRATOS.forEach(function(m){ dados[m.key] = numOrNull(painelContratoForm[m.key]) || 0; });
+  if(existente){
+    Object.assign(existente, dados);
+  } else {
+    const base = { id: relatoriosNextId++, ano: yearFilter, mes: painelContratoMes, vendedor: painelContratoPessoa };
+    METRICAS_MANUAIS.forEach(function(m){ base[m.key] = 0; });
+    relatorios.push(Object.assign(base, dados));
+  }
+  persistRelatorios();
+  render();
+  setTimeout(tryLoadPainelTotaisAsync, 900);
+}
+
+function excluirContratoLancamento(pessoa, mes){
+  showConfirm(
+    `Excluir o mês de ${mes}/${yearFilter} de ${pessoa}? Os números daquele mês serão perdidos.`,
+    function(){
+      relatorios = relatorios.filter(function(r){
+        return !(r.ano === yearFilter && r.mes === mes && name_matches_client(r.vendedor, pessoa));
+      });
+      persistRelatorios();
+      if(name_matches_client(painelContratoPessoa, pessoa) && painelContratoMes === mes) carregarFormContratos();
+      render();
+      setTimeout(tryLoadPainelTotaisAsync, 900);
+    },
+    'Excluir'
+  );
 }
 
 function setPainelEditandoEquipe(v){ painelEditandoEquipe = !!v; render(); }
@@ -5082,13 +5211,14 @@ function renderPainelSection(){
     <div class="painel-abas">
       <button class="painel-aba${painelAba==='lancamento'?' active':''}" onclick="setPainelAba('lancamento')">Lançamento</button>
       <button class="painel-aba${painelAba==='dashboard'?' active':''}" onclick="setPainelAba('dashboard')">Dashboard</button>
+      <button class="painel-aba${painelAba==='contratos'?' active':''}" onclick="setPainelAba('contratos')">Contratos e reuniões</button>
     </div>` : '';
-  const btnEquipe = isAdmin ? `
+  const btnEquipe = (isAdmin && painelAba !== 'contratos') ? `
     <button class="eye-toggle" onclick="setPainelEditandoEquipe(${painelEditandoEquipe ? 'false' : 'true'})"
             title="Escolhe quem aparece neste painel — não mexe nas outras abas">
       ${painelEditandoEquipe ? '✕ Fechar' : '👥 Quem aparece'}
     </button>` : '';
-  const editorEquipe = (isAdmin && painelEditandoEquipe) ? panel('painel-equipe', 'Quem aparece neste painel', `
+  const editorEquipe = (isAdmin && painelEditandoEquipe && painelAba !== 'contratos') ? panel('painel-equipe', 'Quem aparece neste painel', `
     <div class="painel-equipe-nota">Marque as pessoas que este painel acompanha. Desmarcar alguém só tira do painel — os lançamentos, as comissões e as outras abas continuam iguais.</div>
     <div class="painel-equipe-lista">
       ${pessoasConhecidas().map(function(n){
@@ -5100,11 +5230,13 @@ function renderPainelSection(){
       }).join('')}
     </div>
   `) : '';
-  const conteudo = (isAdmin && painelAba === 'lancamento')
-    ? renderPainelLancamento(vends)
+  const conteudo = !isAdmin ? renderPainelDashboard(vends)
+    : painelAba === 'lancamento' ? renderPainelLancamento(vends)
+    : painelAba === 'contratos'  ? renderPainelContratos()
     : renderPainelDashboard(vends);
-  const faltaSistema = isAdmin ? vendasSemResponsavel().length : 0;
-  const faltaCursos  = isAdmin ? entityRowsSemDivisao('cursos').length : 0;
+  const olhaVendas   = isAdmin && painelAba !== 'contratos';
+  const faltaSistema = olhaVendas ? vendasSemResponsavel().length : 0;
+  const faltaCursos  = olhaVendas ? entityRowsSemDivisao('cursos').length : 0;
   const partes = [];
   if(faltaSistema) partes.push(`<b>${faltaSistema}</b> venda${faltaSistema===1?'':'s'} na aba Sistema`);
   if(faltaCursos)  partes.push(`<b>${faltaCursos}</b> lançamento${faltaCursos===1?'':'s'} na aba Cursos`);
@@ -5130,6 +5262,112 @@ function renderPainelSection(){
     ${conteudo}
   `;
 }
+
+/* Aba "Contratos e reuniões": lista própria de pessoas, dois indicadores.
+   Não entra no ranking de vendas — quem é medido assim não vende. */
+function renderPainelContratos(){
+  const pessoas = pessoasDeContratos();
+  if(painelContratoPessoa && pessoas.indexOf(painelContratoPessoa) === -1) painelContratoPessoa = null;
+  if(!painelContratoPessoa && pessoas.length){ painelContratoPessoa = pessoas[0]; carregarFormContratos(); }
+
+  const editor = painelEditandoContratos ? panel('painel-contratos-quem', 'Quem é acompanhado assim', `
+    <div class="painel-equipe-nota">Estas pessoas são medidas por contratos assinados e reuniões realizadas, e não pelo ranking de vendas. Desmarcar alguém só tira desta lista.</div>
+    <div class="painel-equipe-lista">
+      ${pessoasConhecidas().map(function(n){
+        const on = pessoas.some(function(v){ return name_matches_client(v, n); });
+        return `<label class="painel-equipe-item${on?' on':''}">
+          <input type="checkbox" ${on?'checked':''} onchange="togglePessoaContratos('${escJs(n)}')" />
+          <span>${esc(n)}</span>
+        </label>`;
+      }).join('')}
+    </div>
+    <button class="modal-btn modal-btn-ghost" style="width:100%;margin-top:12px;" onclick="adicionarPessoaContratos()">+ Cadastrar alguém que não está na lista</button>
+  `) : '';
+
+  if(!pessoas.length){
+    return `
+      <div class="painel-topo-sub">
+        <button class="eye-toggle" onclick="setPainelEditandoContratos(${painelEditandoContratos?'false':'true'})">${painelEditandoContratos?'✕ Fechar':'👤 Quem é acompanhado'}</button>
+      </div>
+      ${editor}
+      <div class="meta-empty" style="padding:24px;">Ninguém nesta lista ainda. Use “Quem é acompanhado” para incluir alguém.</div>`;
+  }
+
+  const chips = pessoas.map(function(v){
+    return `<button class="painel-chip${name_matches_client(v,painelContratoPessoa)?' active':''}"
+            style="--vc:${esc(corDoVendedor(v))}" onclick="setPainelContratoPessoa('${escJs(v)}')">${esc(v)}</button>`;
+  }).join('');
+
+  const campos = METRICAS_CONTRATOS.map(function(m){
+    return `<label class="painel-campo">
+      <span>${esc(m.label)}</span>
+      <input type="number" min="0" step="1" inputmode="numeric" placeholder="0"
+             value="${esc(painelContratoForm[m.key] ?? '')}" oninput="onContratoFormInput(this,'${m.key}')" />
+    </label>`;
+  }).join('');
+
+  const jaExiste = !!getRelatorio(painelContratoPessoa, painelContratoMes);
+  const formulario = panel('painel-contratos-form', 'Lançar mês', `
+    <label class="painel-campo"><span>Pessoa</span></label>
+    <div class="painel-chips">${chips}</div>
+    <label class="painel-campo" style="margin-top:14px;">
+      <span>Mês</span>
+      <select onchange="setPainelContratoMes(this)">
+        ${MONTHS.map(m => `<option value="${m}" ${painelContratoMes===m?'selected':''}>${m} de ${yearFilter}</option>`).join('')}
+      </select>
+    </label>
+    <div class="painel-campos">${campos}</div>
+    <button class="painel-salvar" onclick="salvarContratoLancamento()">${jaExiste ? 'Atualizar lançamento' : 'Salvar lançamento'}</button>
+  `, { meta: jaExiste ? '<span class="meta-tag ok">Mês já lançado</span>' : '' });
+
+  // Quadro do ano por pessoa
+  const quadros = pessoas.map(function(v){
+    const meses = mesesLancados(v);
+    const totalContratos = MONTHS.reduce(function(a,m){ return a + valorMetrica(v, m, 'contratos'); }, 0);
+    const totalReunioes  = MONTHS.reduce(function(a,m){ return a + valorMetrica(v, m, 'reunioes'); }, 0);
+    const corpo = meses.length ? `
+      <div class="table-scroll">
+        <table class="table-plain">
+          <thead><tr><th>Mês</th><th class="num">Contratos</th><th class="num">Reuniões</th><th></th></tr></thead>
+          <tbody>
+            ${meses.map(function(r){ return `
+              <tr>
+                <td>${esc(r.mes)}</td>
+                <td class="num">${(Number(r.contratos)||0).toLocaleString('pt-BR')}</td>
+                <td class="num">${(Number(r.reunioes)||0).toLocaleString('pt-BR')}</td>
+                <td class="del-cell"><div class="row-actions">
+                  <button class="action-btn" title="Editar este mês" onclick="setPainelContratoPessoa('${escJs(v)}');setPainelContratoMesDireto('${escJs(r.mes)}')">✎</button>
+                  <button class="action-btn danger" title="Excluir este mês" onclick="excluirContratoLancamento('${escJs(v)}','${escJs(r.mes)}')">✕</button>
+                </div></td>
+              </tr>`; }).join('')}
+          </tbody>
+          <tfoot><tr>
+            <td>Total do ano</td>
+            <td class="num">${totalContratos.toLocaleString('pt-BR')}</td>
+            <td class="num">${totalReunioes.toLocaleString('pt-BR')}</td>
+            <td></td>
+          </tr></tfoot>
+        </table>
+      </div>` : `<div class="meta-empty">Nenhum mês lançado ainda para ${esc(v)}.</div>`;
+    return panel('painel-contratos-' + v.toLowerCase().replace(/[^a-z0-9]+/g,'-'), v, corpo, {
+      meta: `<b>${meses.length}</b> de 12 meses lançados`,
+      flush: meses.length > 0,
+    });
+  }).join('');
+
+  return `
+    <div class="painel-topo-sub">
+      <button class="eye-toggle" onclick="setPainelEditandoContratos(${painelEditandoContratos?'false':'true'})">${painelEditandoContratos?'✕ Fechar':'👤 Quem é acompanhado'}</button>
+    </div>
+    ${editor}
+    <div class="painel-grid">
+      <div>${formulario}</div>
+      <div>${quadros}</div>
+    </div>
+  `;
+}
+
+function setPainelContratoMesDireto(mes){ painelContratoMes = mes; carregarFormContratos(); render(); }
 
 function renderPainelLancamento(vends){
   const jaExiste = !!getRelatorio(painelVendedor, painelMes);
@@ -5445,6 +5683,7 @@ function boot(){
     tryLoadRelatoriosFromStorageAsync(),
     tryLoadPainelTotaisAsync(),
     tryLoadPainelVendedorasAsync(),
+    tryLoadPainelContratosAsync(),
   ];
   Promise.allSettled(loaders).then(function(){
     initialDataLoaded = true;

@@ -28,6 +28,8 @@ create table if not exists relatorios_equipe (
   prospeccao numeric not null default 0,
   negocios_abertos numeric not null default 0,
   reunioes numeric not null default 0,
+  -- contratos assinados: só o grupo de "contratos e reuniões" usa (migração 9)
+  contratos numeric not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique(ano, mes, vendedor)

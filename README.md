@@ -29,6 +29,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_painel_equipe_migration.sql → migração 6: painel de relatórios mensais da equipe
 ├── supabase_vendedor_responsavel_migration.sql → migração 7: quem efetivamente vendeu (Sistema e Cursos)
 ├── supabase_vendas_curso_por_vendedora_migration.sql → migração 8: divide o faturamento do curso entre as vendedoras
+├── supabase_contratos_reunioes_migration.sql → migração 9: grupo de contratos e reuniões (Davidson e quem mais entrar)
 └── .gitignore
 ```
 
@@ -82,8 +83,9 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 7. Rode `supabase_painel_equipe_migration.sql` — cria a tabela do Painel da Equipe, a view `painel_equipe_totais` (que calcula os indicadores de venda) e a lista de quem aparece no painel.
 8. Rode `supabase_vendedor_responsavel_migration.sql` — cria a coluna "Quem vendeu" nas abas Sistema e Cursos, e faz o painel contar uma venda por pessoa.
 9. Rode `supabase_vendas_curso_por_vendedora_migration.sql` — troca o "quem vendeu" do curso pela divisão do faturamento por vendedora.
-10. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
-11. Só depois publique esta versão atualizada do `index.html`.
+10. Rode `supabase_contratos_reunioes_migration.sql` — cria o grupo de contratos e reuniões.
+11. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
+12. Só depois publique esta versão atualizada do `index.html`.
 
 ⚠️ A partir da migração 3, o `index.html` lê pelas views `_safe`. Uma versão antiga do front, apontando para as tabelas base, mostraria tudo vazio para as contas restritas — publique o `index.html` desta versão junto.
 
@@ -98,11 +100,11 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `lancamento_vendas` | Divisão do faturamento de um curso entre quem vendeu (sem relação com comissão) |
 | `bonus` | Bônus e metas batidas |
 | `metas` | Regras de meta: gatilho da empresa + prêmio de quem bate |
-| `relatorios_equipe` | Indicadores mensais de andamento da equipe, digitados (Painel da Equipe) |
+| `relatorios_equipe` | Indicadores mensais digitados: andamento da equipe e contratos/reuniões (Painel da Equipe) |
 | `partners` | Parceiros cadastrados |
 | `venda_products` | Catálogo de produtos da aba Sistema |
 | `sellers` | Vendedoras do Sistema (lista editável) |
-| `entity_vendors` | Vendedores(as) por aba (Consultoria / Órgãos Públicos / Cursos) e quem aparece no Painel da Equipe (`entidade='painel'`) |
+| `entity_vendors` | Vendedores(as) por aba (Consultoria / Órgãos Públicos / Cursos), quem aparece no Painel da Equipe (`entidade='painel'`) e quem é acompanhado por contratos/reuniões (`entidade='painel_contratos'`) |
 | `closed_months` | Meses fechados para edição |
 | `extra_years` | Anos adicionados manualmente |
 | `app_user_access` | Nível de acesso de cada conta de login (admin ou restrita + nome pra filtrar) |
@@ -234,6 +236,16 @@ No ranking, cada indicador mostra quem liderou; **quem empata aparece junto**, c
 O ano vem do filtro no topo da página — não é fixo.
 
 > **Contas restritas veem o ranking e o comparativo**, com os números de todo mundo — foi uma escolha de quem administra o sistema, para o painel funcionar como placar da equipe. O que elas continuam **não** vendo é o que está por trás desses números: cliente, contrato, percentual e comissão dos colegas seguem escondidos, porque a view `painel_equipe_totais` devolve só os totais por pessoa/mês. Lançar e editar continua sendo exclusivo de admin.
+
+### Contratos e reuniões
+
+Nem todo mundo do comercial é medido pelos mesmos indicadores. Quem **não vende**, mas assina contratos e faz reuniões — o Davidson é o primeiro caso — tem uma aba própria dentro do painel: **"Contratos e reuniões"**.
+
+É uma **lista separada** da de vendedoras, com **dois indicadores** por pessoa e por mês: *contratos assinados* e *reuniões realizadas*. Escolhe-se a pessoa, o mês, digita os dois números e salva. Ao lado, cada pessoa tem um quadro com os meses lançados e o total do ano.
+
+Para incluir alguém, use **"Quem é acompanhado"** no topo da aba: marque quem já existe no sistema, ou cadastre um nome novo pelo botão do fim da lista. A lista fica no banco (`entity_vendors` com `entidade='painel_contratos'`), então vale para todo mundo.
+
+> Quem está nessa lista **não entra no ranking de vendas** e não aparece nos cartões do dashboard — o ranking mede quem vende, e essas pessoas são medidas por outra coisa. As duas listas são independentes: a mesma pessoa pode estar nas duas, se fizer sentido.
 
 ## Metas e bônus
 
