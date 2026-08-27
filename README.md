@@ -29,7 +29,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_painel_equipe_migration.sql → migração 6: painel de relatórios mensais da equipe
 ├── supabase_vendedor_responsavel_migration.sql → migração 7: quem efetivamente vendeu (Sistema e Cursos)
 ├── supabase_vendas_curso_por_vendedora_migration.sql → migração 8: divide o faturamento do curso entre as vendedoras
-├── supabase_contratos_reunioes_migration.sql → migração 9: grupo de contratos e reuniões (Davidson e quem mais entrar)
+├── supabase_contratos_reunioes_migration.sql → migração 9: equipe de consultoria (contratos e reuniões)
 └── .gitignore
 ```
 
@@ -83,7 +83,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 7. Rode `supabase_painel_equipe_migration.sql` — cria a tabela do Painel da Equipe, a view `painel_equipe_totais` (que calcula os indicadores de venda) e a lista de quem aparece no painel.
 8. Rode `supabase_vendedor_responsavel_migration.sql` — cria a coluna "Quem vendeu" nas abas Sistema e Cursos, e faz o painel contar uma venda por pessoa.
 9. Rode `supabase_vendas_curso_por_vendedora_migration.sql` — troca o "quem vendeu" do curso pela divisão do faturamento por vendedora.
-10. Rode `supabase_contratos_reunioes_migration.sql` — cria o grupo de contratos e reuniões.
+10. Rode `supabase_contratos_reunioes_migration.sql` — cria a equipe de consultoria (contratos e reuniões).
 11. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
 12. Só depois publique esta versão atualizada do `index.html`.
 
@@ -237,13 +237,13 @@ O ano vem do filtro no topo da página — não é fixo.
 
 > **Contas restritas veem o ranking e o comparativo**, com os números de todo mundo — foi uma escolha de quem administra o sistema, para o painel funcionar como placar da equipe. O que elas continuam **não** vendo é o que está por trás desses números: cliente, contrato, percentual e comissão dos colegas seguem escondidos, porque a view `painel_equipe_totais` devolve só os totais por pessoa/mês. Lançar e editar continua sendo exclusivo de admin.
 
-### Contratos e reuniões
+### Equipe de consultoria
 
-Nem todo mundo do comercial é medido pelos mesmos indicadores. Quem **não vende**, mas assina contratos e faz reuniões — o Davidson é o primeiro caso — tem uma aba própria dentro do painel: **"Contratos e reuniões"**.
+Nem todo mundo é medido pelos mesmos indicadores. A **equipe de consultoria** — o Davidson é o primeiro caso — não vende: assina contratos e faz reuniões. Por isso tem uma aba própria dentro do painel, chamada **"Equipe de consultoria"**.
 
 É uma **lista separada** da de vendedoras, com **dois indicadores** por pessoa e por mês: *contratos assinados* e *reuniões realizadas*. Escolhe-se a pessoa, o mês, digita os dois números e salva. Ao lado, cada pessoa tem um quadro com os meses lançados e o total do ano.
 
-Para incluir alguém, use **"Quem é acompanhado"** no topo da aba: marque quem já existe no sistema, ou cadastre um nome novo pelo botão do fim da lista. A lista fica no banco (`entity_vendors` com `entidade='painel_contratos'`), então vale para todo mundo.
+Para incluir alguém, use **"Quem está na equipe"** no topo da aba: marque quem já existe no sistema, ou cadastre um nome novo pelo botão do fim da lista. A lista fica no banco (`entity_vendors` com `entidade='painel_contratos'`), então vale para todo mundo.
 
 > Quem está nessa lista **não entra no ranking de vendas** e não aparece nos cartões do dashboard — o ranking mede quem vende, e essas pessoas são medidas por outra coisa. As duas listas são independentes: a mesma pessoa pode estar nas duas, se fizer sentido.
 

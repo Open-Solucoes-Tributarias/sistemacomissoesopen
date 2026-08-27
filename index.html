@@ -4852,7 +4852,9 @@ function pessoasConhecidas(){
   return out.sort(function(a,b){ return a.localeCompare(b, 'pt-BR', {sensitivity:'base'}); });
 }
 
-/* ---------- Grupo de contratos e reuniões (Davidson e quem mais entrar) ---------- */
+/* ---------- Equipe de consultoria (Davidson e quem mais entrar) ----------
+   Aba própria do painel: gente medida por contratos assinados e reuniões
+   realizadas, não pelo ranking de vendas. */
 const PAINEL_CONTRATOS_PADRAO = ['Davidson'];
 let painelContratos = null;
 let painelEditandoContratos = false;
@@ -4904,7 +4906,7 @@ function togglePessoaContratos(nome){
 
 function adicionarPessoaContratos(){
   if(!isAdmin) return;
-  showPrompt('Nome de quem entra no acompanhamento de contratos e reuniões:', function(nome){
+  showPrompt('Nome de quem entra na equipe de consultoria:', function(nome){
     if(!nome) return;
     const t = String(nome).trim();
     if(!t) return;
@@ -5211,7 +5213,7 @@ function renderPainelSection(){
     <div class="painel-abas">
       <button class="painel-aba${painelAba==='lancamento'?' active':''}" onclick="setPainelAba('lancamento')">Lançamento</button>
       <button class="painel-aba${painelAba==='dashboard'?' active':''}" onclick="setPainelAba('dashboard')">Dashboard</button>
-      <button class="painel-aba${painelAba==='contratos'?' active':''}" onclick="setPainelAba('contratos')">Contratos e reuniões</button>
+      <button class="painel-aba${painelAba==='contratos'?' active':''}" onclick="setPainelAba('contratos')">Equipe de consultoria</button>
     </div>` : '';
   const btnEquipe = (isAdmin && painelAba !== 'contratos') ? `
     <button class="eye-toggle" onclick="setPainelEditandoEquipe(${painelEditandoEquipe ? 'false' : 'true'})"
@@ -5263,15 +5265,15 @@ function renderPainelSection(){
   `;
 }
 
-/* Aba "Contratos e reuniões": lista própria de pessoas, dois indicadores.
+/* Aba "Equipe de consultoria": lista própria de pessoas, dois indicadores.
    Não entra no ranking de vendas — quem é medido assim não vende. */
 function renderPainelContratos(){
   const pessoas = pessoasDeContratos();
   if(painelContratoPessoa && pessoas.indexOf(painelContratoPessoa) === -1) painelContratoPessoa = null;
   if(!painelContratoPessoa && pessoas.length){ painelContratoPessoa = pessoas[0]; carregarFormContratos(); }
 
-  const editor = painelEditandoContratos ? panel('painel-contratos-quem', 'Quem é acompanhado assim', `
-    <div class="painel-equipe-nota">Estas pessoas são medidas por contratos assinados e reuniões realizadas, e não pelo ranking de vendas. Desmarcar alguém só tira desta lista.</div>
+  const editor = painelEditandoContratos ? panel('painel-contratos-quem', 'Quem está na equipe de consultoria', `
+    <div class="painel-equipe-nota">A equipe de consultoria é medida por contratos assinados e reuniões realizadas, e não pelo ranking de vendas. Desmarcar alguém só tira desta lista.</div>
     <div class="painel-equipe-lista">
       ${pessoasConhecidas().map(function(n){
         const on = pessoas.some(function(v){ return name_matches_client(v, n); });
@@ -5287,10 +5289,10 @@ function renderPainelContratos(){
   if(!pessoas.length){
     return `
       <div class="painel-topo-sub">
-        <button class="eye-toggle" onclick="setPainelEditandoContratos(${painelEditandoContratos?'false':'true'})">${painelEditandoContratos?'✕ Fechar':'👤 Quem é acompanhado'}</button>
+        <button class="eye-toggle" onclick="setPainelEditandoContratos(${painelEditandoContratos?'false':'true'})">${painelEditandoContratos?'✕ Fechar':'👤 Quem está na equipe'}</button>
       </div>
       ${editor}
-      <div class="meta-empty" style="padding:24px;">Ninguém nesta lista ainda. Use “Quem é acompanhado” para incluir alguém.</div>`;
+      <div class="meta-empty" style="padding:24px;">Ninguém na equipe de consultoria ainda. Use “Quem está na equipe” para incluir alguém.</div>`;
   }
 
   const chips = pessoas.map(function(v){
@@ -5357,7 +5359,7 @@ function renderPainelContratos(){
 
   return `
     <div class="painel-topo-sub">
-      <button class="eye-toggle" onclick="setPainelEditandoContratos(${painelEditandoContratos?'false':'true'})">${painelEditandoContratos?'✕ Fechar':'👤 Quem é acompanhado'}</button>
+      <button class="eye-toggle" onclick="setPainelEditandoContratos(${painelEditandoContratos?'false':'true'})">${painelEditandoContratos?'✕ Fechar':'👤 Quem está na equipe'}</button>
     </div>
     ${editor}
     <div class="painel-grid">
