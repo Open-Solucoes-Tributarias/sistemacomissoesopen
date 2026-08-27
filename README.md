@@ -227,6 +227,8 @@ No ranking, cada indicador mostra quem liderou; **quem empata aparece junto**, c
 
 > **Por que não é uma soma de pontos.** A primeira versão dava N pontos ao 1º lugar, N−1 ao 2º e assim por diante. Num time de quatro, quatro segundos lugares (3+3+3+3 = 12) valiam mais que uma liderança isolada, e acabava campeã quem não tinha vencido nada — foi exatamente o que apareceu num mês real, com a segunda colocada de todos os indicadores no topo. Contar lideranças resolve isso.
 
+> Os totais de venda são calculados pelo banco, e o painel os relê **depois de cada gravação** nas abas Sistema e Cursos, além de toda vez que a aba é aberta. Não precisa recarregar a página para o mês aparecer.
+
 **Quem aparece** — o painel tem a **própria lista de pessoas**, separada da lista de vendedoras do sistema, porque ele acompanha só a equipe comercial que lança andamento. Hoje são **Angela, Rios, Uilma e Luciana**. Quem é admin muda isso pelo botão **"Quem aparece"** no topo do painel, marcando ou desmarcando nomes — desmarcar alguém só tira do painel, não mexe em lançamento, comissão nem em nenhuma outra aba. A lista fica no banco (`entity_vendors` com `entidade='painel'`), então vale para todo mundo.
 
 O ano vem do filtro no topo da página — não é fixo.

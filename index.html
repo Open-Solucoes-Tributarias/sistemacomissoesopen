@@ -1358,6 +1358,7 @@ function persist(){
         });
         if(comissaoRows.length) await sbUpsert('vendas_comissoes', comissaoRows, 'venda_id,seller_key');
         saveError = false;
+        agendarRefreshPainel();   // "quem vendeu" e o valor alimentam o painel
       } catch(e){
         console.error('Falha ao salvar vendas', e);
         saveError = true;
@@ -1467,6 +1468,7 @@ function persistEntityRows(key){
         }
 
         saveError = false;
+        if(cfg.hasVendasPorVendedor) agendarRefreshPainel();
       } catch(e){
         console.error('Falha ao salvar '+key, e);
         saveError = true;
@@ -1762,6 +1764,21 @@ function persistRelatorios(){
 /* Totais por pessoa/mês, com os indicadores de venda já calculados pelo
    banco. Vem de uma view que devolve só os agregados — é o que permite o
    ranking aparecer para toda a equipe sem abrir contratos e comissões. */
+/* Os totais do painel são calculados pelo banco (view painel_equipe_totais)
+   e vinham só uma vez, no carregamento da página. Então, ao lançar uma venda
+   ou dividir o faturamento de um curso, o painel continuava mostrando a foto
+   antiga até alguém recarregar — parecia que o mês "não estava puxando".
+   Agora ele é recarregado depois de cada gravação que possa mexer nele, e ao
+   entrar na aba. O atraso junta várias edições seguidas numa leitura só. */
+let painelRefreshTimer = null;
+function agendarRefreshPainel(){
+  if(painelRefreshTimer) clearTimeout(painelRefreshTimer);
+  painelRefreshTimer = setTimeout(function(){
+    painelRefreshTimer = null;
+    tryLoadPainelTotaisAsync();
+  }, 700);
+}
+
 async function tryLoadPainelTotaisAsync(){
   try{
     const dbRows = await sbSelect('painel_equipe_totais','select=*');
@@ -5313,7 +5330,13 @@ function renderPainelDashboard(vends){
 
 /* ---------------- App shell ---------------- */
 
-function setTab(t){ activeTab = t; render(); }
+function setTab(t){
+  activeTab = t;
+  // Ao abrir o painel, relê os totais: eles podem ter mudado em outra aba
+  // (ou por outra pessoa) desde que a página abriu.
+  if(t === 'painel') tryLoadPainelTotaisAsync();
+  render();
+}
 
 function render(){
   const root = document.getElementById('root');
