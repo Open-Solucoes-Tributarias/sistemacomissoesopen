@@ -232,7 +232,10 @@
 
   /* ---------- Relatório mensal (só existe na impressão) ---------- */
   #relatorio-print{display:none;}
-  .rel-doc{color:#111;font-family:var(--font);font-size:10.5px;line-height:1.45;}
+  .rel-doc{
+    color:#111;font-family:var(--font);font-size:10.5px;line-height:1.45;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;   /* cores dos gráficos saem no papel */
+  }
   .rel-cabecalho{
     display:flex;justify-content:space-between;align-items:flex-end;gap:16px;
     border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:16px;
@@ -263,6 +266,30 @@
   .rel-tabela td.destaque{font-weight:800;}
   .rel-tabela td.mini{font-size:9px;color:#444;}
   .rel-vazio{font-size:9.5px;color:#777;font-style:italic;margin:4px 0 0;}
+  .rel-ranking{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;margin-bottom:9px;}
+  .rel-ranking-item{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:4px 7px;border:1px solid #e0e0e0;border-radius:4px;font-size:9.5px;
+  }
+  .rel-lideres{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+  .rel-lider{display:inline-flex;align-items:center;gap:3px;font-weight:700;}
+  .rel-lider i{width:7px;height:7px;border-radius:2px;display:inline-block;}
+  .rel-sem{color:#999;font-style:italic;}
+  .rel-campea{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+    border:1.5px solid #333;border-radius:5px;padding:8px 11px;margin-bottom:6px;
+  }
+  .rel-campea-rot{display:block;font-size:8.5px;text-transform:uppercase;letter-spacing:.05em;color:#666;font-weight:700;}
+  .rel-campea b{font-size:14px;}
+  .rel-campea-sub{display:block;font-size:9px;color:#666;}
+  .rel-campea-lista{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;font-size:9px;color:#555;}
+  .rel-nota{font-size:8.5px;color:#777;margin:0;}
+  .rel-graf{margin-bottom:14px;break-inside:avoid;}
+  .rel-graf h3{font-size:10px;font-weight:800;margin:0 0 4px;color:#333;}
+  .rel-legenda{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;font-size:9px;color:#555;}
+  .rel-legenda span{display:inline-flex;align-items:center;gap:4px;}
+  .rel-legenda i{width:8px;height:8px;border-radius:2px;display:inline-block;}
+  @media (max-width:640px){ .rel-ranking{grid-template-columns:1fr;} }
   .rel-rodape{margin-top:20px;padding-top:8px;border-top:1px solid #bbb;font-size:8.5px;color:#777;text-align:center;}
 
   @media print{
@@ -5287,7 +5314,7 @@ function montarRelatorioMes(mes){
       <td class="num destaque">${fmtMoney(g.total)}</td></tr>`;
   });
 
-  // Desempenho da equipe
+  // ---------- Desempenho da equipe: ranking, tabela e gráficos ----------
   const vendsPainel = vendedoresDoPainel();
   const linhasEquipe = vendsPainel.map(function(v){
     return `<tr><td>${esc(v)}</td>` + METRICAS.map(function(m){
@@ -5298,6 +5325,74 @@ function montarRelatorioMes(mes){
   const campeaoTxt = rk.campeoes.length
     ? rk.campeoes.map(function(c){ return c.vendedor; }).join(' e ') + ' — ' + rk.campeoes[0].vitorias + ' de ' + METRICAS.length + ' indicadores'
     : 'sem lançamentos neste mês';
+
+  const rankingHtml = `
+    <div class="rel-ranking">
+      ${rk.porMetrica.map(function(item){
+        return `<div class="rel-ranking-item">
+          <span>${esc(item.metrica)}</span>
+          ${item.lideres.length
+            ? `<span class="rel-lideres">${item.lideres.map(function(l){
+                 return `<span class="rel-lider"><i style="background:${esc(corDoVendedor(l.vendedor))}"></i>${esc(l.vendedor)}</span>`;
+               }).join('')}<b>${esc(item.formatado)}</b></span>`
+            : `<span class="rel-sem">sem dados</span>`}
+        </div>`;
+      }).join('')}
+    </div>
+    ${rk.campeoes.length ? `
+      <div class="rel-campea">
+        <div>
+          <span class="rel-campea-rot">${rk.campeoes.length > 1 ? 'Melhores do mês · empate' : 'Melhor do mês'}</span>
+          <b>${rk.campeoes.map(function(c){ return esc(c.vendedor); }).join(' e ')}</b>
+          <span class="rel-campea-sub">${rk.campeoes[0].vitorias} de ${METRICAS.length} indicadores vencidos</span>
+        </div>
+        <div class="rel-campea-lista">${rk.geral.map(function(g){
+          return `<span>${g.posicao}º ${esc(g.vendedor)} (${g.vitorias})</span>`;
+        }).join('')}</div>
+      </div>` : ''}
+    <p class="rel-nota">Vence quem liderar mais indicadores no mês. Empate conta vitória para todas as empatadas; quem está zerado num indicador não vence nele.</p>`;
+
+  // Gráficos: os mesmos do painel, com os dados do mês (barras) e do ano (linhas).
+  const legendaHtml = `<div class="rel-legenda">${vendsPainel.map(function(v){
+    return `<span><i style="background:${esc(corDoVendedor(v))}"></i>${esc(v)}</span>`;
+  }).join('')}</div>`;
+
+  const focoAntigo = painelMetricaFoco;
+  const graficosMes = ['vendasSistemas','vendasCursos','reunioes'].map(function(chave){
+    const m = METRICAS.find(function(x){ return x.key === chave; });
+    const dados = vendsPainel.map(function(v){ return {vendedor: v, valor: valorMetrica(v, mes, chave)}; });
+    if(!dados.some(function(d){ return d.valor > 0; })) return '';
+    return `<div class="rel-graf">
+      <h3>${esc(m.label)} — ${esc(mes)}</h3>
+      ${graficoBarrasPainel(dados)}
+    </div>`;
+  }).join('');
+
+  const graficosAno = ['vendasSistemas','vendasCursos'].map(function(chave){
+    const m = METRICAS.find(function(x){ return x.key === chave; });
+    const temAlgo = vendsPainel.some(function(v){
+      return MONTHS.some(function(mm){ return valorMetrica(v, mm, chave) > 0; });
+    });
+    if(!temAlgo) return '';
+    painelMetricaFoco = chave;
+    const svg = graficoLinhaPainel(vendsPainel);
+    return `<div class="rel-graf">
+      <h3>${esc(m.label)} — evolução em ${ano}</h3>
+      ${svg}
+      ${legendaHtml}
+    </div>`;
+  }).join('');
+  painelMetricaFoco = focoAntigo;
+
+  // Totais do ano por pessoa (volume vendido, não comissão)
+  const totaisAno = totaisPorVendedorPainel();
+  const linhasTotaisAno = vendsPainel.map(function(v){
+    const t = totaisAno[v] || {};
+    return `<tr><td>${esc(v)}</td>
+      <td class="num">${fmtMoney(t.vendasSistemas||0)}</td>
+      <td class="num">${(t.qtdSistemas||0).toLocaleString('pt-BR')}</td>
+      <td class="num">${fmtMoney(t.vendasCursos||0)}</td></tr>`;
+  });
 
   const consultoria = pessoasDeContratos();
   const linhasConsult = consultoria.map(function(v){
@@ -5381,9 +5476,31 @@ function montarRelatorioMes(mes){
 
       <section class="rel-sec quebra">
         <h2>Desempenho da equipe <span class="rel-sub">campeã do mês: ${esc(campeaoTxt)}</span></h2>
+        ${rankingHtml}
+      </section>
+
+      <section class="rel-sec">
+        <h2>Indicadores do mês</h2>
         ${relTabela(
           [{label:'Vendedora'}].concat(METRICAS.map(function(m){ return {label:m.label, num:true}; })),
           linhasEquipe, 'Nenhum indicador lançado em ' + mes + '.')}
+      </section>
+
+      ${graficosMes ? `<section class="rel-sec quebra">
+        <h2>Comparativo do mês</h2>
+        ${graficosMes}
+      </section>` : ''}
+
+      ${graficosAno ? `<section class="rel-sec quebra">
+        <h2>Evolução ao longo de ${ano}</h2>
+        ${graficosAno}
+      </section>` : ''}
+
+      <section class="rel-sec">
+        <h2>Totais do ano por vendedora <span class="rel-sub">volume vendido, não comissão</span></h2>
+        ${relTabela(
+          [{label:'Vendedora'},{label:'Vendido em sistemas',num:true},{label:'Qtd. sistemas',num:true},{label:'Vendido em cursos',num:true}],
+          linhasTotaisAno, 'Nenhuma venda registrada em ' + ano + '.')}
       </section>
 
       <section class="rel-sec">

@@ -261,8 +261,14 @@ O que entra:
 | Sistema, Consultoria, Órgãos Públicos, Cursos | os lançamentos do mês, com valor, quem vendeu, situação do pagamento e as comissões de cada linha |
 | Parceiros | honorários do mês, lançamento a lançamento |
 | Bônus e metas | bônus lançados e a situação de cada meta configurada |
-| Desempenho da equipe | os nove indicadores por pessoa e a campeã do mês |
+| Desempenho da equipe | o ranking completo — quem liderou cada indicador (com os empates) e o quadro da campeã do mês |
+| Indicadores do mês | os nove indicadores, pessoa por pessoa |
+| Comparativo do mês | gráficos de barras de vendas de sistemas, vendas de cursos e reuniões |
+| Evolução do ano | gráficos de linha das vendas de sistemas e de cursos ao longo dos 12 meses |
+| Totais do ano por vendedora | volume vendido no ano (não comissão) |
 | Equipe de consultoria | contratos assinados e reuniões realizadas |
+
+Os gráficos são os mesmos do painel, desenhados em SVG dentro da própria página — saem no papel com as cores certas, sem depender de imagem nem de biblioteca.
 
 O relatório usa o **ano selecionado** no topo da página. É exclusivo de admin — conta restrita não vê o botão, já que o documento mostra os números de toda a equipe.
 
