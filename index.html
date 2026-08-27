@@ -683,6 +683,7 @@
   }
   .painel-melhor-rot{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--ink-soft);}
   .painel-melhor-nome{font-size:19px;font-weight:800;color:var(--vc);margin-top:2px;}
+  .painel-melhor-sub{font-size:11.5px;font-weight:600;color:var(--ink-soft);margin-top:3px;}
   .painel-melhor-pontos{text-align:right;}
   .painel-melhor-pontos > div:last-child{display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-end;margin-top:4px;}
   .painel-melhor-pontos span{font-size:12px;font-weight:600;color:var(--ink-faint);}
@@ -4955,32 +4956,27 @@ function excluirPainelLancamento(vendedor, mes){
 
 /* Ranking do mês: em cada indicador, quem lidera soma N pontos, o segundo
    N-1, e assim por diante. Vence quem somar mais no conjunto. */
-/* Empate é empate: quem tem o mesmo número divide a posição e ganha os
-   mesmos pontos, e aparece junto na tela. Quem está zerado num indicador
-   não pontua nele — senão um indicador que ninguém lançou acabava
-   decidindo o ranking geral pela ordem da lista. */
+/* Campeã do mês = quem venceu MAIS INDICADORES, não quem somou mais
+   pontos. A soma de pontos premiava quem chegava em segundo lugar em
+   tudo: num time de 4, quatro segundos lugares valiam mais que uma
+   liderança, e acabava campeã quem não tinha vencido nada.
+
+   Aqui vale o que a Soraya pediu: conta quantas vezes o nome da pessoa
+   aparece liderando. Empate num indicador dá vitória para todas as
+   empatadas, e quem está zerado não vence nada. */
 function rankingDoMes(mes){
   const vends = vendedoresDoPainel();
-  const pontos = {};
-  vends.forEach(v => { pontos[v] = 0; });
+  const vitorias = {};
+  vends.forEach(v => { vitorias[v] = 0; });
 
   const porMetrica = METRICAS.map(m => {
     const valores = vends
       .map(v => ({ vendedor: v, valor: valorMetrica(v, mes, m.key) }))
       .sort((a,b) => b.valor - a.valor);
 
-    let i = 0;
-    while(i < valores.length){
-      let fim = i;
-      while(fim + 1 < valores.length && valores[fim+1].valor === valores[i].valor) fim++;
-      if(valores[i].valor > 0){
-        const p = vends.length - i;                       // posição do grupo empatado
-        for(let k = i; k <= fim; k++) pontos[valores[k].vendedor] += p;
-      }
-      i = fim + 1;
-    }
-
     const lideres = valores.filter(x => x.valor > 0 && x.valor === valores[0].valor);
+    lideres.forEach(l => { vitorias[l.vendedor] += 1; });
+
     return {
       metrica: m.label,
       lideres: lideres,
@@ -4989,14 +4985,16 @@ function rankingDoMes(mes){
     };
   });
 
-  const geral = vends.map(v => ({ vendedor: v, pontos: pontos[v] })).sort((a,b) => b.pontos - a.pontos);
-  // Posição de cada uma, com empate ocupando o mesmo lugar (1º, 1º, 3º...)
+  const geral = vends
+    .map(v => ({ vendedor: v, vitorias: vitorias[v] }))
+    .sort((a,b) => b.vitorias - a.vitorias);
+  // Empate ocupa o mesmo lugar (1º, 1º, 3º...)
   let pos = 0;
   geral.forEach(function(g, idx){
-    if(idx === 0 || g.pontos !== geral[idx-1].pontos) pos = idx + 1;
+    if(idx === 0 || g.vitorias !== geral[idx-1].vitorias) pos = idx + 1;
     g.posicao = pos;
   });
-  const campeoes = geral.filter(g => g.pontos > 0 && g.pontos === geral[0].pontos);
+  const campeoes = geral.filter(g => g.vitorias > 0 && g.vitorias === geral[0].vitorias);
   return { porMetrica, geral, campeoes };
 }
 
@@ -5257,15 +5255,16 @@ function renderPainelDashboard(vends){
         ${rk.campeoes.length ? `
         <div class="painel-melhor" style="--vc:${esc(corDoVendedor(rk.campeoes[0].vendedor))}">
           <div>
-            <div class="painel-melhor-rot">${rk.campeoes.length > 1 ? `Melhores do mês · empate em ${rk.campeoes[0].pontos} pontos` : 'Melhor do mês · visão geral'}</div>
+            <div class="painel-melhor-rot">${rk.campeoes.length > 1 ? `Melhores do mês · empate em ${rk.campeoes[0].vitorias} indicador${rk.campeoes[0].vitorias===1?'':'es'}` : 'Melhor do mês · visão geral'}</div>
             <div class="painel-melhor-nome">${rk.campeoes.map(c => esc(c.vendedor)).join(' e ')}</div>
+            <div class="painel-melhor-sub">${rk.campeoes[0].vitorias} de ${METRICAS.length} indicador${rk.campeoes[0].vitorias===1?'':'es'} vencido${rk.campeoes[0].vitorias===1?'':'s'}</div>
           </div>
           <div class="painel-melhor-pontos">
-            <div class="painel-melhor-rot">Pontuação combinada</div>
-            <div>${rk.geral.map(g => `<span class="${g.posicao===1&&g.pontos>0?'destaque':''}">${g.posicao}º ${esc(g.vendedor)} (${g.pontos})</span>`).join('')}</div>
+            <div class="painel-melhor-rot">Indicadores vencidos</div>
+            <div>${rk.geral.map(g => `<span class="${g.posicao===1&&g.vitorias>0?'destaque':''}">${g.posicao}º ${esc(g.vendedor)} (${g.vitorias})</span>`).join('')}</div>
           </div>
         </div>` : ''}
-        <div class="painel-nota">Em cada indicador, o 1º lugar soma ${vends.length} pontos, o 2º soma ${vends.length-1}, e assim por diante. Quem empata divide a posição e ganha os mesmos pontos; quem está zerado num indicador não pontua nele. Vence quem somar mais nos ${METRICAS.length} indicadores.</div>
+        <div class="painel-nota">Vence quem <b>liderar mais indicadores</b> no mês, dos ${METRICAS.length}. Empate num indicador conta vitória para todas as empatadas; quem está zerado num indicador não vence nele. Não há pontuação por 2º ou 3º lugar — só a liderança conta.</div>
       `;
     ranking = panel('painel-ranking', 'Ranking do mês', corpo, {
       actions: `<label class="ordem-wrap"><span>Mês</span>

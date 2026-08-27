@@ -217,10 +217,15 @@ A aba **Consultoria** e a de **Órgãos Públicos** não têm essa coluna — o 
 
 **Dashboard** — cartões com o total do ano por pessoa, **ranking do mês**, gráfico de barras comparando as pessoas num indicador, evolução mensal em linhas ao longo dos 12 meses, e a tabela de totais anuais.
 
-No ranking, cada indicador mostra quem liderou; **quem empata aparece junto**, com o valor uma vez só. A pontuação combinada dá N pontos ao 1º lugar, N−1 ao 2º e assim por diante, com duas regras:
+No ranking, cada indicador mostra quem liderou; **quem empata aparece junto**, com o valor uma vez só.
 
-- **Empate divide a posição** e rende os mesmos pontos às duas (1º, 1º, 3º…). Se o empate for no topo geral, o quadro mostra as duas como melhores do mês.
-- **Quem está zerado num indicador não pontua nele** — senão um indicador que ninguém lançou acabava decidindo o ranking pela ordem da lista.
+**A campeã do mês é quem liderou mais indicadores** — conta-se quantas vezes o nome da pessoa aparece na frente, e pronto. Não há pontuação por 2º ou 3º lugar.
+
+- Empate num indicador conta **vitória para todas as empatadas**.
+- Quem está **zerado** num indicador não vence nele.
+- Se duas pessoas terminarem com o mesmo número de vitórias, o quadro mostra as duas como melhores do mês.
+
+> **Por que não é uma soma de pontos.** A primeira versão dava N pontos ao 1º lugar, N−1 ao 2º e assim por diante. Num time de quatro, quatro segundos lugares (3+3+3+3 = 12) valiam mais que uma liderança isolada, e acabava campeã quem não tinha vencido nada — foi exatamente o que apareceu num mês real, com a segunda colocada de todos os indicadores no topo. Contar lideranças resolve isso.
 
 **Quem aparece** — o painel tem a **própria lista de pessoas**, separada da lista de vendedoras do sistema, porque ele acompanha só a equipe comercial que lança andamento. Hoje são **Angela, Rios, Uilma e Luciana**. Quem é admin muda isso pelo botão **"Quem aparece"** no topo do painel, marcando ou desmarcando nomes — desmarcar alguém só tira do painel, não mexe em lançamento, comissão nem em nenhuma outra aba. A lista fica no banco (`entity_vendors` com `entidade='painel'`), então vale para todo mundo.
 
