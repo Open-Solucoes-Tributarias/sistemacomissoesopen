@@ -100,7 +100,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | Tabela | Conteúdo |
 |---|---|
 | `vendas` | Lançamentos da aba Sistema (inclui `vendedor_responsavel` — quem efetivamente fez a venda) |
-| `vendas_comissoes` | Comissão de cada vendedor(a) por lançamento do Sistema |
+| `vendas_comissoes` | Comissão de cada vendedor(a) por lançamento do Sistema (valor e, opcionalmente, a % que o gerou) |
 | `lancamentos` | Lançamentos de Consultoria, Consultoria Órgãos Públicos e Cursos (uma tabela só, filtrada pela coluna `entidade`) |
 | `lancamentos_extra_vendedores` | Vendedores extras (4º em diante) por lançamento |
 | `lancamento_vendas` | Divisão do faturamento de um curso entre quem vendeu (sem relação com comissão) |
@@ -195,6 +195,17 @@ São nove indicadores por vendedora, por mês, divididos em dois grupos:
 **Os três indicadores de venda não são mais digitados.** Quem faz a soma é a view `painel_equipe_totais` no banco:
 
 Os três saem da coluna **"Quem vendeu"** dos lançamentos: cada venda conta para **uma pessoa só**, a que estiver marcada ali. Lançamento sem essa marcação não conta para ninguém, e o sistema avisa quantos estão assim.
+
+### Comissão por percentual (aba Sistema)
+
+Na aba Sistema, cada coluna de vendedora tem **dois campos**: a **%** em cima e o **valor em R$** embaixo.
+
+- Preencheu a **%**? O valor sai calculado na hora, e fica em azul para você saber que veio de uma taxa. Se o valor do contrato ou a participação do parceiro mudarem depois, a comissão **se refaz sozinha**.
+- Prefere digitar o **valor** direto? Digite embaixo — a % é limpa e aquele valor fica fixo.
+
+A base do cálculo é a mesma das outras abas: o valor do contrato **menos a parte do parceiro**. Num contrato de R$ 10.000 com parceiro de 20%, uma comissão de 5% dá R$ 400 (5% de R$ 8.000), não R$ 500.
+
+> Lançamentos antigos não mudaram: continuam com o valor que já tinha e a % vazia. O valor em R$ segue sendo o que alimenta todos os relatórios — a % só serve para calcular.
 
 ### Quem vendeu ≠ quem ganha comissão
 

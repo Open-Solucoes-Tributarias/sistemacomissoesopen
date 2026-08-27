@@ -536,6 +536,14 @@
   .pct-wrap input{text-align:right;padding-right:2px;}
   .pct-suffix{color:var(--ink-faint);font-size:12px;font-weight:600;padding-right:10px;user-select:none;}
   .pct-disabled{display:block;text-align:right;padding-right:14px;color:var(--ink-faint);}
+  /* Comissão do Sistema: % em cima, valor embaixo */
+  .com-cell{padding:4px 0 !important;min-width:96px;}
+  .com-cell .pct-wrap input.pct-mini{
+    font-size:11.5px;padding:2px 0;color:var(--ink-soft);font-weight:600;
+  }
+  .com-cell .pct-wrap .pct-suffix{font-size:10.5px;padding-right:8px;}
+  .com-cell.por-pct .pct-wrap input.pct-mini{color:var(--primary);font-weight:800;}
+  .com-cell.por-pct input[data-field]{color:var(--primary);font-weight:700;}
   .col-pct{width:110px;}
   .extra-vendedores-btn{
     background:var(--primary-soft);border:1px solid var(--ring);color:var(--primary);
@@ -1462,7 +1470,7 @@ function checkStorageAvailability(){
 }
 
 /* ---------- Sistema (vendas + vendas_comissoes) ---------- */
-const VENDA_NON_SELLER_FIELDS = new Set(['id','ano','mes','cliente','venda','valor','parceiro','participacao','formaPagamento','colaborador','observacoes','vendedor2','vendedor3','vendedorResponsavel','pago','mesPagamento','parcelaLabel']);
+const VENDA_NON_SELLER_FIELDS = new Set(['id','ano','mes','cliente','venda','valor','parceiro','participacao','formaPagamento','colaborador','observacoes','vendedor2','vendedor3','vendedorResponsavel','pago','mesPagamento','parcelaLabel','comissaoPercents']);
 
 function persist(){
   saving = true; updateSaveStatus();
@@ -1491,7 +1499,10 @@ function persist(){
         rows.forEach(function(r){
           Object.keys(r).forEach(function(k){
             if(VENDA_NON_SELLER_FIELDS.has(k)) return;
-            comissaoRows.push({ venda_id: r.id, seller_key: k, valor: numOrNull(r[k]) });
+            comissaoRows.push({
+              venda_id: r.id, seller_key: k, valor: numOrNull(r[k]),
+              percent: numOrNull((r.comissaoPercents||{})[k]),
+            });
           });
         });
         if(comissaoRows.length) await sbUpsert('vendas_comissoes', comissaoRows, 'venda_id,seller_key');
@@ -1514,9 +1525,14 @@ async function tryLoadFromStorageAsync(){
     carregouDoBanco.vendas = true;
     if(dbRows && dbRows.length){
       const bySellerByVenda = {};
+      const pctBySellerByVenda = {};
       (comissoes||[]).forEach(function(c){
         if(!bySellerByVenda[c.venda_id]) bySellerByVenda[c.venda_id] = {};
         bySellerByVenda[c.venda_id][c.seller_key] = c.valor;
+        if(c.percent !== null && c.percent !== undefined){
+          if(!pctBySellerByVenda[c.venda_id]) pctBySellerByVenda[c.venda_id] = {};
+          pctBySellerByVenda[c.venda_id][c.seller_key] = c.percent;
+        }
       });
       rows = dbRows.map(function(d){
         const r = {
@@ -1530,6 +1546,7 @@ async function tryLoadFromStorageAsync(){
         SELLERS.forEach(function(s){ r[s.key] = null; });
         const sellerVals = bySellerByVenda[d.id] || {};
         Object.keys(sellerVals).forEach(function(k){ r[k] = sellerVals[k]; });
+        r.comissaoPercents = pctBySellerByVenda[d.id] || {};
         return r;
       });
       migrateYear(rows, 2026);
@@ -3087,7 +3104,8 @@ function parcelarRow(id){
     r.parcelaLabel = `1/${n}`;
     for(let i=1;i<n;i++){
       const nm = nextMonthYear(origMes, origAno, i);
-      const copy = {...r, id: nextId++, mes: nm.mes, ano: nm.ano, valor: amounts[i], pago:false, mesPagamento:null, parcelaLabel:`${i+1}/${n}`};
+      const copy = {...r, id: nextId++, mes: nm.mes, ano: nm.ano, valor: amounts[i], pago:false, mesPagamento:null, parcelaLabel:`${i+1}/${n}`, comissaoPercents: Object.assign({}, r.comissaoPercents)};
+      recalcComissoesPorPercent(copy);
       rows.push(copy);
     }
     persist();
@@ -3900,6 +3918,65 @@ function vendasSemResponsavel(){
   });
 }
 
+/* ---------- Comissão do Sistema por percentual ----------
+   A comissão de cada vendedora continua guardada em reais — é dela que
+   sai todo o resto do sistema. A % é opcional: quando preenchida, o valor
+   passa a ser calculado por ela e se refaz sozinho se o contrato ou a
+   participação do parceiro mudarem. Digitar o valor à mão limpa a %.
+   A base é a mesma das outras abas: o contrato menos a parte do parceiro. */
+function vendaBaseComissao(r){
+  const v = Number(r.valor)||0;
+  if(!r.parceiro) return v;
+  return v - (v * (parsePercent(r.participacao)/100));
+}
+
+function recalcComissoesPorPercent(r){
+  const pcts = r.comissaoPercents || {};
+  const base = vendaBaseComissao(r);
+  let mudou = false;
+  Object.keys(pcts).forEach(function(k){
+    const p = pcts[k];
+    if(p === null || p === undefined || p === '') return;
+    r[k] = base * (Number(p)/100);
+    mudou = true;
+  });
+  return mudou;
+}
+
+/* Escreve os valores recalculados direto nos campos, sem re-renderizar a
+   tabela inteira — assim quem está digitando não perde o cursor. */
+function pintarComissoesDaLinha(r){
+  SELLERS.forEach(function(sv){
+    const el = document.querySelector('input[data-id="' + r.id + '"][data-field="' + sv.key + '"]');
+    if(!el) return;
+    const v = r[sv.key];
+    const novo = (v === null || v === undefined) ? '' : String(Math.round(Number(v)*100)/100);
+    if(el.value !== novo && document.activeElement !== el) el.value = novo;
+  });
+}
+
+function onComissaoPctInput(el){
+  const id = Number(el.dataset.id), key = el.dataset.seller;
+  const r = rows.find(function(x){ return x.id === id; });
+  if(!r) return;
+  if(isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    render();
+    return;
+  }
+  if(!r.comissaoPercents) r.comissaoPercents = {};
+  const pct = numOrNull(el.value);
+  if(pct === null){
+    delete r.comissaoPercents[key];          // voltou a ser valor digitado à mão
+  } else {
+    r.comissaoPercents[key] = pct;
+    r[key] = vendaBaseComissao(r) * (pct/100);
+    pintarComissoesDaLinha(r);
+  }
+  persist();
+  updateSummaries();
+}
+
 function onVendaSelect(el){
   const id = Number(el.dataset.id);
   if(el.value === '__new__'){
@@ -3946,12 +4023,17 @@ function updateCell(id, field, value){
     render();
     return;
   }
+  // Valor de comissão digitado à mão deixa de seguir a %.
+  if(!VENDA_NON_SELLER_FIELDS.has(field) && r.comissaoPercents) delete r.comissaoPercents[field];
   r[field] = value;
+  // Mudou o contrato ou a fatia do parceiro: as comissões com % se refazem.
+  if(field === "valor" || field === "participacao" || field === "parceiro") recalcComissoesPorPercent(r);
   persist();
   if(field === "mes" || field === "parceiro") render();
   else {
     updateSummaries();
     if(field === "valor" || field === "participacao"){
+      pintarComissoesDaLinha(r);
       updateRowPartnerCalc(id);
     }
   }
@@ -3974,7 +4056,8 @@ function addRow(){
                    parceiro:"", participacao:null, formaPagamento:"", colaborador:"", vendedor2:"", vendedor3:"",
                    vendedorResponsavel: sellerFilter !== "Todas" ? ((SELLERS.find(x => x.key === sellerFilter)||{}).label || "") : "",
                    pago:false, mesPagamento:null, observacoes:"",
-                   soraya:null, angela:null, rios:null, uilma:null, luciana:null};
+                   soraya:null, angela:null, rios:null, uilma:null, luciana:null,
+                   comissaoPercents:{}};
   if(sellerFilter !== "Todas"){
     newRow[sellerFilter] = 0;
   }
@@ -3998,7 +4081,7 @@ function deleteRow(id){
 function duplicateRow(id){
   const r = rows.find(r => r.id === id);
   if(!r) return;
-  const copy = {...r, id: nextId++};
+  const copy = {...r, id: nextId++, comissaoPercents: Object.assign({}, r.comissaoPercents)};
   rows.unshift(copy);
   persist();
   render();
@@ -4020,7 +4103,7 @@ function repeatRowForYear(id){
       remainingMonths.forEach(targetMonth => {
         const exists = rows.some(x => x.ano===r.ano && x.mes===targetMonth && (x.cliente||"")===(r.cliente||"") && (x.venda||"")===(r.venda||""));
         if(exists) return;
-        const copy = {...r, id: nextId++, mes: targetMonth};
+        const copy = {...r, id: nextId++, mes: targetMonth, comissaoPercents: Object.assign({}, r.comissaoPercents)};
         rows.push(copy);
       });
       persist();
@@ -4258,7 +4341,17 @@ function renderVendasSection(){
           ${row.pago ? `<select data-id="${row.id}" onchange="onPagamentoMesSelect(this)">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthNumber(m)}</option>`).join('')}</select>` : ''}
         </td>
         <td class="obs-cell"><input type="text" data-id="${row.id}" data-field="observacoes" value="${esc(row.observacoes)}" placeholder="Anotação livre..." oninput="onTextInput(this)" /></td>
-        ${visibleSellers.map(s => `<td>${numInputHtml(row,s.key)}</td>`).join('')}
+        ${visibleSellers.map(s => {
+          const pct = (row.comissaoPercents||{})[s.key];
+          const temPct = pct !== null && pct !== undefined && pct !== '';
+          return `<td class="com-cell${temPct ? ' por-pct' : ''}">
+            <div class="pct-wrap"><input class="num pct-mini" type="number" step="0.01" min="0" placeholder="" 
+                   value="${temPct ? esc(pct) : ''}" data-id="${row.id}" data-seller="${s.key}"
+                   title="Comissão em % do contrato (já descontado o parceiro). Deixe vazio para digitar o valor à mão."
+                   oninput="onComissaoPctInput(this)" /><span class="pct-suffix">%</span></div>
+            ${numInputHtml(row,s.key)}
+          </td>`;
+        }).join('')}
         <td class="del-cell">
           <div class="row-actions">
             <button class="action-btn" title="Duplicar" onclick="duplicateRow(${row.id})">⎘</button>

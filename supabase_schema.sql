@@ -61,6 +61,8 @@ create table vendas_comissoes (
   venda_id bigint not null references vendas(id) on delete cascade,
   seller_key text not null,
   valor numeric,
+  -- % opcional: quando preenchida, o valor acima é calculado por ela
+  percent numeric,
   unique(venda_id, seller_key)
 );
 
