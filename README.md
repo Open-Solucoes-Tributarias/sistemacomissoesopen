@@ -10,7 +10,13 @@ Sistema de controle de vendas, comissões, parceiros e pagamentos da equipe come
 
 ## Visual
 
-O sistema segue o mesmo padrão do **Gestão de Logística da Open**: barra lateral fixa com o menu agrupado (Visão geral / Lançamentos / Equipe), faixa de título em degradê marinho→azul no topo de cada aba, fundo azulado claro e cartões brancos de borda azul com cantos arredondados. Os cartões de indicador ficam levemente tingidos com a cor da pessoa ou do indicador.
+O sistema usa a **identidade da Open Soluções Tributárias**, a mesma do mapa de produto:
+
+- **A marca** — o globo de meridianos com "OPEN" e a assinatura — aparece na barra lateral, na faixa de título, na tela de login e no cabeçalho do relatório em PDF. É desenhada em **SVG dentro do próprio arquivo** (função `marcaOpenHtml`), então acompanha o tamanho pedido, imprime nítida e não depende de carregar imagem de fora (o que o CSP bloqueia).
+- **Faixa de título** em degradê marinho, com a marca à esquerda, um filete divisor, o rótulo em caixa alta espaçada e o nome da aba; à direita o exercício e o indicador de "salvo". Um globo d'água discreto no canto e um **filete azul claro** fechando embaixo, como no material impresso.
+- **Cartões** brancos com **filete azul no topo**, borda azul clara e cantos suaves. Nos indicadores o filete vem na cor da pessoa; o cartão de total é marinho cheio.
+- **Rótulos em caixa alta bem espaçada** (`letter-spacing`) nos títulos de painel, grupos do menu e cabeçalhos de tabela — é a assinatura tipográfica da identidade.
+- Paleta: marinho `#0A2540`, azul do degradê `#14508C`, azul de destaque `#4FA3E3`, azul de ação `#1C6FBF`, fundo `#F4F7FB`.
 
 Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola na horizontal, e o conteúdo ocupa a largura toda. Na impressão o menu some e a faixa sai em preto no branco.
 

@@ -11,21 +11,24 @@
 <div id="root"></div>
 <style>
   :root{
-    /* Mesma linguagem visual do sistema de Gestão de Logística da Open:
-       fundo azulado claro, cartões brancos de borda azul, faixa em degradê
-       marinho e azul de destaque. */
-    --bg:#F4F7FC;
+    /* Identidade visual da Open Soluções Tributárias (mapa de produto):
+       marinho profundo na marca e nas faixas, azul claro como destaque,
+       fundo azulado bem claro, cartões brancos de borda azul com filete
+       colorido no topo, e rótulos em caixa alta bem espaçados. */
+    --bg:#F4F7FB;
     --surface:#FFFFFF;
-    --ink:#152238;
-    --ink-soft:#5B6B82;
-    --ink-faint:#93A1B5;
-    --border:#DCE6F3;
-    --border-soft:#EDF2F9;
-    --navy:#12335E;
-    --primary:#1D4ED8;
-    --primary-hover:#1A43B8;
-    --primary-soft:#E7EFFC;
-    --ring:#B6CDF3;
+    --ink:#11243D;
+    --ink-soft:#5A6E88;
+    --ink-faint:#93A3B8;
+    --border:#D8E4F0;
+    --border-soft:#EDF3F9;
+    --navy:#0A2540;          /* marinho da marca */
+    --navy-2:#14508C;        /* fim do degradê da faixa */
+    --azul-claro:#4FA3E3;    /* destaque do título e do filete */
+    --primary:#1C6FBF;
+    --primary-hover:#155A9E;
+    --primary-soft:#E6F0FA;
+    --ring:#A9CDEC;
     --danger:#EF4444;
     --danger-soft:#FEECEC;
     --shadow-sm:0 1px 2px rgba(21,34,56,.04), 0 1px 1px rgba(21,34,56,.03);
@@ -56,20 +59,33 @@
     position:sticky;top:0;height:100vh;overflow-y:auto;
     display:flex;flex-direction:column;
   }
-  .brand{display:flex;align-items:center;gap:10px;padding:2px 6px 6px;}
-  .brand-mark{
-    width:36px;height:36px;border-radius:10px;flex:none;
-    background:linear-gradient(135deg,var(--navy) 0%,var(--primary) 100%);
-    color:#fff;font-weight:800;font-size:13.5px;letter-spacing:-.02em;
-    display:flex;align-items:center;justify-content:center;
+  /* ---------- Marca ---------- */
+  .marca-open{display:flex;align-items:center;gap:9px;}
+  .marca-open .logo-globo{flex:none;display:block;}
+  .marca-texto{min-width:0;line-height:1;}
+  .marca-nome{
+    font-size:var(--marca-nome,21px);font-weight:800;letter-spacing:.01em;
+    color:var(--navy);line-height:.95;
   }
-  .brand-text{min-width:0;}
-  .brand-title{font-size:13.5px;font-weight:800;color:var(--ink);line-height:1.2;}
-  .brand-sub{font-size:10.5px;font-weight:600;color:var(--ink-faint);line-height:1.3;margin-top:2px;}
+  .marca-assinatura{
+    font-size:calc(var(--marca-nome,21px) * .30);font-weight:700;
+    letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);
+    margin-top:3px;white-space:nowrap;
+  }
+  .marca-open.clara .marca-nome{color:#fff;}
+  .marca-open.clara .marca-assinatura{color:rgba(255,255,255,.62);}
+
+  .brand{display:block;padding:2px 6px 10px;border-bottom:1px solid var(--border-soft);}
+  .brand-text{min-width:0;margin-top:10px;}
+  .brand-title{
+    font-size:10px;font-weight:800;color:var(--primary);line-height:1.2;
+    text-transform:uppercase;letter-spacing:.16em;
+  }
+  .brand-sub{font-size:12.5px;font-weight:700;color:var(--ink);line-height:1.3;margin-top:3px;}
   .nav{margin-top:6px;}
   .nav-group-label{
-    font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
-    color:var(--ink-faint);padding:0 9px;margin:16px 0 6px;
+    font-size:9.5px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--ink-faint);padding:0 9px;margin:18px 0 6px;
   }
   .nav-item{
     display:flex;align-items:center;gap:9px;width:100%;
@@ -80,7 +96,10 @@
   }
   .nav-item svg{flex:none;width:16px;height:16px;opacity:.7;}
   .nav-item:hover{background:var(--border-soft);color:var(--ink);}
-  .nav-item.active{background:var(--primary-soft);color:var(--primary);font-weight:700;}
+  .nav-item.active{
+    background:var(--primary-soft);color:var(--primary);font-weight:800;
+    box-shadow:inset 3px 0 0 var(--primary);
+  }
   .nav-item.active svg{opacity:1;}
   .sidebar-foot{
     margin-top:auto;padding-top:14px;border-top:1px solid var(--border-soft);
@@ -97,19 +116,43 @@
   .sidebar-foot .logout-btn:hover{border-color:var(--danger);color:var(--danger);background:var(--danger-soft);}
   .main{flex:1;min-width:0;padding:20px 22px 60px;}
 
-  /* Faixa de título em degradê */
+  /* ---------- Faixa de título (padrão do mapa de produto) ---------- */
   .hero{
-    background:linear-gradient(100deg,var(--navy) 0%,#1E5FA8 62%,#2E7AC4 100%);
-    border-radius:var(--radius-lg);color:#fff;padding:24px 28px;margin-bottom:18px;
-    display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;
+    position:relative;overflow:hidden;
+    background:linear-gradient(100deg,#071B30 0%,var(--navy) 42%,var(--navy-2) 100%);
+    border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+    color:#fff;padding:22px 28px;
+    display:flex;align-items:center;justify-content:space-between;gap:22px;flex-wrap:wrap;
   }
-  .hero h1{font-size:23px;font-weight:800;letter-spacing:-.02em;margin:0;color:#fff;}
-  .hero-sub{font-size:13px;font-weight:500;color:rgba(255,255,255,.8);margin-top:5px;}
-  .hero-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
+  /* filete azul claro embaixo, como no material impresso */
+  .hero-linha{
+    height:4px;border-radius:0 0 var(--radius-lg) var(--radius-lg);margin-bottom:18px;
+    background:linear-gradient(90deg,var(--azul-claro) 0%,#2E82CE 55%,var(--navy-2) 100%);
+  }
+  .hero-marca{display:flex;align-items:center;gap:20px;min-width:0;position:relative;z-index:1;}
+  .hero-divisor{width:1px;height:40px;background:rgba(255,255,255,.22);flex:none;}
+  .hero-eyebrow{
+    font-size:9.5px;font-weight:800;letter-spacing:.24em;text-transform:uppercase;
+    color:var(--azul-claro);margin-bottom:5px;
+  }
+  .hero h1{font-size:22px;font-weight:800;letter-spacing:-.01em;margin:0;color:#fff;line-height:1.15;}
+  .hero h1 em{font-style:normal;color:var(--azul-claro);}
+  .hero-right{
+    display:flex;flex-direction:column;align-items:flex-end;gap:6px;
+    position:relative;z-index:1;text-align:right;
+  }
+  .hero-info{font-size:12.5px;font-weight:700;color:#fff;}
+  .hero-info-sub{font-size:9.5px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.5);}
   .hero .save-chip{
-    background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.24);
+    background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.22);
     color:rgba(255,255,255,.92);box-shadow:none;
   }
+  /* globo d'água no canto, como na arte */
+  .hero-globo{
+    position:absolute;right:-40px;top:50%;transform:translateY(-50%);
+    width:210px;height:210px;opacity:.07;pointer-events:none;
+  }
+  .hero-globo svg{width:100%;height:100%;}
 
   @media (max-width:900px){
     .shell{flex-direction:column;}
@@ -240,22 +283,27 @@
     display:flex;justify-content:space-between;align-items:flex-end;gap:16px;
     border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:12px;
   }
-  .rel-empresa{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#555;}
+  .rel-marca{display:flex;align-items:center;gap:14px;min-width:0;}
+  .rel-divisor{width:1px;height:32px;background:#ccc;flex:none;}
+  .rel-empresa{font-size:9px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:#1C6FBF;}
   .rel-cabecalho h1{font-size:17px;font-weight:800;margin:3px 0 0;}
   .rel-emissao{font-size:9.5px;color:#666;white-space:nowrap;}
   .rel-sec{margin-bottom:13px;}
   .rel-sec h2{
-    font-size:12px;font-weight:800;margin:0 0 6px;padding-bottom:3px;
-    border-bottom:1px solid #bbb;display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+    font-size:11px;font-weight:800;margin:0 0 6px;padding-bottom:3px;
+    letter-spacing:.1em;text-transform:uppercase;color:#0A2540;
+    border-bottom:1.5px solid #1C6FBF;display:flex;justify-content:space-between;align-items:baseline;gap:12px;
   }
-  .rel-sub{font-size:9.5px;font-weight:600;color:#666;}
+  .rel-sub{font-size:9px;font-weight:700;color:#666;letter-spacing:.02em;text-transform:none;}
   .rel-cards{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:8px;}
   .rel-card{
-    border:1px solid #ccc;border-radius:5px;padding:6px 10px;min-width:118px;flex:1;
+    border:1px solid #ccc;border-top:2.5px solid #1C6FBF;
+    border-radius:4px;padding:6px 10px;min-width:118px;flex:1;
   }
   .rel-card span{display:block;font-size:8.5px;text-transform:uppercase;letter-spacing:.05em;color:#666;font-weight:700;}
   .rel-card b{font-size:12.5px;}
-  .rel-card-total{background:#eee;border-color:#888;}
+  .rel-card-total{background:#0A2540;color:#fff;border-color:#0A2540;border-top-color:#4FA3E3;}
+  .rel-card-total span{color:rgba(255,255,255,.6);}
   .rel-tabela{width:100%;border-collapse:collapse;}
   .rel-tabela th{
     text-align:left;font-size:8.5px;text-transform:uppercase;letter-spacing:.04em;
@@ -311,8 +359,9 @@
     body, #root{ background:#fff; }
     .sidebar{ display:none !important; }
     .main{ padding:0 !important; }
-    .hero{ background:#fff !important; color:#000 !important; padding:0 0 12px !important; }
-    .hero h1, .hero-sub{ color:#000 !important; }
+    .hero{ background:#fff !important; color:#000 !important; padding:0 0 10px !important; }
+    .hero h1, .hero-info, .hero-info-sub, .marca-open.clara .marca-nome{ color:#000 !important; }
+    .hero-globo, .hero-linha{ display:none !important; }
     .table-card, .chart-card, .metas-panel{ box-shadow:none; border:1px solid #999; break-inside:avoid; }
     input, select{ border:none !important; background:transparent !important; color:#000 !important; }
     .kpi-value.masked{ display:none; }
@@ -344,18 +393,11 @@
   }
   .kpi-card{
     background:var(--surface);border:1px solid var(--border);
-    border-radius:var(--radius-md);padding:16px 16px 14px;
+    border-top:3px solid var(--kc,var(--primary));
+    border-radius:var(--radius-sm);padding:14px 16px 13px;
     box-shadow:var(--shadow-sm);
     transition:transform .15s, box-shadow .15s;
     min-width:0;
-  }
-  /* Fundo levemente tingido com a cor da pessoa/indicador; navegador antigo
-     cai no branco da regra acima. */
-  @supports (background:color-mix(in srgb,#000 5%,#fff)){
-    .kpi-card{
-      background:color-mix(in srgb, var(--kc,var(--primary)) 7%, #fff);
-      border-color:color-mix(in srgb, var(--kc,var(--primary)) 24%, #fff);
-    }
   }
   .kpi-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);}
   .kpi-card .kpi-label{
@@ -369,8 +411,8 @@
     font-variant-numeric:tabular-nums;white-space:nowrap;
   }
   .kpi-card.total{
-    background:linear-gradient(135deg,var(--navy) 0%,#1E5FA8 100%);
-    border-color:var(--navy);
+    background:linear-gradient(120deg,var(--navy) 0%,var(--navy-2) 100%);
+    border-color:var(--navy);border-top-color:var(--azul-claro);
   }
   .kpi-card.total .kpi-label{color:rgba(255,255,255,.55);}
   .kpi-card.total .kpi-value{color:#fff;font-size:20px;}
@@ -422,7 +464,10 @@
     transition:all .15s;white-space:nowrap;
   }
   .pill:hover{color:var(--ink);background:var(--border-soft);}
-  .pill.active{background:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(29,78,216,.32);}
+  .pill.active{
+    background:var(--navy);color:#fff;box-shadow:0 2px 8px rgba(10,37,64,.28);
+    letter-spacing:.03em;
+  }
 
   /* Toolbar */
   .toolbar{
@@ -457,7 +502,7 @@
   table{border-collapse:collapse;width:100%;table-layout:auto;}
   thead th{
     background:var(--surface);color:var(--ink-faint);
-    font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;
+    font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.13em;
     text-align:left;padding:12px 10px 10px;white-space:nowrap;
     border-bottom:1px solid var(--border);
   }
@@ -582,6 +627,8 @@
   .auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
   .auth-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);padding:34px 30px;max-width:380px;width:100%;}
   .auth-logo{font-size:12.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--primary);margin-bottom:6px;}
+  .auth-marca{display:flex;justify-content:center;margin-bottom:22px;}
+  .auth-card{border-top:3px solid var(--primary);}
   .auth-card h1{font-size:20px;margin:0 0 4px;font-weight:800;color:var(--ink);}
   .auth-card .auth-sub{font-size:13px;color:var(--ink-soft);margin:0 0 22px;font-weight:500;}
   .auth-field{margin-bottom:14px;}
@@ -605,10 +652,13 @@
   .user-chip .logout-btn{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-family:var(--font);font-weight:700;font-size:12px;padding:0;}
   .user-chip .logout-btn:hover{color:var(--danger);}
 
-  /* ---------- Painéis recolhíveis ---------- */
+  /* ---------- Painéis recolhíveis ----------
+     Filete azul no topo e título em caixa alta espaçada, como os cartões
+     das linhas de produto do mapa. */
   .panel{
     background:var(--surface);border:1px solid var(--border);
-    border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);
+    border-top:3px solid var(--primary);
+    border-radius:var(--radius-md);box-shadow:var(--shadow-sm);
     margin-bottom:18px;overflow:hidden;
   }
   .panel-head{
@@ -636,8 +686,8 @@
   .panel.collapsed .panel-chevron{transform:rotate(-90deg);}
   .panel-toggle:hover .panel-chevron{color:var(--primary);}
   .panel-title{
-    font-size:13.5px;font-weight:700;letter-spacing:-.005em;
-    color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    font-size:12.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   }
   .panel-toggle:hover .panel-title{color:var(--primary);}
   .panel-head-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
@@ -1273,7 +1323,7 @@ function renderAuthScreen(){
   let bodyHtml = '';
   if(authScreen === 'reset'){
     bodyHtml = `
-      <div class="auth-logo">Open Soluções Tributárias</div>
+      <div class="auth-marca">${marcaOpenHtml({tam:44})}</div>
       <h1>Nova senha</h1>
       <p class="auth-sub">Escolha uma nova senha para sua conta.</p>
       ${authError ? `<div class="auth-error">${esc(authError)}</div>` : ''}
@@ -1289,7 +1339,7 @@ function renderAuthScreen(){
     `;
   } else if(authScreen === 'recover'){
     bodyHtml = `
-      <div class="auth-logo">Open Soluções Tributárias</div>
+      <div class="auth-marca">${marcaOpenHtml({tam:44})}</div>
       <h1>Recuperar senha</h1>
       <p class="auth-sub">Informe seu e-mail cadastrado. Vamos te enviar um link para redefinir a senha.</p>
       ${authError ? `<div class="auth-error">${esc(authError)}</div>` : ''}
@@ -1303,7 +1353,7 @@ function renderAuthScreen(){
     `;
   } else {
     bodyHtml = `
-      <div class="auth-logo">Open Soluções Tributárias</div>
+      <div class="auth-marca">${marcaOpenHtml({tam:44})}</div>
       <h1>Comissões — Equipe Comercial</h1>
       <p class="auth-sub">Entre com sua conta para acessar o sistema.</p>
       ${authError ? `<div class="auth-error">${esc(authError)}</div>` : ''}
@@ -1934,6 +1984,43 @@ function fmtMoney(v){
 }
 
 
+
+/* ---------- Marca da Open ----------
+   O globo de meridianos e a assinatura, desenhados em SVG aqui mesmo:
+   acompanham a cor do texto, imprimem nítidos em qualquer tamanho e não
+   dependem de arquivo de imagem (que o sistema teria de carregar de fora). */
+let __logoSeq = 0;
+function logoGloboSvg(tam, cor){
+  const id = 'og' + (++__logoSeq);
+  const c = cor || null;
+  const traco = c ? `stroke="${c}"` : `stroke="url(#${id})"`;
+  return `<svg class="logo-globo" width="${tam}" height="${tam}" viewBox="0 0 100 100" aria-hidden="true">
+    ${c ? '' : `<defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7CC6F5"/><stop offset="0.55" stop-color="#2E82CE"/><stop offset="1" stop-color="#0B3D73"/>
+    </linearGradient></defs>`}
+    <g fill="none" ${traco} stroke-width="4.5" stroke-linecap="round">
+      <circle cx="50" cy="50" r="45"/>
+      <ellipse cx="50" cy="50" rx="45" ry="17"/>
+      <ellipse cx="50" cy="50" rx="45" ry="34"/>
+      <ellipse cx="50" cy="50" rx="17" ry="45"/>
+      <ellipse cx="50" cy="50" rx="34" ry="45"/>
+      <line x1="50" y1="5" x2="50" y2="95"/>
+      <line x1="5" y1="50" x2="95" y2="50"/>
+    </g>
+  </svg>`;
+}
+/* Marca completa: globo + "OPEN" + assinatura. `escala` ajusta o conjunto. */
+function marcaOpenHtml(opts){
+  const o = opts || {};
+  const tam = o.tam || 34;
+  return `<div class="marca-open${o.clara ? ' clara' : ''}" style="--marca-globo:${tam}px;--marca-nome:${Math.round(tam*0.62)}px">
+    ${logoGloboSvg(tam, o.cor)}
+    <div class="marca-texto">
+      <div class="marca-nome">OPEN</div>
+      <div class="marca-assinatura">Soluções Tributárias</div>
+    </div>
+  </div>`;
+}
 
 function esc(s){
   if(s===null||s===undefined) return "";
@@ -5415,9 +5502,13 @@ function montarRelatorioMes(mes){
   return `
     <div class="rel-doc">
       <header class="rel-cabecalho">
-        <div>
-          <div class="rel-empresa">Open Soluções Tributárias</div>
-          <h1>Relatório mensal — ${esc(mes)} de ${ano}</h1>
+        <div class="rel-marca">
+          ${marcaOpenHtml({tam:34})}
+          <div class="rel-divisor"></div>
+          <div>
+            <div class="rel-empresa">Comissões · Gestão Tributária</div>
+            <h1>Relatório mensal — ${esc(mes)} de ${ano}</h1>
+          </div>
         </div>
         <div class="rel-emissao">Emitido em ${esc(emitido)}</div>
       </header>
@@ -6062,10 +6153,10 @@ function render(){
     <div class="shell${isAdmin ? '' : ' read-only-mode'}">
       <aside class="sidebar">
         <div class="brand">
-          <div class="brand-mark">Open</div>
+          ${marcaOpenHtml({tam:30})}
           <div class="brand-text">
-            <div class="brand-title">Comissões</div>
-            <div class="brand-sub">Open Soluções Tributárias</div>
+            <div class="brand-title">Gestão Tributária</div>
+            <div class="brand-sub">Comissões da equipe comercial</div>
           </div>
         </div>
         <nav class="nav">${sidebarNavHtml()}</nav>
@@ -6078,17 +6169,25 @@ function render(){
 
       <div class="main">
       <div class="hero">
-        <div>
-          <h1>${esc(abaAtual ? abaAtual.label : 'Comissões')}</h1>
-          <div class="hero-sub">Controle mensal de vendas e comissões · ${yearFilter}</div>
+        <div class="hero-globo">${logoGloboSvg(210, '#ffffff')}</div>
+        <div class="hero-marca">
+          ${marcaOpenHtml({tam:38, clara:true, cor:'#8FCBF5'})}
+          <div class="hero-divisor"></div>
+          <div>
+            <div class="hero-eyebrow">Comissões</div>
+            <h1>${esc(abaAtual ? abaAtual.label : 'Comissões')}</h1>
+          </div>
         </div>
         <div class="hero-right">
+          <div class="hero-info">Controle mensal de vendas e comissões</div>
+          <div class="hero-info-sub">Exercício de ${yearFilter}</div>
           <div class="save-chip">
             <span id="save-dot" class="dot${saveError?' error':(saving?' saving':'')}"></span>
             <span id="save-label">${saveError?'erro ao salvar':(saving?'salvando':'salvo')}</span>
           </div>
         </div>
       </div>
+      <div class="hero-linha"></div>
 
       ${!isAdmin ? `
         <div class="storage-warning read-only-notice">
