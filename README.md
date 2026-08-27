@@ -247,6 +247,27 @@ Para incluir alguém, use **"Quem está na equipe"** no topo da aba: marque quem
 
 > Quem está nessa lista **não entra no ranking de vendas** e não aparece nos cartões do dashboard — o ranking mede quem vende, e essas pessoas são medidas por outra coisa. As duas listas são independentes: a mesma pessoa pode estar nas duas, se fizer sentido.
 
+## Relatório mensal em PDF
+
+O botão **"📄 Relatório do mês"**, no topo de qualquer aba, gera um documento único com **tudo o que aconteceu num mês**. Escolhe-se o mês e o sistema monta o relatório e abre a janela de impressão do navegador — para salvar em PDF, basta escolher **"Salvar como PDF"** no destino.
+
+O que entra:
+
+| Seção | Conteúdo |
+|---|---|
+| Faturamento do mês | total por origem (Sistema, Consultoria, Órgãos Públicos, Cursos) e o total geral, mais comissões, honorários, bônus e comissões liberadas |
+| Ganhos por vendedora | quanto cada uma ganhou em cada origem, mais bônus e total |
+| Comissões liberadas | o que já pode ser pago, por vendedora (cliente já pagou a nota) |
+| Sistema, Consultoria, Órgãos Públicos, Cursos | os lançamentos do mês, com valor, quem vendeu, situação do pagamento e as comissões de cada linha |
+| Parceiros | honorários do mês, lançamento a lançamento |
+| Bônus e metas | bônus lançados e a situação de cada meta configurada |
+| Desempenho da equipe | os nove indicadores por pessoa e a campeã do mês |
+| Equipe de consultoria | contratos assinados e reuniões realizadas |
+
+O relatório usa o **ano selecionado** no topo da página. É exclusivo de admin — conta restrita não vê o botão, já que o documento mostra os números de toda a equipe.
+
+> Não usa nenhuma biblioteca externa: o PDF sai pela impressão do próprio navegador. É de propósito — o sistema bloqueia carregar script de fora, por segurança.
+
 ## Metas e bônus
 
 Uma meta é um **gatilho da empresa que premia uma pessoa**, não uma cota individual:

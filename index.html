@@ -230,7 +230,48 @@
   .pay-toggle input{width:15px;height:15px;accent-color:#22C55E;cursor:pointer;}
   .pagamento-cell select{margin-top:4px;font-size:11.5px;padding:4px 6px !important;}
 
+  /* ---------- Relatório mensal (só existe na impressão) ---------- */
+  #relatorio-print{display:none;}
+  .rel-doc{color:#111;font-family:var(--font);font-size:10.5px;line-height:1.45;}
+  .rel-cabecalho{
+    display:flex;justify-content:space-between;align-items:flex-end;gap:16px;
+    border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:16px;
+  }
+  .rel-empresa{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#555;}
+  .rel-cabecalho h1{font-size:17px;font-weight:800;margin:3px 0 0;}
+  .rel-emissao{font-size:9.5px;color:#666;white-space:nowrap;}
+  .rel-sec{margin-bottom:18px;}
+  .rel-sec h2{
+    font-size:12px;font-weight:800;margin:0 0 7px;padding-bottom:4px;
+    border-bottom:1px solid #bbb;display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  }
+  .rel-sub{font-size:9.5px;font-weight:600;color:#666;}
+  .rel-cards{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:8px;}
+  .rel-card{
+    border:1px solid #ccc;border-radius:5px;padding:6px 10px;min-width:118px;flex:1;
+  }
+  .rel-card span{display:block;font-size:8.5px;text-transform:uppercase;letter-spacing:.05em;color:#666;font-weight:700;}
+  .rel-card b{font-size:12.5px;}
+  .rel-card-total{background:#eee;border-color:#888;}
+  .rel-tabela{width:100%;border-collapse:collapse;}
+  .rel-tabela th{
+    text-align:left;font-size:8.5px;text-transform:uppercase;letter-spacing:.04em;
+    color:#444;border-bottom:1px solid #999;padding:4px 6px;font-weight:800;
+  }
+  .rel-tabela td{padding:4px 6px;border-bottom:1px solid #e4e4e4;vertical-align:top;}
+  .rel-tabela th.num, .rel-tabela td.num{text-align:right;white-space:nowrap;}
+  .rel-tabela td.destaque{font-weight:800;}
+  .rel-tabela td.mini{font-size:9px;color:#444;}
+  .rel-vazio{font-size:9.5px;color:#777;font-style:italic;margin:4px 0 0;}
+  .rel-rodape{margin-top:20px;padding-top:8px;border-top:1px solid #bbb;font-size:8.5px;color:#777;text-align:center;}
+
   @media print{
+    body.imprimindo-relatorio > #root{ display:none !important; }
+    body.imprimindo-relatorio #relatorio-print{ display:block !important; }
+    body.imprimindo-relatorio .rel-sec.quebra{ break-before:page; }
+    body.imprimindo-relatorio .rel-sec{ break-inside:avoid; }
+    body.imprimindo-relatorio .rel-tabela tr{ break-inside:avoid; }
+    @page{ margin:12mm; }
     .topbar-actions, .tabs-nav, .filters-row, .toolbar, .kpi-toggle-row, .row-actions, .del-cell, .search-row, .year-row{
       display:none !important;
     }
@@ -2041,6 +2082,34 @@ function renderModal(){
         <div class="modal-box modal-box-wide">
           ${bodyHtml}
           <div class="modal-actions"><button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button></div>
+        </div>
+      </div>
+    `;
+  }
+  if(m.type === 'relatorio-mes'){
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box">
+          <div class="modal-msg">Relatório do mês</div>
+          <div class="divisao-explica">
+            Junta num documento só tudo o que aconteceu no mês: faturamento por origem, ganhos de
+            cada vendedora, honorários de parceiros, os lançamentos de todas as abas, bônus, metas,
+            comissões liberadas e o desempenho da equipe.
+          </div>
+          <label class="meta-field">
+            <span>Mês</span>
+            <select onchange="onRelatorioMesChange(this)">
+              ${MONTHS.map(x => `<option value="${x}" ${m.mes===x?'selected':''}>${x} de ${yearFilter}</option>`).join('')}
+            </select>
+          </label>
+          <div class="divisao-conferencia">
+            Vai abrir a janela de impressão do navegador. Para salvar em PDF, escolha
+            <b>“Salvar como PDF”</b> no campo de destino/impressora.
+          </div>
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
+            <button class="modal-btn modal-btn-primary" onclick="imprimirRelatorioMes()">Gerar relatório</button>
+          </div>
         </div>
       </div>
     `;
@@ -5063,6 +5132,271 @@ function carregarFormPainel(){
     painelForm = painelFormVazio();
   }
 }
+/* ================= Relatório mensal do sistema inteiro (PDF) =================
+   Junta num documento só tudo o que aconteceu num mês: faturamento por
+   origem, ganhos de cada vendedora, honorários de parceiros, os
+   lançamentos de cada aba, bônus, comissões já liberadas e o desempenho
+   da equipe. Sai pela impressão do navegador ("Salvar como PDF"), que é
+   o caminho que funciona sem depender de biblioteca externa — o sistema
+   bloqueia carregar script de fora por segurança. */
+
+function abrirRelatorioMes(){
+  const mesAtual = (partnerMonthFilter && partnerMonthFilter !== 'Todos') ? partnerMonthFilter
+    : (filter && filter !== 'Todos') ? filter
+    : MONTHS[new Date().getMonth()];
+  modalState = { type:'relatorio-mes', mes: mesAtual };
+  render();
+}
+function onRelatorioMesChange(el){ if(modalState) modalState.mes = el.value; }
+
+function imprimirRelatorioMes(){
+  const mes = (modalState && modalState.mes) || MONTHS[new Date().getMonth()];
+  closeModal();
+  let div = document.getElementById('relatorio-print');
+  if(!div){
+    div = document.createElement('div');
+    div.id = 'relatorio-print';
+    document.body.appendChild(div);
+  }
+  div.innerHTML = montarRelatorioMes(mes);
+  document.body.classList.add('imprimindo-relatorio');
+  const limpar = function(){
+    document.body.classList.remove('imprimindo-relatorio');
+    window.removeEventListener('afterprint', limpar);
+  };
+  window.addEventListener('afterprint', limpar);
+  setTimeout(function(){ window.print(); setTimeout(limpar, 1500); }, 60);
+}
+
+function relTabela(cabecalho, linhas, vazio){
+  if(!linhas.length) return `<p class="rel-vazio">${esc(vazio)}</p>`;
+  return `<table class="rel-tabela">
+    <thead><tr>${cabecalho.map(function(c){
+      return `<th${c.num?' class="num"':''}>${esc(c.label)}</th>`;
+    }).join('')}</tr></thead>
+    <tbody>${linhas.join('')}</tbody>
+  </table>`;
+}
+
+function montarRelatorioMes(mes){
+  const ano = yearFilter;
+  // getSellerBreakdown / getPartnerBreakdown / getPartnerEntries leem o
+  // filtro global; aponta pro mês do relatório e devolve no fim.
+  const filtroAntigo = partnerMonthFilter;
+  partnerMonthFilter = mes;
+
+  const fatur = [
+    {label:'Sistema',                  valor: faturamentoDaOrigem('sistema', ano, mes)},
+    {label:'Consultoria',              valor: faturamentoDaOrigem('consultoria', ano, mes)},
+    {label:'Consultoria Órgãos Públicos', valor: faturamentoDaOrigem('publicos', ano, mes)},
+    {label:'Cursos',                   valor: faturamentoDaOrigem('cursos', ano, mes)},
+  ];
+  const faturTotal = fatur.reduce(function(a,x){ return a + x.valor; }, 0);
+
+  const sellerBreak = getSellerBreakdown();
+  const nomesVend = Object.keys(sellerBreak).filter(function(n){
+    const b = sellerBreak[n];
+    return (b.sistema + b.consultoria + b.publicos + b.cursos + b.bonus) > 0;
+  }).sort(function(a,b){
+    const ta = sellerBreak[a], tb = sellerBreak[b];
+    return (tb.sistema+tb.consultoria+tb.publicos+tb.cursos+tb.bonus) - (ta.sistema+ta.consultoria+ta.publicos+ta.cursos+ta.bonus);
+  });
+  let totComissao = 0;
+  const linhasVend = nomesVend.map(function(n){
+    const b = sellerBreak[n];
+    const t = b.sistema + b.consultoria + b.publicos + b.cursos + b.bonus;
+    totComissao += t;
+    return `<tr><td>${esc(n)}</td><td class="num">${fmtMoney(b.sistema)}</td><td class="num">${fmtMoney(b.consultoria)}</td>
+      <td class="num">${fmtMoney(b.publicos)}</td><td class="num">${fmtMoney(b.cursos)}</td>
+      <td class="num">${fmtMoney(b.bonus)}</td><td class="num destaque">${fmtMoney(t)}</td></tr>`;
+  });
+
+  const partnerEntries = getPartnerEntries();
+  const totHonorarios = partnerEntries.reduce(function(a,e){ return a + e.honorario; }, 0);
+  const linhasParc = partnerEntries.map(function(e){
+    return `<tr><td>${esc(e.parceiro)}</td><td>${esc(e.origem)}</td><td>${esc(e.label)}</td>
+      <td class="num">${fmtMoney(e.valorContrato)}</td><td class="num">${e.pct}%</td>
+      <td class="num destaque">${fmtMoney(e.honorario)}</td></tr>`;
+  });
+
+  // Lançamentos de cada origem
+  const vendasMes = rows.filter(function(r){ return (r.ano||2026) === ano && r.mes === mes; });
+  const linhasSistema = vendasMes.map(function(r){
+    const com = SELLERS.filter(function(sv){ return Number(r[sv.key]) > 0; })
+      .map(function(sv){ return sv.label + ' ' + fmtMoney(Number(r[sv.key])||0); }).join(' · ');
+    return `<tr><td>${esc(r.cliente||'—')}</td><td>${esc(r.venda||'—')}</td>
+      <td class="num">${fmtMoney(Number(r.valor)||0)}</td>
+      <td>${esc(r.vendedorResponsavel||'—')}</td>
+      <td>${r.pago ? 'Pago' : 'Pendente'}</td>
+      <td class="mini">${esc(com || '—')}</td></tr>`;
+  });
+
+  const blocosEntidade = ENTITY_KEYS.map(function(key){
+    const cfg = ENTITIES[key];
+    const campo = cfg.fields[0].key;
+    const lista = state[key].rows.filter(function(r){ return (r.ano||2026) === ano && r.mes === mes; });
+    const linhas = lista.map(function(r){
+      const base = entityRemainingAfterPartner(r);
+      const com = getRowSellerAssignments(r)
+        .map(function(a){ return a.vendedor + ' ' + fmtMoney(base * (a.percent/100)); }).join(' · ');
+      const quem = cfg.hasVendasPorVendedor
+        ? ((r.vendasVendedoras||[]).map(function(v){ return v.vendedor + ' ' + fmtMoney(Number(v.valor)||0); }).join(' · ') || '—')
+        : '';
+      return `<tr><td>${esc(r[campo]||'—')}</td>
+        <td class="num">${fmtMoney(Number(r.valorContrato)||0)}</td>
+        ${cfg.hasVendasPorVendedor ? `<td class="mini">${esc(quem)}</td>` : ''}
+        ${cfg.hasPagamento ? `<td>${r.pago ? 'Pago' : 'Pendente'}</td>` : ''}
+        <td class="mini">${esc(com || '—')}</td></tr>`;
+    });
+    const cab = [{label: cfg.fields[0].label}, {label:'Valor do contrato', num:true}]
+      .concat(cfg.hasVendasPorVendedor ? [{label:'Quem vendeu'}] : [])
+      .concat(cfg.hasPagamento ? [{label:'Pagamento'}] : [])
+      .concat([{label:'Comissões'}]);
+    const total = lista.reduce(function(a,r){ return a + (Number(r.valorContrato)||0); }, 0);
+    return `<section class="rel-sec">
+      <h2>${esc(cfg.tabLabel)} <span class="rel-sub">${lista.length} lançamento${lista.length===1?'':'s'} · ${fmtMoney(total)}</span></h2>
+      ${relTabela(cab, linhas, 'Nenhum lançamento em ' + mes + '.')}
+    </section>`;
+  }).join('');
+
+  // Bônus e metas
+  const bonusMes = bonusRows.filter(function(r){ return (r.ano||2026) === ano && r.mes === mes; });
+  const totBonus = bonusMes.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0);
+  const linhasBonus = bonusMes.map(function(r){
+    return `<tr><td>${esc(r.vendedor||'—')}</td><td>${esc(r.descricao||'—')}</td>
+      <td class="num destaque">${fmtMoney(Number(r.valor)||0)}</td></tr>`;
+  });
+
+  const metasMes = metas.filter(function(m){ return m.ano === ano && m.mes === mes; });
+  const linhasMetas = metasMes.map(function(m){
+    const a = avaliarMeta(m);
+    return `<tr><td>${esc(m.vendedor)}</td><td class="mini">${esc(metaDescricaoRegra(m))}</td>
+      <td class="num">${fmtMoney(a.faturado)}</td>
+      <td>${a.bateu ? 'Bateu' : 'Falta ' + fmtMoney(a.falta)}</td>
+      <td class="num destaque">${a.bateu ? fmtMoney(a.premio) : '—'}</td></tr>`;
+  });
+
+  // Comissões já liberadas (cliente pagou) no mês
+  const liberadas = getComissoesPorStatus(true).filter(function(e){
+    return (e.mesPagamento || e.mesVenda) === mes;
+  });
+  const gruposLib = agruparPorVendedor(liberadas);
+  const totLiberado = liberadas.reduce(function(a,e){ return a + e.comissao; }, 0);
+  const linhasLib = gruposLib.map(function(g){
+    return `<tr><td>${esc(g.nome)}</td><td class="num">${g.itens.length}</td>
+      <td class="num destaque">${fmtMoney(g.total)}</td></tr>`;
+  });
+
+  // Desempenho da equipe
+  const vendsPainel = vendedoresDoPainel();
+  const linhasEquipe = vendsPainel.map(function(v){
+    return `<tr><td>${esc(v)}</td>` + METRICAS.map(function(m){
+      return `<td class="num">${esc(fmtMetrica(m, valorMetrica(v, mes, m.key)))}</td>`;
+    }).join('') + `</tr>`;
+  });
+  const rk = rankingDoMes(mes);
+  const campeaoTxt = rk.campeoes.length
+    ? rk.campeoes.map(function(c){ return c.vendedor; }).join(' e ') + ' — ' + rk.campeoes[0].vitorias + ' de ' + METRICAS.length + ' indicadores'
+    : 'sem lançamentos neste mês';
+
+  const consultoria = pessoasDeContratos();
+  const linhasConsult = consultoria.map(function(v){
+    return `<tr><td>${esc(v)}</td>
+      <td class="num">${(valorMetrica(v, mes, 'contratos')||0).toLocaleString('pt-BR')}</td>
+      <td class="num">${(valorMetrica(v, mes, 'reunioes')||0).toLocaleString('pt-BR')}</td></tr>`;
+  });
+
+  partnerMonthFilter = filtroAntigo;
+
+  const agora = new Date();
+  const emitido = agora.toLocaleDateString('pt-BR') + ' às ' + agora.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+
+  return `
+    <div class="rel-doc">
+      <header class="rel-cabecalho">
+        <div>
+          <div class="rel-empresa">Open Soluções Tributárias</div>
+          <h1>Relatório mensal — ${esc(mes)} de ${ano}</h1>
+        </div>
+        <div class="rel-emissao">Emitido em ${esc(emitido)}</div>
+      </header>
+
+      <section class="rel-sec">
+        <h2>Faturamento do mês</h2>
+        <div class="rel-cards">
+          ${fatur.map(function(f){
+            return `<div class="rel-card"><span>${esc(f.label)}</span><b>${fmtMoney(f.valor)}</b></div>`;
+          }).join('')}
+          <div class="rel-card rel-card-total"><span>Total faturado</span><b>${fmtMoney(faturTotal)}</b></div>
+        </div>
+        <div class="rel-cards">
+          <div class="rel-card"><span>Comissões da equipe</span><b>${fmtMoney(totComissao)}</b></div>
+          <div class="rel-card"><span>Honorários de parceiros</span><b>${fmtMoney(totHonorarios)}</b></div>
+          <div class="rel-card"><span>Bônus lançados</span><b>${fmtMoney(totBonus)}</b></div>
+          <div class="rel-card"><span>Comissões liberadas</span><b>${fmtMoney(totLiberado)}</b></div>
+        </div>
+      </section>
+
+      <section class="rel-sec">
+        <h2>Ganhos por vendedora <span class="rel-sub">${fmtMoney(totComissao)} no total</span></h2>
+        ${relTabela(
+          [{label:'Vendedora'},{label:'Sistema',num:true},{label:'Consultoria',num:true},
+           {label:'Órgãos Públicos',num:true},{label:'Cursos',num:true},{label:'Bônus',num:true},{label:'Total',num:true}],
+          linhasVend, 'Nenhuma comissão em ' + mes + '.')}
+      </section>
+
+      <section class="rel-sec">
+        <h2>Comissões liberadas <span class="rel-sub">o cliente já pagou a nota</span></h2>
+        ${relTabela([{label:'Vendedora'},{label:'Lançamentos',num:true},{label:'A receber',num:true}],
+          linhasLib, 'Nenhuma comissão liberada em ' + mes + '.')}
+      </section>
+
+      <section class="rel-sec quebra">
+        <h2>Sistema <span class="rel-sub">${vendasMes.length} venda${vendasMes.length===1?'':'s'} · ${fmtMoney(faturamentoDaOrigem('sistema', ano, mes))}</span></h2>
+        ${relTabela(
+          [{label:'Cliente'},{label:'Venda'},{label:'Valor do contrato',num:true},{label:'Quem vendeu'},{label:'Pagamento'},{label:'Comissões'}],
+          linhasSistema, 'Nenhuma venda em ' + mes + '.')}
+      </section>
+
+      ${blocosEntidade}
+
+      <section class="rel-sec quebra">
+        <h2>Parceiros <span class="rel-sub">${fmtMoney(totHonorarios)} em honorários</span></h2>
+        ${relTabela(
+          [{label:'Parceiro'},{label:'Origem'},{label:'Cliente / Empresa / Curso'},{label:'Valor do contrato',num:true},{label:'%',num:true},{label:'Honorário',num:true}],
+          linhasParc, 'Nenhum honorário de parceiro em ' + mes + '.')}
+      </section>
+
+      <section class="rel-sec">
+        <h2>Bônus lançados <span class="rel-sub">${fmtMoney(totBonus)}</span></h2>
+        ${relTabela([{label:'Vendedora'},{label:'Descrição'},{label:'Valor',num:true}],
+          linhasBonus, 'Nenhum bônus em ' + mes + '.')}
+      </section>
+
+      <section class="rel-sec">
+        <h2>Metas do mês</h2>
+        ${relTabela([{label:'Quem recebe'},{label:'Regra'},{label:'Faturado',num:true},{label:'Situação'},{label:'Prêmio',num:true}],
+          linhasMetas, 'Nenhuma meta configurada para ' + mes + '.')}
+      </section>
+
+      <section class="rel-sec quebra">
+        <h2>Desempenho da equipe <span class="rel-sub">campeã do mês: ${esc(campeaoTxt)}</span></h2>
+        ${relTabela(
+          [{label:'Vendedora'}].concat(METRICAS.map(function(m){ return {label:m.label, num:true}; })),
+          linhasEquipe, 'Nenhum indicador lançado em ' + mes + '.')}
+      </section>
+
+      <section class="rel-sec">
+        <h2>Equipe de consultoria</h2>
+        ${relTabela([{label:'Pessoa'},{label:'Contratos assinados',num:true},{label:'Reuniões realizadas',num:true}],
+          linhasConsult, 'Ninguém na equipe de consultoria ainda.')}
+      </section>
+
+      <footer class="rel-rodape">Relatório gerado pelo sistema de comissões da Open Soluções Tributárias · ${esc(mes)}/${ano}</footer>
+    </div>
+  `;
+}
+
 function setPainelAba(a){ painelAba = a; render(); }
 function setPainelVendedor(v){ painelVendedor = v; carregarFormPainel(); render(); }
 function setPainelMes(el){ painelMes = el.value; carregarFormPainel(); render(); }
@@ -5649,6 +5983,7 @@ function render(){
         <span class="year-row-label">Ano:</span>
         <div class="months">${yearPillsHtml}</div>
         <div class="topbar-actions">
+          <button class="eye-toggle admin-only-btn" onclick="abrirRelatorioMes()" title="Gera um relatório do mês inteiro, com todas as abas, pra salvar em PDF ou imprimir">📄 Relatório do mês</button>
           <button class="eye-toggle" onclick="showExport()" title="Copia todos os dados em texto, pra guardar ou levar pra outro navegador">⬇ Exportar dados</button>
           <button class="eye-toggle admin-only-btn" onclick="showImport()" title="Cola um texto exportado antes e restaura os dados">⬆ Importar dados</button>
           <button class="eye-toggle admin-only-btn" onclick="normalizeAllText()" title="Coloca Primeira Letra Maiúscula em todos os textos já lançados">Aa Normalizar textos</button>
