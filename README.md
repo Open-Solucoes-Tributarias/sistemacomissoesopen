@@ -272,6 +272,8 @@ Os gráficos são os mesmos do painel, desenhados em SVG dentro da própria pág
 
 O relatório usa o **ano selecionado** no topo da página. É exclusivo de admin — conta restrita não vê o botão, já que o documento mostra os números de toda a equipe.
 
+O documento **não força quebra de página**: as seções correm uma atrás da outra e só evitam ser cortadas no meio de um bloco pequeno (um gráfico, o quadro da campeã, uma linha de tabela). Tabela que atravessa a página repete o cabeçalho.
+
 > Não usa nenhuma biblioteca externa: o PDF sai pela impressão do próprio navegador. É de propósito — o sistema bloqueia carregar script de fora, por segurança.
 
 ## Metas e bônus

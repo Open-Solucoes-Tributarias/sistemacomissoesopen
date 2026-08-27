@@ -238,14 +238,14 @@
   }
   .rel-cabecalho{
     display:flex;justify-content:space-between;align-items:flex-end;gap:16px;
-    border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:16px;
+    border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:12px;
   }
   .rel-empresa{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#555;}
   .rel-cabecalho h1{font-size:17px;font-weight:800;margin:3px 0 0;}
   .rel-emissao{font-size:9.5px;color:#666;white-space:nowrap;}
-  .rel-sec{margin-bottom:18px;}
+  .rel-sec{margin-bottom:13px;}
   .rel-sec h2{
-    font-size:12px;font-weight:800;margin:0 0 7px;padding-bottom:4px;
+    font-size:12px;font-weight:800;margin:0 0 6px;padding-bottom:3px;
     border-bottom:1px solid #bbb;display:flex;justify-content:space-between;align-items:baseline;gap:12px;
   }
   .rel-sub{font-size:9.5px;font-weight:600;color:#666;}
@@ -284,21 +284,27 @@
   .rel-campea-sub{display:block;font-size:9px;color:#666;}
   .rel-campea-lista{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;font-size:9px;color:#555;}
   .rel-nota{font-size:8.5px;color:#777;margin:0;}
-  .rel-graf{margin-bottom:14px;break-inside:avoid;}
+  .rel-graf{margin-bottom:10px;break-inside:avoid;}
   .rel-graf h3{font-size:10px;font-weight:800;margin:0 0 4px;color:#333;}
   .rel-legenda{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;font-size:9px;color:#555;}
   .rel-legenda span{display:inline-flex;align-items:center;gap:4px;}
   .rel-legenda i{width:8px;height:8px;border-radius:2px;display:inline-block;}
   @media (max-width:640px){ .rel-ranking{grid-template-columns:1fr;} }
-  .rel-rodape{margin-top:20px;padding-top:8px;border-top:1px solid #bbb;font-size:8.5px;color:#777;text-align:center;}
+  .rel-rodape{margin-top:14px;padding-top:8px;border-top:1px solid #bbb;font-size:8.5px;color:#777;text-align:center;}
 
   @media print{
     body.imprimindo-relatorio > #root{ display:none !important; }
     body.imprimindo-relatorio #relatorio-print{ display:block !important; }
-    body.imprimindo-relatorio .rel-sec.quebra{ break-before:page; }
-    body.imprimindo-relatorio .rel-sec{ break-inside:avoid; }
+    /* Nada de quebra forçada: o conteúdo corre e só evita cortar no meio de
+       um bloco pequeno. Quebra à força deixava meia página em branco. */
+    body.imprimindo-relatorio .rel-sec h2{ break-after:avoid; }
+    body.imprimindo-relatorio .rel-graf,
+    body.imprimindo-relatorio .rel-campea,
+    body.imprimindo-relatorio .rel-cabecalho{ break-inside:avoid; }
     body.imprimindo-relatorio .rel-tabela tr{ break-inside:avoid; }
-    @page{ margin:12mm; }
+    /* Tabela que atravessa a página repete o cabeçalho */
+    body.imprimindo-relatorio .rel-tabela thead{ display:table-header-group; }
+    @page{ margin:10mm; }
     .topbar-actions, .tabs-nav, .filters-row, .toolbar, .kpi-toggle-row, .row-actions, .del-cell, .search-row, .year-row{
       display:none !important;
     }
@@ -5364,7 +5370,7 @@ function montarRelatorioMes(mes){
     if(!dados.some(function(d){ return d.valor > 0; })) return '';
     return `<div class="rel-graf">
       <h3>${esc(m.label)} — ${esc(mes)}</h3>
-      ${graficoBarrasPainel(dados)}
+      ${graficoBarrasPainel(dados, {h:180})}
     </div>`;
   }).join('');
 
@@ -5375,7 +5381,7 @@ function montarRelatorioMes(mes){
     });
     if(!temAlgo) return '';
     painelMetricaFoco = chave;
-    const svg = graficoLinhaPainel(vendsPainel);
+    const svg = graficoLinhaPainel(vendsPainel, {h:190});
     return `<div class="rel-graf">
       <h3>${esc(m.label)} — evolução em ${ano}</h3>
       ${svg}
@@ -5446,7 +5452,7 @@ function montarRelatorioMes(mes){
           linhasLib, 'Nenhuma comissão liberada em ' + mes + '.')}
       </section>
 
-      <section class="rel-sec quebra">
+      <section class="rel-sec">
         <h2>Sistema <span class="rel-sub">${vendasMes.length} venda${vendasMes.length===1?'':'s'} · ${fmtMoney(faturamentoDaOrigem('sistema', ano, mes))}</span></h2>
         ${relTabela(
           [{label:'Cliente'},{label:'Venda'},{label:'Valor do contrato',num:true},{label:'Quem vendeu'},{label:'Pagamento'},{label:'Comissões'}],
@@ -5455,7 +5461,7 @@ function montarRelatorioMes(mes){
 
       ${blocosEntidade}
 
-      <section class="rel-sec quebra">
+      <section class="rel-sec">
         <h2>Parceiros <span class="rel-sub">${fmtMoney(totHonorarios)} em honorários</span></h2>
         ${relTabela(
           [{label:'Parceiro'},{label:'Origem'},{label:'Cliente / Empresa / Curso'},{label:'Valor do contrato',num:true},{label:'%',num:true},{label:'Honorário',num:true}],
@@ -5474,7 +5480,7 @@ function montarRelatorioMes(mes){
           linhasMetas, 'Nenhuma meta configurada para ' + mes + '.')}
       </section>
 
-      <section class="rel-sec quebra">
+      <section class="rel-sec">
         <h2>Desempenho da equipe <span class="rel-sub">campeã do mês: ${esc(campeaoTxt)}</span></h2>
         ${rankingHtml}
       </section>
@@ -5486,12 +5492,12 @@ function montarRelatorioMes(mes){
           linhasEquipe, 'Nenhum indicador lançado em ' + mes + '.')}
       </section>
 
-      ${graficosMes ? `<section class="rel-sec quebra">
+      ${graficosMes ? `<section class="rel-sec">
         <h2>Comparativo do mês</h2>
         ${graficosMes}
       </section>` : ''}
 
-      ${graficosAno ? `<section class="rel-sec quebra">
+      ${graficosAno ? `<section class="rel-sec">
         <h2>Evolução ao longo de ${ano}</h2>
         ${graficosAno}
       </section>` : ''}
@@ -5599,8 +5605,8 @@ function rankingDoMes(mes){
 
 /* ---------------- Painel da Equipe: gráficos em SVG ---------------- */
 
-function graficoBarrasPainel(dados){
-  const w = 760, h = 240, padBottom = 30, padTop = 12, padLeft = 44, gap = 18;
+function graficoBarrasPainel(dados, opts){
+  const w = 760, h = (opts && opts.h) || 240, padBottom = 30, padTop = 12, padLeft = 44, gap = 18;
   const max = Math.max(1, ...dados.map(d => d.valor));
   const plotH = h - padBottom - padTop;
   const plotW = w - padLeft - 12;
@@ -5621,8 +5627,8 @@ function graficoBarrasPainel(dados){
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">${grade}${barras}</svg>`;
 }
 
-function graficoLinhaPainel(vends){
-  const w = 760, h = 260, padBottom = 28, padTop = 12, padLeft = 44;
+function graficoLinhaPainel(vends, opts){
+  const w = 760, h = (opts && opts.h) || 260, padBottom = 28, padTop = 12, padLeft = 44;
   const plotH = h - padBottom - padTop;
   const plotW = w - padLeft - 12;
   const serie = v => MONTHS.map(m => valorMetrica(v, m, painelMetricaFoco));
