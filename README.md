@@ -234,7 +234,7 @@ A aba **Consultoria** e a de **Órgãos Públicos** não têm essa coluna — o 
 
 **Lançamento** — escolhe a vendedora, o mês e preenche os **seis** campos de andamento. Logo abaixo, um bloco cinza mostra os três indicadores de venda já calculados daquele mês, só para conferência. Se aquele mês já foi lançado, o formulário abre preenchido e o botão vira "Atualizar". Ao lado, cada vendedora tem um quadro com os meses já lançados, com atalhos para editar ou excluir.
 
-**Dashboard** — cartões com o total do ano por pessoa, **ranking do mês**, gráfico de barras comparando as pessoas num indicador, evolução mensal em linhas ao longo dos 12 meses, e a tabela de totais anuais.
+**Dashboard** — abre pelo **ranking do mês**, que é o que essa aba tem de mais importante: um quadro em degradê marinho com a campeã e a classificação, e abaixo um cartão por indicador mostrando quem liderou cada quesito, na cor da pessoa. Depois vêm os cartões de total do ano, o gráfico de barras comparando as pessoas num indicador, a evolução mensal em linhas ao longo dos 12 meses e a tabela de totais anuais.
 
 No ranking, cada indicador mostra quem liderou; **quem empata aparece junto**, com o valor uma vez só.
 
