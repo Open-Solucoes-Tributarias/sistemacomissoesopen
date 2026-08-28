@@ -997,6 +997,27 @@
 
   .painel-topo-acoes{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
   .painel-topo-sub{display:flex;justify-content:flex-end;margin-bottom:12px;}
+  .painel-periodo{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--primary);
+    border-radius:var(--radius-sm);padding:11px 14px;margin-bottom:14px;
+  }
+  .painel-periodo > span{
+    font-size:9.5px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);
+  }
+  .painel-periodo select{
+    font-family:var(--font);font-size:13.5px;font-weight:700;color:var(--ink);
+    background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius-sm);
+    padding:8px 10px;cursor:pointer;outline:none;
+  }
+  .painel-periodo select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+  .painel-periodo > b{
+    margin-left:auto;font-size:12px;font-weight:800;color:var(--primary);
+    background:var(--primary-soft);border-radius:999px;padding:5px 12px;
+  }
+  .painel-periodo-tag{
+    font-size:11.5px;font-weight:700;color:var(--ink-soft);
+  }
   .painel-equipe-nota{font-size:12.5px;color:var(--ink-soft);font-weight:600;line-height:1.5;margin-bottom:12px;}
   .painel-equipe-lista{display:flex;flex-wrap:wrap;gap:8px;}
   .painel-equipe-item{
@@ -1223,7 +1244,10 @@ let painelVendedor = '';        // quem está sendo lançado
 let painelMes = MONTHS[0];
 let painelForm = {};            // rascunho do formulário
 let painelMetricaFoco = 'vendasSistemas';
-let painelMesRanking = MONTHS[0];
+/* Período do Relatório de Desempenho: 'Ano' ou o nome de um mês. Vale para
+   TODOS os blocos do painel — ranking, cartões, comparativo e tabela — pra
+   não ter um filtro em cada quadro dizendo coisa diferente. */
+let painelPeriodo = 'Ano';
 
 const state = {};
 ENTITY_KEYS.forEach(k => {
@@ -5457,12 +5481,22 @@ function mesesLancados(vendedor){
     .filter(r => name_matches_client(r.vendedor, vendedor))
     .sort((a,b) => MONTHS.indexOf(a.mes) - MONTHS.indexOf(b.mes));
 }
-function totaisPorVendedorPainel(){
+/* Valor de um indicador no período escolhido: o mês, ou a soma dos 12. */
+function valorNoPeriodo(vendedor, key, periodo){
+  const p = periodo || painelPeriodo;
+  if(p && p !== 'Ano') return valorMetrica(vendedor, p, key);
+  return MONTHS.reduce(function(a, mes){ return a + valorMetrica(vendedor, mes, key); }, 0);
+}
+function rotuloPeriodo(periodo){
+  const p = periodo || painelPeriodo;
+  return (p && p !== 'Ano') ? (p + ' de ' + yearFilter) : ('todo o ano de ' + yearFilter);
+}
+
+function totaisPorVendedorPainel(periodo){
   const out = {};
   vendedoresDoPainel().forEach(v => {
     const t = {};
-    METRICAS.forEach(m => { t[m.key] = 0; });
-    MONTHS.forEach(mes => { METRICAS.forEach(m => { t[m.key] += valorMetrica(v, mes, m.key); }); });
+    METRICAS.forEach(m => { t[m.key] = valorNoPeriodo(v, m.key, periodo); });
     out[v] = t;
   });
   return out;
@@ -5709,7 +5743,7 @@ function montarRelatorioMes(mes){
   painelMetricaFoco = focoAntigo;
 
   // Totais do ano por pessoa (volume vendido, não comissão)
-  const totaisAno = totaisPorVendedorPainel();
+  const totaisAno = totaisPorVendedorPainel('Ano');   // no PDF é sempre o ano cheio
   const linhasTotaisAno = vendsPainel.map(function(v){
     const t = totaisAno[v] || {};
     return `<tr><td>${esc(v)}</td>
@@ -5852,7 +5886,7 @@ function setPainelVendedor(v){ painelVendedor = v; carregarFormPainel(); render(
 function setPainelMes(el){ painelMes = el.value; carregarFormPainel(); render(); }
 function onPainelFormInput(el, key){ painelForm[key] = el.value; }   // sem render, pra não perder o foco
 function setPainelMetricaFoco(el){ painelMetricaFoco = el.value; render(); }
-function setPainelMesRanking(el){ painelMesRanking = el.value; render(); }
+function setPainelPeriodo(el){ painelPeriodo = el.value; render(); }
 
 function salvarPainelLancamento(){
   if(!painelVendedor){ showAlert("Escolha a vendedora antes de salvar."); return; }
@@ -5896,14 +5930,14 @@ function excluirPainelLancamento(vendedor, mes){
    Aqui vale o que a Soraya pediu: conta quantas vezes o nome da pessoa
    aparece liderando. Empate num indicador dá vitória para todas as
    empatadas, e quem está zerado não vence nada. */
-function rankingDoMes(mes){
+function rankingDoMes(periodo){
   const vends = vendedoresDoPainel();
   const vitorias = {};
   vends.forEach(v => { vitorias[v] = 0; });
 
   const porMetrica = METRICAS.map(m => {
     const valores = vends
-      .map(v => ({ vendedor: v, valor: valorMetrica(v, mes, m.key) }))
+      .map(v => ({ vendedor: v, valor: valorNoPeriodo(v, m.key, periodo) }))
       .sort((a,b) => b.valor - a.valor);
 
     const lideres = valores.filter(x => x.valor > 0 && x.valor === valores[0].valor);
@@ -6250,8 +6284,21 @@ function renderPainelLancamento(vends){
 function renderPainelDashboard(vends){
   const totais = totaisPorVendedorPainel();
   const metricaLabel = (METRICAS.find(m => m.key === painelMetricaFoco) || {}).label || '';
+  const ehMes = painelPeriodo !== 'Ano';
+  const doPeriodo = ehMes ? ('de ' + painelPeriodo) : ('de ' + yearFilter);
 
-  const cartoes = panel('painel-cartoes', 'Totais do ano por vendedora', `
+  // Um filtro só, valendo para todos os quadros do painel.
+  const seletorPeriodo = `
+    <div class="painel-periodo">
+      <span>Período</span>
+      <select onchange="setPainelPeriodo(this)">
+        <option value="Ano" ${painelPeriodo==='Ano'?'selected':''}>Ano inteiro · ${yearFilter}</option>
+        ${MONTHS.map(m => `<option value="${m}" ${painelPeriodo===m?'selected':''}>${m} de ${yearFilter}</option>`).join('')}
+      </select>
+      <b>${ehMes ? esc(painelPeriodo) : 'Ano inteiro'}</b>
+    </div>`;
+
+  const cartoes = panel('painel-cartoes', `Totais ${doPeriodo} por vendedora`, `
     <div class="kpis painel-kpis" style="margin:0;">
       ${vends.map(v => `
         <div class="kpi-card" style="--kc:${esc(corDoVendedor(v))}">
@@ -6275,16 +6322,16 @@ function renderPainelDashboard(vends){
   {
     // "sem dados" tem que olhar os totais consolidados: um mês pode ter
     // venda registrada mesmo sem ninguém ter lançado os indicadores à mão.
-    const semLancamento = vends.every(v => METRICAS.every(m => valorMetrica(v, painelMesRanking, m.key) === 0));
-    const rk = rankingDoMes(painelMesRanking);
+    const semLancamento = vends.every(v => METRICAS.every(m => valorNoPeriodo(v, m.key) === 0));
+    const rk = rankingDoMes(painelPeriodo);
     const corpo = semLancamento
-      ? `<div class="meta-empty">Nenhum lançamento registrado para ${esc(painelMesRanking)} ainda.</div>`
+      ? `<div class="meta-empty">Nenhum lançamento registrado em ${esc(rotuloPeriodo())} ainda.</div>`
       : `
         ${rk.campeoes.length ? `
         <div class="painel-melhor">
           <div class="painel-melhor-globo">${logoGloboSvg(150, '#ffffff')}</div>
           <div class="painel-melhor-esq">
-            <div class="painel-melhor-rot">${rk.campeoes.length > 1 ? 'Melhores do mês · empate' : 'Melhor do mês'}</div>
+            <div class="painel-melhor-rot">${rk.campeoes.length > 1 ? (ehMes ? 'Melhores do mês · empate' : 'Melhores do ano · empate') : (ehMes ? 'Melhor do mês' : 'Melhor do ano')}</div>
             <div class="painel-melhor-nome">${rk.campeoes.map(c => esc(c.vendedor)).join(' e ')}</div>
             <div class="painel-melhor-sub">${rk.campeoes[0].vitorias} de ${METRICAS.length} indicador${rk.campeoes[0].vitorias===1?'':'es'} vencido${rk.campeoes[0].vitorias===1?'':'s'}</div>
           </div>
@@ -6311,13 +6358,10 @@ function renderPainelDashboard(vends){
             </div>`;
           }).join('')}
         </div>
-        <div class="painel-nota">Vence quem <b>liderar mais indicadores</b> no mês, dos ${METRICAS.length}. Empate num indicador conta vitória para todas as empatadas; quem está zerado num indicador não vence nele. Não há pontuação por 2º ou 3º lugar — só a liderança conta.</div>
+        <div class="painel-nota">Vence quem <b>liderar mais indicadores</b> ${ehMes ? 'no mês' : 'no ano'}, dos ${METRICAS.length}. Empate num indicador conta vitória para todas as empatadas; quem está zerado num indicador não vence nele. Não há pontuação por 2º ou 3º lugar — só a liderança conta.</div>
       `;
-    ranking = panel('painel-ranking', 'Ranking do mês', corpo, {
-      actions: `<label class="ordem-wrap"><span>Mês</span>
-        <select onchange="setPainelMesRanking(this)">
-          ${MONTHS.map(m => `<option value="${m}" ${painelMesRanking===m?'selected':''}>${m}</option>`).join('')}
-        </select></label>`,
+    ranking = panel('painel-ranking', ehMes ? ('Ranking de ' + painelPeriodo) : 'Ranking do ano', corpo, {
+      meta: `<span class="painel-periodo-tag">${esc(rotuloPeriodo())}</span>`,
     });
   }
 
@@ -6328,16 +6372,17 @@ function renderPainelDashboard(vends){
 
   const barras = panel('painel-barras', 'Comparativo por indicador',
     graficoBarrasPainel(vends.map(v => ({vendedor: v, valor: totais[v]?.[painelMetricaFoco] || 0})))
-    + `<div class="painel-nota">Totais de ${yearFilter}, por ${esc(metricaLabel.toLowerCase())}.</div>`,
+    + `<div class="painel-nota">${esc(metricaLabel)} em ${esc(rotuloPeriodo())}.</div>`,
     { actions: seletorMetrica });
 
   const linha = panel('painel-linha', `Evolução mensal — ${esc(metricaLabel)}`,
     graficoLinhaPainel(vends)
+    + `<div class="painel-nota">Este quadro mostra sempre os 12 meses de ${yearFilter} — é a linha do tempo, não muda com o período escolhido.</div>`
     + `<div class="painel-legenda">${vends.map(v => `
         <span><i style="background:${esc(corDoVendedor(v))}"></i>${esc(v)}</span>`).join('')}</div>`,
     {});
 
-  const tabela = panel('painel-totais', 'Totais anuais por indicador', `
+  const tabela = panel('painel-totais', ehMes ? ('Totais de ' + painelPeriodo + ' por indicador') : 'Totais anuais por indicador', `
     <div class="table-scroll">
       <table class="table-plain">
         <thead>
@@ -6357,7 +6402,7 @@ function renderPainelDashboard(vends){
 
   // O ranking é o que essa aba tem de mais importante: quem foi melhor em
   // cada quesito. Vem primeiro e com destaque, antes de qualquer número.
-  return sectionsToolbarHtml() + ranking + cartoes + barras + linha + tabela;
+  return seletorPeriodo + sectionsToolbarHtml() + ranking + cartoes + barras + linha + tabela;
 }
 
 /* ---------------- App shell ---------------- */
