@@ -293,10 +293,11 @@ create policy "admin insert" on bonus for insert to authenticated with check (cu
 create policy "admin update" on bonus for update to authenticated using (current_user_is_admin()) with check (current_user_is_admin());
 create policy "admin delete" on bonus for delete to authenticated using (current_user_is_admin());
 
--- lancamento_vendas: divisão do faturamento de um curso. É um dado de
--- gestão da equipe inteira, então só admin lê e escreve; cada vendedora
--- vê o próprio total pelo Painel da Equipe, que passa por view agregada.
-create policy "select admin only" on lancamento_vendas for select to authenticated using (current_user_is_admin());
+-- lancamento_vendas: divisão do faturamento de um curso. Escrever é só de
+-- admin; ler segue o corte do resto do sistema — admin vê tudo, cada
+-- vendedora vê a própria linha.
+create policy "select own or admin" on lancamento_vendas for select to authenticated
+  using (current_user_is_admin() or name_matches(vendedor, current_user_person_name()));
 create policy "admin insert" on lancamento_vendas for insert to authenticated with check (current_user_is_admin());
 create policy "admin update" on lancamento_vendas for update to authenticated using (current_user_is_admin()) with check (current_user_is_admin());
 create policy "admin delete" on lancamento_vendas for delete to authenticated using (current_user_is_admin());

@@ -946,6 +946,15 @@
   .divisao-btn:hover{border-color:#E0A93B;}
   .divisao-btn.ok{background:#F0FDF4;color:#15803D;border-color:#BBF7D0;}
   .divisao-alerta{color:#B45309 !important;font-weight:700;}
+  .divisao-minha{
+    font-size:13.5px;font-weight:800;color:var(--primary);
+    font-variant-numeric:tabular-nums;line-height:1.2;
+  }
+  .divisao-minha span{
+    display:block;font-size:10px;font-weight:700;color:var(--ink-faint);
+    text-transform:uppercase;letter-spacing:.08em;margin-top:2px;
+  }
+  .divisao-nada{color:var(--ink-faint);font-weight:600;}
   .divisao-explica{
     font-size:12.5px;color:var(--ink-soft);font-weight:500;line-height:1.55;margin-bottom:14px;
   }
@@ -1755,8 +1764,10 @@ async function tryLoadEntityFromStorageAsync(key){
     const dbRows = await sbSelect('lancamentos', 'select=*&entidade=eq.'+key+'&order=id.asc');
     falhaAoCarregar['lanc-'+key] = false;
     const extras = await sbSelectOpcional('lancamentos_extra_vendedores', 'select=*', []);
-    // A divisão das vendas é dado de admin; conta restrita não lê e nem precisa.
-    const divisoes = (cfg.hasVendasPorVendedor && isAdmin)
+    // Sempre pede: quem é admin recebe a divisão inteira, e cada vendedora
+    // recebe a própria linha (o banco corta o resto). Não dá pra condicionar
+    // a isAdmin aqui — isso carrega em paralelo e ainda pode não ter chegado.
+    const divisoes = cfg.hasVendasPorVendedor
       ? await sbSelectOpcional('lancamento_vendas', 'select=*&order=id.asc', [])
       : [];
     const vendorsDb = await sbSelectOpcional('entity_vendors', 'select=vendor_name&entidade=eq.'+key+'&order=id.asc', []);
@@ -4890,7 +4901,7 @@ function resumoDivisao(row){
 }
 
 function entityRowsSemDivisao(key){
-  if(!ENTITIES[key].hasVendasPorVendedor) return [];
+  if(!ENTITIES[key].hasVendasPorVendedor || !isAdmin) return [];
   return (state[key].rows || []).filter(function(r){
     return (r.ano||2026) === yearFilter && !resumoDivisao(r).fecha;
   });
@@ -5070,13 +5081,24 @@ function renderEntitySection(key){
         cfg.fields.forEach((f, fi) => {
           if(fi === 1 && cfg.hasVendasPorVendedor){
             const d = resumoDivisao(row);
-            cells += `<td class="divisao-cell">
-              <button class="divisao-btn${d.fecha ? ' ok' : ''}" onclick="abrirDivisaoVendas('${key}',${row.id})"
-                      title="Divide o faturamento deste curso entre quem realmente vendeu">
-                ${d.lista.length ? `${d.lista.length} vendedora${d.lista.length===1?'':'s'}` : '— dividir'}
-              </button>
-              ${d.lista.length ? `<div class="calc-value${d.fecha?'':' divisao-alerta'}">${d.fecha ? 'confere' : esc(d.rotuloDiferenca)}</div>` : ''}
-            </td>`;
+            if(!isAdmin){
+              // A vendedora vê só a própria participação — sem o botão de
+              // dividir e sem o aviso de "falta", que é conferência de admin.
+              const meu = d.lista.reduce(function(a,x){ return a + (Number(x.valor)||0); }, 0);
+              cells += `<td class="divisao-cell">
+                ${meu > 0
+                  ? `<div class="divisao-minha">${fmtMoney(meu)}<span>vendido por você</span></div>`
+                  : `<div class="divisao-nada">—</div>`}
+              </td>`;
+            } else {
+              cells += `<td class="divisao-cell">
+                <button class="divisao-btn${d.fecha ? ' ok' : ''}" onclick="abrirDivisaoVendas('${key}',${row.id})"
+                        title="Divide o faturamento deste curso entre quem realmente vendeu">
+                  ${d.lista.length ? `${d.lista.length} vendedora${d.lista.length===1?'':'s'}` : '— dividir'}
+                </button>
+                ${d.lista.length ? `<div class="calc-value${d.fecha?'':' divisao-alerta'}">${d.fecha ? 'confere' : esc(d.rotuloDiferenca)}</div>` : ''}
+              </td>`;
+            }
           }
           if(f.key === "parceiro"){
             cells += `<td><select data-entity="${key}" data-id="${row.id}" onchange="onEntityParceiroSelect(this)">${partnerOptionsHtml(row.parceiro)}</select></td>`;
@@ -5180,7 +5202,7 @@ function renderEntitySection(key){
           <thead>
             <tr>
               <th style="width:58px">Mês</th>
-              ${cfg.fields.map((f,fi) => `<th${f.key==='valorContrato'?' class="num col-valor"':(f.key==='participacao'?' class="num col-pct"':(f.type==='number'?' class="num"':''))}>${f.label}</th>${fi===0&&cfg.hasVendasPorVendedor?'<th style="width:150px">Vendas por vendedora</th>':''}${f.key==='formaPagamento'&&cfg.hasPagamento?'<th style="width:110px">Pagamento</th>':''}`).join('')}
+              ${cfg.fields.map((f,fi) => `<th${f.key==='valorContrato'?' class="num col-valor"':(f.key==='participacao'?' class="num col-pct"':(f.type==='number'?' class="num"':''))}>${f.label}</th>${fi===0&&cfg.hasVendasPorVendedor?('<th style="width:150px">'+(isAdmin?'Vendas por vendedora':'Sua venda')+'</th>'):''}${f.key==='formaPagamento'&&cfg.hasPagamento?'<th style="width:110px">Pagamento</th>':''}`).join('')}
               <th class="num">% Comissão</th>
               <th>Vendedor</th>
               <th class="num">% Comissão V2</th>

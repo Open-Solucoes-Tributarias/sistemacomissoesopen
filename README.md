@@ -234,7 +234,7 @@ As duas abas resolvem isso, cada uma do jeito que o dado pede:
 
 > **Nada foi preenchido automaticamente, de propósito.** No Sistema, nenhuma venda tinha uma vendedora única — todas eram divididas entre 2 e 6 pessoas. Em Cursos, a mesma pessoa aparece como vendedora em 10 dos 12 lançamentos, com 1% em todos: é o papel dela na comissão, não a venda. Copiar esses campos repetiria exatamente o erro que a coluna existe para corrigir.
 
-O nome de quem vendeu no Sistema tem a mesma máscara dos outros vendedores: conta restrita só lê se for ela mesma. A divisão dos cursos é só de admin — cada vendedora vê o próprio total pelo Relatório de Desempenho.
+O nome de quem vendeu no Sistema tem a mesma máscara dos outros vendedores: conta restrita só lê se for ela mesma. Na divisão dos cursos vale o mesmo: **cada vendedora vê a própria linha** — na coluna "Sua venda" aparece quanto ela vendeu daquele curso — e as linhas das colegas ficam invisíveis. Editar a divisão continua sendo só de admin.
 
 A aba **Consultoria** e a de **Órgãos Públicos** não têm essa coluna — o painel não conta essas duas origens.
 

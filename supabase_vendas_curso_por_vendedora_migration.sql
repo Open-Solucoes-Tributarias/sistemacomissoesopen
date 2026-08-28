@@ -32,14 +32,18 @@ create table if not exists lancamento_vendas (
 );
 create index if not exists lancamento_vendas_lanc on lancamento_vendas (lancamento_id);
 
--- Dado de gestão da equipe inteira: só admin lê e escreve. Cada vendedora
--- vê o próprio total pelo Painel da Equipe, que passa por view agregada.
+-- Escrever é só de admin. Ler segue o corte do resto do sistema: admin vê
+-- a divisão inteira e cada vendedora vê a PRÓPRIA linha — sem isso ela
+-- abria a aba Cursos e não via a própria participação, como se não
+-- tivesse entrado no curso.
 alter table lancamento_vendas enable row level security;
 drop policy if exists "select admin only" on lancamento_vendas;
+drop policy if exists "select own or admin" on lancamento_vendas;
 drop policy if exists "admin insert" on lancamento_vendas;
 drop policy if exists "admin update" on lancamento_vendas;
 drop policy if exists "admin delete" on lancamento_vendas;
-create policy "select admin only" on lancamento_vendas for select to authenticated using (current_user_is_admin());
+create policy "select own or admin" on lancamento_vendas for select to authenticated
+  using (current_user_is_admin() or name_matches(vendedor, current_user_person_name()));
 create policy "admin insert" on lancamento_vendas for insert to authenticated with check (current_user_is_admin());
 create policy "admin update" on lancamento_vendas for update to authenticated using (current_user_is_admin()) with check (current_user_is_admin());
 create policy "admin delete" on lancamento_vendas for delete to authenticated using (current_user_is_admin());
