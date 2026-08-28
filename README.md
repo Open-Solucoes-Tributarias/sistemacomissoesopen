@@ -53,6 +53,21 @@ O sistema exige login (e-mail e senha) antes de mostrar qualquer dado. Não exis
   
   Quem é admin e quem é restrito (e qual nome cada conta restrita representa) fica guardado na tabela `app_user_access`, ligada à conta de login de cada pessoa — não é algo que o próprio app deixa alguém mudar sozinho.
 
+### Contas cadastradas
+
+| E-mail | Acesso | Vê o quê |
+|---|---|---|
+| soraya.sa@opensolucoestributarias.com.br | Admin | tudo, e edita |
+| financeiro@opensolucoestributarias.com.br | Admin | tudo, e edita |
+| open@opensolucoestributarias.com.br | Admin | tudo, e edita |
+| ana.rios@opensolucoestributarias.com.br | Restrita · **Rios** | só o que tem o nome dela, sem editar |
+| angela@opensolucoestributarias.com.br | Restrita · **Angela** | idem |
+| uilma@opensolucoestributarias.com.br | Restrita · **Uilma** | idem |
+| luciana@opensolucoestributarias.com.br | Restrita · **Luciana** | idem |
+| gustavo.reis@opensolucoestributarias.com.br | Restrita · **Gustavo** | idem |
+
+As senhas não ficam aqui nem em lugar nenhum do código — só no Supabase, em hash. Para trocar a de alguém: **Authentication → Users**, os três pontinhos na linha da pessoa → *Reset password*.
+
 ### Criando contas da equipe
 
 1. No painel do Supabase, vá em **Authentication → Users → Add user**.
