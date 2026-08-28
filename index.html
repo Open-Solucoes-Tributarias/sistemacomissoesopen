@@ -275,15 +275,29 @@
     color:#111;font-family:var(--font);font-size:10.5px;line-height:1.45;
     -webkit-print-color-adjust:exact;print-color-adjust:exact;   /* cores dos gráficos saem no papel */
   }
-  .rel-cabecalho{
-    display:flex;justify-content:space-between;align-items:flex-end;gap:16px;
-    border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:12px;
+  /* Faixa do relatório: a mesma do topo do sistema. */
+  .rel-faixa{
+    position:relative;overflow:hidden;
+    background:linear-gradient(100deg,#071B30 0%,#0A2540 42%,#14508C 100%);
+    color:#fff;padding:14px 18px;border-radius:5px 5px 0 0;
+    display:flex;justify-content:space-between;align-items:center;gap:18px;
   }
-  .rel-marca{display:flex;align-items:center;gap:14px;min-width:0;}
-  .rel-divisor{width:1px;height:32px;background:#ccc;flex:none;}
-  .rel-empresa{font-size:9px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:#1C6FBF;}
-  .rel-cabecalho h1{font-size:17px;font-weight:800;margin:3px 0 0;}
-  .rel-emissao{font-size:9.5px;color:#666;white-space:nowrap;}
+  .rel-faixa-linha{
+    height:3px;border-radius:0 0 5px 5px;margin-bottom:14px;
+    background:linear-gradient(90deg,#4FA3E3 0%,#2E82CE 55%,#14508C 100%);
+  }
+  .rel-faixa-globo{
+    position:absolute;right:-26px;top:50%;transform:translateY(-50%);
+    width:150px;height:150px;opacity:.08;pointer-events:none;
+  }
+  .rel-faixa-globo svg{width:100%;height:100%;}
+  .rel-marca{display:flex;align-items:center;gap:14px;min-width:0;position:relative;z-index:1;}
+  .rel-divisor{width:1px;height:30px;background:rgba(255,255,255,.25);flex:none;}
+  .rel-empresa{font-size:8px;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:#4FA3E3;}
+  .rel-faixa h1{font-size:15px;font-weight:800;margin:3px 0 0;color:#fff;}
+  .rel-emissao{position:relative;z-index:1;text-align:right;white-space:nowrap;}
+  .rel-emissao-tit{font-size:9.5px;font-weight:700;color:#fff;}
+  .rel-emissao-sub{font-size:8px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.55);margin-top:3px;}
   .rel-sec{margin-bottom:13px;}
   .rel-sec h2{
     font-size:11px;font-weight:800;margin:0 0 6px;padding-bottom:3px;
@@ -344,7 +358,7 @@
     body.imprimindo-relatorio .rel-sec h2{ break-after:avoid; }
     body.imprimindo-relatorio .rel-graf,
     body.imprimindo-relatorio .rel-campea,
-    body.imprimindo-relatorio .rel-cabecalho{ break-inside:avoid; }
+    body.imprimindo-relatorio .rel-faixa{ break-inside:avoid; }
     body.imprimindo-relatorio .rel-tabela tr{ break-inside:avoid; }
     /* Tabela que atravessa a página repete o cabeçalho */
     body.imprimindo-relatorio .rel-tabela thead{ display:table-header-group; }
@@ -1037,7 +1051,7 @@ const TABS = [
   {key:"bonus", label:"Bônus e Metas"},
   {key:"parceiros", label:"Resumo Geral"},
   {key:"pagamentos", label:"Pagamentos Realizados"},
-  {key:"painel", label:"Painel da Equipe"},
+  {key:"painel", label:"Relatório de Desempenho"},
 ];
 
 // Como as abas aparecem agrupadas na barra lateral. Cada chave precisa
@@ -2271,7 +2285,7 @@ function renderModal(){
           ${isAdmin && !d.fecha ? `<button class="action-btn" title="Jogar o que falta nesta linha" onclick="usarValorTotalNaDivisao(${item.id})">⤵</button>` : ''}
           ${isAdmin ? `<button class="action-btn danger" title="Remover" onclick="removeDivisaoVenda(${item.id})">✕</button>` : ''}
         </div>`;
-    }).join('') : `<div class="divisao-vazio">Nenhuma vendedora informada ainda. Este curso não está sendo contado no Painel da Equipe.</div>`;
+    }).join('') : `<div class="divisao-vazio">Nenhuma vendedora informada ainda. Este curso não está sendo contado no Relatório de Desempenho.</div>`;
 
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
@@ -4320,7 +4334,7 @@ function renderVendasSection(){
         </td>
         <td class="resp-cell">
           <select class="${(row.vendedorResponsavel||'').trim() ? '' : 'sem-resp'}" data-id="${row.id}" onchange="onResponsavelSelect(this)"
-                  title="Quem efetivamente fez esta venda — é essa pessoa que o Painel da Equipe conta">
+                  title="Quem efetivamente fez esta venda — é essa pessoa que o Relatório de Desempenho conta">
             <option value="">— quem vendeu?</option>
             ${SELLERS.map(sv => `<option value="${esc(sv.label)}" ${name_matches_client(row.vendedorResponsavel, sv.label)?'selected':''}>${esc(sv.label)}</option>`).join('')}
           </select>
@@ -4366,7 +4380,7 @@ function renderVendasSection(){
     <div class="storage-warning aviso-resp">
       🧭 <b>${semResp.length}</b> venda${semResp.length===1?'':'s'} de ${yearFilter} ainda sem <b>quem vendeu</b>.
       A comissão é dividida entre várias pessoas, então o sistema não tem como adivinhar de quem é a venda —
-      preencha a coluna <b>“Quem vendeu”</b> para essas entrarem no Painel da Equipe.
+      preencha a coluna <b>“Quem vendeu”</b> para essas entrarem no Relatório de Desempenho.
     </div>` : '';
 
   return `
@@ -5590,17 +5604,22 @@ function montarRelatorioMes(mes){
 
   return `
     <div class="rel-doc">
-      <header class="rel-cabecalho">
+      <header class="rel-faixa">
+        <div class="rel-faixa-globo">${logoGloboSvg(150, '#ffffff')}</div>
         <div class="rel-marca">
-          ${marcaOpenHtml({tam:34})}
+          ${marcaOpenHtml({tam:32, clara:true, cor:'#8FCBF5'})}
           <div class="rel-divisor"></div>
           <div>
             <div class="rel-empresa">Painel Diretoria Comercial</div>
             <h1>Relatório mensal — ${esc(mes)} de ${ano}</h1>
           </div>
         </div>
-        <div class="rel-emissao">Emitido em ${esc(emitido)}</div>
+        <div class="rel-emissao">
+          <div class="rel-emissao-tit">Controle mensal de vendas e comissões</div>
+          <div class="rel-emissao-sub">Emitido em ${esc(emitido)}</div>
+        </div>
       </header>
+      <div class="rel-faixa-linha"></div>
 
       <section class="rel-sec">
         <h2>Faturamento do mês</h2>
@@ -5891,7 +5910,7 @@ function renderPainelSection(){
   return `
     <div class="painel-topo">
       <div>
-        <div class="painel-titulo">Painel de relatórios mensais · ${yearFilter}</div>
+        <div class="painel-titulo">Relatório de desempenho · ${yearFilter}</div>
         <div class="painel-sub">Andamento da equipe comercial — indicadores lançados a cada mês.</div>
       </div>
       <div class="painel-topo-acoes">${abas}${btnEquipe}</div>

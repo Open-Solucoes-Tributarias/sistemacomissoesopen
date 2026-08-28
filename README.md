@@ -86,7 +86,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 4. Rode `supabase_column_masking_migration.sql` — cria as views `_safe` e fecha a leitura direta das tabelas base.
 5. Rode `supabase_hardening_migration.sql` — correções encontradas na conferência do banco.
 6. Rode `supabase_metas_migration.sql` — novo formato das metas (recria a tabela `metas`).
-7. Rode `supabase_painel_equipe_migration.sql` — cria a tabela do Painel da Equipe, a view `painel_equipe_totais` (que calcula os indicadores de venda) e a lista de quem aparece no painel.
+7. Rode `supabase_painel_equipe_migration.sql` — cria a tabela do Relatório de Desempenho, a view `painel_equipe_totais` (que calcula os indicadores de venda) e a lista de quem aparece no painel.
 8. Rode `supabase_vendedor_responsavel_migration.sql` — cria a coluna "Quem vendeu" nas abas Sistema e Cursos, e faz o painel contar uma venda por pessoa.
 9. Rode `supabase_vendas_curso_por_vendedora_migration.sql` — troca o "quem vendeu" do curso pela divisão do faturamento por vendedora.
 10. Rode `supabase_contratos_reunioes_migration.sql` — cria a equipe de consultoria (contratos e reuniões).
@@ -106,11 +106,11 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `lancamento_vendas` | Divisão do faturamento de um curso entre quem vendeu (sem relação com comissão) |
 | `bonus` | Bônus e metas batidas |
 | `metas` | Regras de meta: gatilho da empresa + prêmio de quem bate |
-| `relatorios_equipe` | Indicadores mensais digitados: andamento da equipe e contratos/reuniões (Painel da Equipe) |
+| `relatorios_equipe` | Indicadores mensais digitados: andamento da equipe e contratos/reuniões (Relatório de Desempenho) |
 | `partners` | Parceiros cadastrados |
 | `venda_products` | Catálogo de produtos da aba Sistema |
 | `sellers` | Vendedoras do Sistema (lista editável) |
-| `entity_vendors` | Vendedores(as) por aba (Consultoria / Órgãos Públicos / Cursos), quem aparece no Painel da Equipe (`entidade='painel'`) e quem é acompanhado por contratos/reuniões (`entidade='painel_contratos'`) |
+| `entity_vendors` | Vendedores(as) por aba (Consultoria / Órgãos Públicos / Cursos), quem aparece no Relatório de Desempenho (`entidade='painel'`) e quem é acompanhado por contratos/reuniões (`entidade='painel_contratos'`) |
 | `closed_months` | Meses fechados para edição |
 | `extra_years` | Anos adicionados manualmente |
 | `app_user_access` | Nível de acesso de cada conta de login (admin ou restrita + nome pra filtrar) |
@@ -181,7 +181,7 @@ Cada vendedor(a) logado enxerga **apenas as próprias linhas** — é o mesmo co
 
 > **Cursos não tem controle de pagamento.** As abas Sistema, Consultoria e Órgãos Públicos têm a coluna "Pago"; a de Cursos não, então lançamentos de curso não aparecem nesses dois quadros. Se a equipe de cursos também passar a receber só depois do pagamento, dá pra ativar o controle lá.
 
-## Painel da Equipe
+## Relatório de Desempenho
 
 Aba própria, para acompanhar o **andamento** da equipe — o esforço, não só o resultado financeiro.
 
@@ -228,7 +228,7 @@ As duas abas resolvem isso, cada uma do jeito que o dado pede:
 
 > **Nada foi preenchido automaticamente, de propósito.** No Sistema, nenhuma venda tinha uma vendedora única — todas eram divididas entre 2 e 6 pessoas. Em Cursos, a mesma pessoa aparece como vendedora em 10 dos 12 lançamentos, com 1% em todos: é o papel dela na comissão, não a venda. Copiar esses campos repetiria exatamente o erro que a coluna existe para corrigir.
 
-O nome de quem vendeu no Sistema tem a mesma máscara dos outros vendedores: conta restrita só lê se for ela mesma. A divisão dos cursos é só de admin — cada vendedora vê o próprio total pelo Painel da Equipe.
+O nome de quem vendeu no Sistema tem a mesma máscara dos outros vendedores: conta restrita só lê se for ela mesma. A divisão dos cursos é só de admin — cada vendedora vê o próprio total pelo Relatório de Desempenho.
 
 A aba **Consultoria** e a de **Órgãos Públicos** não têm essa coluna — o painel não conta essas duas origens.
 
@@ -266,7 +266,7 @@ Para incluir alguém, use **"Quem está na equipe"** no topo da aba: marque quem
 
 ## Relatório mensal em PDF
 
-O botão **"📄 Relatório do mês"**, no topo de qualquer aba, gera um documento único com **tudo o que aconteceu num mês**. Escolhe-se o mês e o sistema monta o relatório e abre a janela de impressão do navegador — para salvar em PDF, basta escolher **"Salvar como PDF"** no destino.
+O botão **"📄 Relatório do mês"**, no topo de qualquer aba, gera um documento único com **tudo o que aconteceu num mês**. Ele abre com a **mesma faixa do sistema** — marca, degradê marinho, globo d'água e o filete azul —, então o papel sai com a cara da empresa. Escolhe-se o mês e o sistema monta o relatório e abre a janela de impressão do navegador — para salvar em PDF, basta escolher **"Salvar como PDF"** no destino.
 
 O que entra:
 
