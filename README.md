@@ -70,6 +70,20 @@ As senhas não ficam aqui nem em lugar nenhum do código — só no Supabase, em
 
 ### Criando contas da equipe
 
+Pelo próprio sistema: aba **Usuários e Acessos** (só aparece para admin).
+
+1. Preencha o **e-mail** e clique em **Gerar** para uma senha provisória forte — ela evita caracteres que se confundem ao ditar por telefone (0/O, 1/l/I).
+2. Marque **Administrador** se a pessoa deve ver e editar tudo. Se não marcar, informe o **nome como aparece nos lançamentos** (ex: `Rios`) — é por ele que o sistema decide o que ela enxerga.
+3. **Criar conta.** A senha aparece **uma única vez**, num quadro destacado: copie e repasse por um canal seguro. Depois disso nem o sistema consegue mostrá-la de novo, só definir outra.
+
+Na lista abaixo do formulário dá para **redefinir a senha** (🔑) e **mudar o nível de acesso** (✎) de qualquer conta, além de ver quem nunca entrou.
+
+> **Por que isso não roda no navegador.** Criar conta e trocar senha exigem a *chave de serviço* do Supabase, que passa por cima de todas as regras de acesso do banco. Se ela estivesse no `index.html`, qualquer pessoa abriria o código-fonte da página e a copiaria. Por isso essa parte vive numa **função no servidor** (`supabase/functions/admin-usuarios`): a chave fica só lá, o navegador manda apenas o token de quem está logado, e o servidor confere **de novo** se essa pessoa é admin antes de fazer qualquer coisa.
+
+Duas travas embutidas: se a conta for criada mas o registro de acesso falhar, a função **desfaz a conta** (nada de usuário órfão); e não deixa rebaixar a **última conta de administrador**, senão ninguém mais administraria o sistema.
+
+### Criando contas pelo painel do Supabase (alternativa)
+
 1. No painel do Supabase, vá em **Authentication → Users → Add user**.
 2. Preencha e-mail e uma senha provisória para a pessoa (marque "Auto Confirm User" pra já liberar o acesso sem precisar confirmar e-mail).
 3. Passe o e-mail e a senha provisória pra pessoa por um canal seguro; ela pode trocar a senha depois pelo link **"Esqueci minha senha"** na tela de login.

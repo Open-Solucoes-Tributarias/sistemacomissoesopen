@@ -1015,6 +1015,53 @@
     margin-left:auto;font-size:12px;font-weight:800;color:var(--primary);
     background:var(--primary-soft);border-radius:999px;padding:5px 12px;
   }
+  /* ---------- Usuários e acessos ---------- */
+  .usuario-aviso{
+    background:var(--primary-soft);border:1px solid var(--ring);color:var(--primary);
+    border-radius:var(--radius-sm);padding:11px 14px;margin-bottom:16px;
+    font-size:12.5px;font-weight:600;line-height:1.55;
+  }
+  .senha-campo{display:flex;gap:8px;align-items:center;}
+  .senha-campo input{flex:1;min-width:0;font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.02em;}
+  .senha-campo .eye-toggle{flex:none;}
+  .usuario-tipo{
+    display:flex;align-items:flex-start;gap:10px;cursor:pointer;
+    border:1.5px solid var(--border);border-radius:var(--radius-sm);
+    padding:11px 13px;margin-bottom:12px;font-size:13px;color:var(--ink-soft);line-height:1.45;
+  }
+  .usuario-tipo input{width:16px;height:16px;accent-color:var(--primary);cursor:pointer;margin-top:1px;flex:none;}
+  .usuario-tipo b{color:var(--ink);}
+  .usuario-dica{
+    font-size:12px;color:var(--ink-faint);font-weight:600;line-height:1.5;margin:-4px 0 14px;
+  }
+  .usuario-tag{
+    font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+    background:var(--border-soft);color:var(--ink-soft);padding:3px 9px;border-radius:999px;white-space:nowrap;
+  }
+  .usuario-tag.admin{background:var(--primary-soft);color:var(--primary);}
+  .usuario-tag.alerta{background:#FFF8E8;color:#B45309;}
+  .usuario-nunca{color:var(--ink-faint);font-style:italic;}
+  .senha-nova{
+    border:2px solid var(--primary);border-radius:var(--radius-md);
+    background:var(--primary-soft);padding:16px 18px;margin-bottom:18px;
+  }
+  .senha-nova-tit{
+    font-size:10px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--primary);margin-bottom:10px;
+  }
+  .senha-nova-linha{display:flex;align-items:baseline;gap:10px;margin-bottom:6px;flex-wrap:wrap;}
+  .senha-nova-linha > span{
+    font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-faint);width:130px;flex:none;
+  }
+  .senha-nova-linha > b{font-size:14.5px;color:var(--ink);word-break:break-all;}
+  .senha-valor{
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:16px !important;
+    background:#fff;border:1px solid var(--ring);border-radius:6px;padding:4px 10px;
+    user-select:all;
+  }
+  .senha-nova-nota{font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.55;margin:10px 0 12px;}
+
   .painel-periodo-tag{
     font-size:11.5px;font-weight:700;color:var(--ink-soft);
   }
@@ -1141,6 +1188,7 @@ const TABS = [
   {key:"parceiros", label:"Resumo Geral"},
   {key:"pagamentos", label:"Pagamentos Realizados"},
   {key:"painel", label:"Relatório de Desempenho"},
+  {key:"usuarios", label:"Usuários e Acessos", adminOnly:true},
 ];
 
 // Como as abas aparecem agrupadas na barra lateral. Cada chave precisa
@@ -1149,6 +1197,7 @@ const NAV_GROUPS = [
   {label:"Visão geral",  keys:["parceiros","pagamentos"]},
   {label:"Lançamentos",  keys:["vendas","consultoria","publicos","cursos"]},
   {label:"Equipe",       keys:["painel","bonus"]},
+  {label:"Administração", keys:["usuarios"]},
 ];
 
 const SVG_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">';
@@ -1161,6 +1210,7 @@ const NAV_ICONS = {
   cursos:      SVG_OPEN + '<path d="M12 4 2.5 8.5 12 13l9.5-4.5L12 4Z"/><path d="M6.5 11v5c0 1.4 2.5 2.6 5.5 2.6s5.5-1.2 5.5-2.6v-5"/></svg>',
   bonus:       SVG_OPEN + '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg>',
   painel:      SVG_OPEN + '<path d="M16.5 20.5v-2a4 4 0 0 0-4-4h-6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="3.5"/><path d="M22 20.5v-2a4 4 0 0 0-3-3.87"/><path d="M16.5 3.6a4 4 0 0 1 0 7.75"/></svg>',
+  usuarios:    SVG_OPEN + '<path d="M12 2.5 4 6v5.5c0 5 3.4 9.3 8 10.5 4.6-1.2 8-5.5 8-10.5V6l-8-3.5Z"/><circle cx="12" cy="11" r="2.6"/><path d="M8.2 17.3a4.2 4.2 0 0 1 7.6 0"/></svg>',
 };
 
 function sidebarNavHtml(){
@@ -1168,9 +1218,11 @@ function sidebarNavHtml(){
     const itens = g.keys.map(function(k){
       const t = TABS.find(x => x.key === k);
       if(!t) return '';
+      if(t.adminOnly && !isAdmin) return '';
       const active = t.key === activeTab ? ' active' : '';
       return `<button class="nav-item${active}" onclick="setTab('${t.key}')">${NAV_ICONS[t.key] || ''}<span>${esc(t.label)}</span></button>`;
     }).join('');
+    if(!itens.trim()) return '';   // grupo inteiro sem item visível
     return `<div class="nav-group"><div class="nav-group-label">${esc(g.label)}</div>${itens}</div>`;
   }).join('');
 }
@@ -2362,6 +2414,31 @@ function renderModal(){
         </div>
       </div>
     `;
+  }
+  if(m.type === 'acesso-usuario'){
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box">
+          <div class="modal-msg">Acesso de ${esc(m.email)}</div>
+          ${m.error ? `<div class="modal-error">${esc(m.error)}</div>` : ''}
+          <label class="usuario-tipo">
+            <input type="checkbox" ${m.admin?'checked':''} onchange="onAcessoFormChange(this,'admin')" />
+            <span><b>Administrador</b> — vê e edita tudo, e gerencia usuários</span>
+          </label>
+          ${!m.admin ? `
+            <label class="meta-field">
+              <span>Nome nos lançamentos</span>
+              <input type="text" autocomplete="off" placeholder="Ex: Rios"
+                     value="${esc(m.pessoa||'')}" oninput="onAcessoFormChange(this,'pessoa')" />
+            </label>
+            <div class="usuario-dica">É por esse nome que o sistema decide o que a pessoa enxerga.</div>
+          ` : `<div class="usuario-dica">Administrador vê tudo, não precisa de nome.</div>`}
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
+            <button class="modal-btn modal-btn-primary" onclick="salvarAcessoUsuario()">Salvar acesso</button>
+          </div>
+        </div>
+      </div>`;
   }
   if(m.type === 'relatorio-mes'){
     return `
@@ -6405,6 +6482,251 @@ function renderPainelDashboard(vends){
   return seletorPeriodo + sectionsToolbarHtml() + ranking + cartoes + barras + linha + tabela;
 }
 
+/* ================= Usuários e acessos =================
+   O cadastro de contas roda numa função no servidor (admin-usuarios), não
+   aqui. É de propósito: criar conta e trocar senha exigem a chave de
+   serviço do Supabase, e essa chave nunca pode ficar no navegador — com
+   ela qualquer pessoa leria e escreveria o banco inteiro, passando por
+   cima de todas as regras de acesso. O que vai daqui é só o token de quem
+   está logado; o servidor confere se é admin antes de fazer qualquer
+   coisa. */
+
+let usuariosLista = null;
+let usuariosCarregando = false;
+let usuariosErro = '';
+let usuarioForm = { email:'', senha:'', admin:false, pessoa:'' };
+let usuarioCriado = null;   // {email, senha} — pra mostrar a senha uma vez
+
+async function chamarAdminUsuarios(payload){
+  const token = await ensureFreshToken();
+  if(!token) throw new Error('Sessão expirada. Entre de novo.');
+  const res = await fetch(SUPABASE_URL + '/functions/v1/admin-usuarios', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + token,
+      'apikey': SUPABASE_ANON_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  let json = {};
+  try{ json = await res.json(); }catch(e){}
+  if(!res.ok) throw new Error(json.erro || ('Não consegui falar com o servidor (erro ' + res.status + ').'));
+  return json;
+}
+
+async function carregarUsuarios(){
+  if(!isAdmin) return;
+  usuariosCarregando = true; usuariosErro = ''; render();
+  try{
+    const r = await chamarAdminUsuarios({ acao:'listar' });
+    usuariosLista = r.usuarios || [];
+  }catch(e){
+    usuariosErro = e.message || String(e);
+  }finally{
+    usuariosCarregando = false; render();
+  }
+}
+
+/* Senha provisória forte, fácil de ditar por telefone: sem caracteres que
+   se confundem (0/O, 1/l/I). */
+function gerarSenhaProvisoria(){
+  const letras = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const minus  = 'abcdefghijkmnopqrstuvwxyz';
+  const nums   = '23456789';
+  const simb   = '!@#$%&*';
+  const todos  = letras + minus + nums + simb;
+  const sorteia = (s) => s[Math.floor(Math.random() * s.length)];
+  let senha = sorteia(letras) + sorteia(minus) + sorteia(nums) + sorteia(simb);
+  for(let i = 0; i < 8; i++) senha += sorteia(todos);
+  return senha.split('').sort(() => Math.random() - 0.5).join('');
+}
+function onGerarSenha(){
+  usuarioForm.senha = gerarSenhaProvisoria();
+  render();
+}
+function onUsuarioFormInput(el, campo){
+  usuarioForm[campo] = (el.type === 'checkbox') ? el.checked : el.value;
+  if(campo === 'admin') render();   // mostra/esconde o campo do nome
+}
+
+async function criarUsuario(){
+  const f = usuarioForm;
+  if(!f.email.trim()){ showAlert('Informe o e-mail.'); return; }
+  if((f.senha||'').length < 8){ showAlert('A senha provisória precisa de pelo menos 8 caracteres. Use o botão "Gerar senha".'); return; }
+  if(!f.admin && !f.pessoa.trim()){
+    showAlert('Para conta restrita, informe o nome exatamente como ele aparece nos lançamentos (ex: Rios).');
+    return;
+  }
+  usuariosCarregando = true; usuariosErro = ''; render();
+  try{
+    await chamarAdminUsuarios({
+      acao:'criar', email:f.email.trim(), senha:f.senha,
+      admin:!!f.admin, pessoa:f.pessoa.trim(),
+    });
+    usuarioCriado = { email: f.email.trim(), senha: f.senha };
+    usuarioForm = { email:'', senha:'', admin:false, pessoa:'' };
+    await carregarUsuarios();
+  }catch(e){
+    usuariosErro = e.message || String(e);
+    usuariosCarregando = false; render();
+  }
+}
+
+function redefinirSenhaUsuario(id, email){
+  const nova = gerarSenhaProvisoria();
+  showConfirm(
+    `Definir uma senha provisória nova para ${email}?\n\nA senha atual deixa de funcionar na hora.`,
+    async function(){
+      usuariosCarregando = true; usuariosErro = ''; render();
+      try{
+        await chamarAdminUsuarios({ acao:'senha', id: id, senha: nova });
+        usuarioCriado = { email: email, senha: nova, trocada: true };
+        await carregarUsuarios();
+      }catch(e){
+        usuariosErro = e.message || String(e);
+        usuariosCarregando = false; render();
+      }
+    },
+    'Definir senha nova'
+  );
+}
+
+function abrirAcessoUsuario(id){
+  const u = (usuariosLista||[]).find(x => x.id === id);
+  if(!u) return;
+  modalState = { type:'acesso-usuario', id: id, email: u.email, admin: !!u.admin, pessoa: u.pessoa || '' };
+  render();
+}
+function onAcessoFormChange(el, campo){
+  if(!modalState) return;
+  modalState[campo] = (el.type === 'checkbox') ? el.checked : el.value;
+  if(campo === 'admin') render();
+}
+async function salvarAcessoUsuario(){
+  if(!modalState) return;
+  const m = modalState;
+  if(!m.admin && !String(m.pessoa||'').trim()){
+    modalState.error = 'Para conta restrita, informe o nome como aparece nos lançamentos.';
+    render(); return;
+  }
+  const dados = { acao:'acesso', id:m.id, admin:!!m.admin, pessoa:String(m.pessoa||'').trim() };
+  closeModal();
+  usuariosCarregando = true; usuariosErro = ''; render();
+  try{
+    await chamarAdminUsuarios(dados);
+    await carregarUsuarios();
+  }catch(e){
+    usuariosErro = e.message || String(e);
+    usuariosCarregando = false; render();
+  }
+}
+function fecharSenhaMostrada(){ usuarioCriado = null; render(); }
+
+function renderUsuariosSection(){
+  if(!isAdmin) return `<div class="meta-empty" style="padding:24px;">Esta área é só de administrador.</div>`;
+  if(usuariosLista === null && !usuariosCarregando && !usuariosErro) carregarUsuarios();
+
+  const senhaMostrada = usuarioCriado ? `
+    <div class="senha-nova">
+      <div class="senha-nova-tit">${usuarioCriado.trocada ? 'Senha redefinida' : 'Conta criada'}</div>
+      <div class="senha-nova-linha"><span>E-mail</span><b>${esc(usuarioCriado.email)}</b></div>
+      <div class="senha-nova-linha"><span>Senha provisória</span><b class="senha-valor">${esc(usuarioCriado.senha)}</b></div>
+      <div class="senha-nova-nota">
+        Anote ou copie agora: esta é a <b>única vez</b> que ela aparece. O banco guarda a senha
+        embaralhada, então nem o sistema nem eu conseguimos mostrá-la de novo — só definir outra.
+      </div>
+      <button class="eye-toggle" onclick="fecharSenhaMostrada()">Já anotei, pode fechar</button>
+    </div>` : '';
+
+  const formulario = panel('usuarios-novo', 'Cadastrar usuário', `
+    <div class="meta-form-grid">
+      <label class="meta-field">
+        <span>E-mail</span>
+        <input type="email" autocomplete="off" placeholder="pessoa@opensolucoestributarias.com.br"
+               value="${esc(usuarioForm.email)}" oninput="onUsuarioFormInput(this,'email')" />
+      </label>
+      <label class="meta-field">
+        <span>Senha provisória</span>
+        <div class="senha-campo">
+          <input type="text" autocomplete="off" placeholder="mínimo 8 caracteres"
+                 value="${esc(usuarioForm.senha)}" oninput="onUsuarioFormInput(this,'senha')" />
+          <button class="eye-toggle" onclick="onGerarSenha()">Gerar</button>
+        </div>
+      </label>
+    </div>
+
+    <label class="usuario-tipo">
+      <input type="checkbox" ${usuarioForm.admin?'checked':''} onchange="onUsuarioFormInput(this,'admin')" />
+      <span><b>Administrador</b> — vê e edita tudo, e pode gerenciar usuários</span>
+    </label>
+
+    ${!usuarioForm.admin ? `
+      <label class="meta-field">
+        <span>Nome nos lançamentos</span>
+        <input type="text" autocomplete="off" placeholder="Ex: Rios"
+               value="${esc(usuarioForm.pessoa)}" oninput="onUsuarioFormInput(this,'pessoa')" />
+      </label>
+      <div class="usuario-dica">
+        Precisa ser <b>exatamente</b> o nome que aparece nos campos de vendedor dos lançamentos —
+        é por ele que o sistema decide o que essa pessoa enxerga. "Rios" e "Ana Rios" são nomes
+        diferentes para o sistema.
+      </div>` : `
+      <div class="usuario-dica">Conta de administrador não precisa de nome: ela vê tudo.</div>`}
+
+    <button class="painel-salvar" ${usuariosCarregando?'disabled':''} onclick="criarUsuario()">
+      ${usuariosCarregando ? 'Criando...' : 'Criar conta'}
+    </button>
+  `);
+
+  const linhas = (usuariosLista || []).map(function(u){
+    const quando = u.ultimoAcesso
+      ? new Date(u.ultimoAcesso).toLocaleDateString('pt-BR')
+      : '<span class="usuario-nunca">nunca entrou</span>';
+    return `<tr>
+      <td>${esc(u.email)}</td>
+      <td>${u.semAcesso
+        ? '<span class="usuario-tag alerta">sem acesso</span>'
+        : (u.admin ? '<span class="usuario-tag admin">Administrador</span>'
+                   : '<span class="usuario-tag">Restrita</span>')}</td>
+      <td>${u.pessoa ? esc(u.pessoa) : '—'}</td>
+      <td>${quando}</td>
+      <td class="del-cell"><div class="row-actions">
+        <button class="action-btn" title="Definir senha provisória nova" onclick="redefinirSenhaUsuario('${escJs(u.id)}','${escJs(u.email)}')">🔑</button>
+        <button class="action-btn" title="Mudar o nível de acesso" onclick="abrirAcessoUsuario('${escJs(u.id)}')">✎</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+
+  const corpoLista = usuariosErro
+    ? `<div class="storage-warning">⚠️ ${esc(usuariosErro)}</div>`
+    : (usuariosLista === null || usuariosCarregando)
+      ? `<div class="meta-empty">Carregando as contas...</div>`
+      : (linhas ? `<div class="table-scroll"><table class="table-plain">
+            <thead><tr><th>E-mail</th><th>Acesso</th><th>Nome nos lançamentos</th><th>Último acesso</th><th></th></tr></thead>
+            <tbody>${linhas}</tbody>
+          </table></div>`
+        : `<div class="meta-empty">Nenhuma conta cadastrada ainda.</div>`);
+
+  const lista = panel('usuarios-lista', 'Contas do sistema', corpoLista, {
+    meta: usuariosLista ? `<b>${usuariosLista.length}</b> conta${usuariosLista.length===1?'':'s'}` : '',
+    flush: !!linhas && !usuariosErro,
+    actions: `<button class="eye-toggle" onclick="carregarUsuarios()">↻ Atualizar</button>`,
+  });
+
+  return `
+    <div class="usuario-aviso">
+      🔐 O cadastro de contas roda no servidor, não aqui no navegador — a chave que cria usuário
+      nunca chega ao seu computador. Só quem é administrador consegue usar esta área, e isso é
+      conferido de novo no servidor a cada ação.
+    </div>
+    ${senhaMostrada}
+    ${sectionsToolbarHtml()}
+    ${formulario}
+    ${lista}
+  `;
+}
+
 /* ---------------- App shell ---------------- */
 
 function setTab(t){
@@ -6428,6 +6750,7 @@ function render(){
     : activeTab === "bonus" ? renderBonusSection()
     : activeTab === "pagamentos" ? renderPagamentosSection()
     : activeTab === "painel" ? renderPainelSection()
+    : activeTab === "usuarios" ? renderUsuariosSection()
     : renderEntitySection(activeTab);
 
   const years = getKnownYears();
