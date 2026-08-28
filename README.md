@@ -196,6 +196,12 @@ São nove indicadores por vendedora, por mês, divididos em dois grupos:
 
 Os três saem da coluna **"Quem vendeu"** dos lançamentos: cada venda conta para **uma pessoa só**, a que estiver marcada ali. Lançamento sem essa marcação não conta para ninguém, e o sistema avisa quantos estão assim.
 
+### Quando o banco não responde
+
+Cada aba carrega os lançamentos numa consulta principal e mais algumas secundárias (vendedores extras, divisão das vendas, catálogo de vendedoras). Antes, se **qualquer uma** delas falhasse, a aba inteira ficava vazia — igualzinho a "não há nada lançado", sem nenhum aviso.
+
+Agora as consultas secundárias falham sozinhas, sem derrubar os lançamentos, e se a consulta principal falhar a aba mostra um **aviso amarelo** pedindo para recarregar a página. A divisão das vendas (dado só de admin) nem é pedida por conta restrita.
+
 ### Comissão por percentual (aba Sistema)
 
 Na aba Sistema, cada coluna de vendedora tem **dois campos**: a **%** em cima e o **valor em R$** embaixo.
