@@ -37,6 +37,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_vendas_curso_por_vendedora_migration.sql → migração 8: divide o faturamento do curso entre as vendedoras
 ├── supabase_contratos_reunioes_migration.sql → migração 9: equipe de consultoria (contratos e reuniões)
 ├── supabase_contratos_novos_migration.sql → migração 10: empresas com contrato assinado (nome, CNPJ e rentabilidade)
+├── supabase_bonus_tipo_migration.sql   → migração 11: bônus fixo x bônus variável
 └── .gitignore
 ```
 
@@ -121,6 +122,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 9. Rode `supabase_vendas_curso_por_vendedora_migration.sql` — troca o "quem vendeu" do curso pela divisão do faturamento por vendedora.
 10. Rode `supabase_contratos_reunioes_migration.sql` — cria a equipe de consultoria (contratos e reuniões).
 11. Rode `supabase_contratos_novos_migration.sql` — cria a lista de empresas que assinaram contrato, com CNPJ e avaliação de rentabilidade.
+12. Rode `supabase_bonus_tipo_migration.sql` — separa bônus de valor fixo dos que variam com o mês.
 11. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
 12. Só depois publique esta versão atualizada do `index.html`.
 
@@ -135,7 +137,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `lancamentos` | Lançamentos de Consultoria, Consultoria Órgãos Públicos e Cursos (uma tabela só, filtrada pela coluna `entidade`) |
 | `lancamentos_extra_vendedores` | Vendedores extras (4º em diante) por lançamento |
 | `lancamento_vendas` | Divisão do faturamento de um curso entre quem vendeu (sem relação com comissão) |
-| `bonus` | Bônus e metas batidas |
+| `bonus` | Bônus e metas batidas (com `tipo`: fixo ou variável) |
 | `metas` | Regras de meta: gatilho da empresa + prêmio de quem bate |
 | `relatorios_equipe` | Indicadores mensais digitados: andamento da equipe e contratos/reuniões (Relatório de Desempenho) |
 | `contratos_consultoria` | Empresas que assinaram contrato: quem trouxe, mês, nome, CNPJ e se o negócio foi rentável |
@@ -396,6 +398,14 @@ Como as metas são mensais mas as regras costumam valer o ano todo, o botão �
 **Como o prêmio vira bônus:** ao bater, o card fica verde e aparece o botão *"Lançar bônus de R$ X"*. Alguém confirma e a linha vai para a aba **Bônus e Metas**, onde pode ser editada como qualquer outra. A linha guarda de qual meta veio, então a mesma meta nunca paga duas vezes — depois de lançada, o card passa a mostrar *"✓ bônus lançado"*.
 
 Como a meta depende do faturamento da empresa inteira, **só admin configura e acompanha**. A vendedora premiada vê o resultado normalmente na aba Bônus, porque a linha leva o nome dela.
+
+### Bônus fixo x bônus variável
+
+A aba Bônus e Metas mistura duas coisas de natureza diferente: o bônus de **valor fechado**, que se repete igual todo mês (*"Participação SAAE Volta Redonda — R$ 100"*), e o que **muda com o desempenho** (*"1% de R$ 441.206,00 em Cursos — R$ 4.412,06"*). A coluna **"Fixo / Variável"** separa os dois, e o cabeçalho do painel mostra quantos são de cada tipo no mês.
+
+A classificação é opcional — começa em branco, porque o bônus pode ser lançado antes de alguém decidir como classificá-lo. O que o sistema preenche sozinho é o bônus que **veio de uma regra de meta**: prêmio em R$ fechado nasce **Fixo**, prêmio em % do faturado nasce **Variável**. Os bônus já lançados que vieram de metas foram classificados assim na migração 11; os digitados à mão ficaram em branco, esperando sua escolha.
+
+A coluna também sai no relatório mensal em PDF, ao lado da descrição.
 
 ## Backup manual
 

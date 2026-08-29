@@ -1090,6 +1090,7 @@
   .contrato-linha-input::placeholder{color:var(--ink-faint);font-weight:400;}
   .contrato-cnpj-aviso{display:block;font-size:10.5px;color:#B45309;font-weight:700;padding:1px 8px 0;}
   .col-cnpj{min-width:180px;}
+  .col-tipo{width:120px;min-width:120px;}
   .col-rent{min-width:206px;}
   /* Rentável x não rentável: dois botões, um só ativo. Clicar no que já
      está ativo desmarca — o contrato pode entrar antes da avaliação. */
@@ -1958,7 +1959,7 @@ function persistBonus(){
   bonusTimer = setTimeout(function(){
     (async function(){
       try{
-        const dbRows = bonusRows.map(function(r){ return { id:r.id, ano:r.ano||2026, mes:r.mes, vendedor:r.vendedor||'', descricao:r.descricao||'', valor:numOrNull(r.valor), meta_id: r.metaId || null }; });
+        const dbRows = bonusRows.map(function(r){ return { id:r.id, ano:r.ano||2026, mes:r.mes, vendedor:r.vendedor||'', descricao:r.descricao||'', valor:numOrNull(r.valor), tipo: r.tipo || null, meta_id: r.metaId || null }; });
         await sbUpsert('bonus', dbRows, 'id');
         const existing = carregouDoBanco.bonus ? ((await sbSelect('bonus','select=id')) || []) : [];
         const localIds = bonusRows.map(function(r){ return r.id; });
@@ -1975,7 +1976,7 @@ async function tryLoadBonusFromStorageAsync(){
     const dbRows = await sbSelect('bonus','select=*&order=id.asc');
     carregouDoBanco.bonus = true;
     if(dbRows && dbRows.length){
-      bonusRows = dbRows.map(function(d){ return { id:d.id, ano:d.ano, mes:d.mes, vendedor:d.vendedor||'', descricao:d.descricao||'', valor:d.valor, metaId: d.meta_id || null }; });
+      bonusRows = dbRows.map(function(d){ return { id:d.id, ano:d.ano, mes:d.mes, vendedor:d.vendedor||'', descricao:d.descricao||'', valor:d.valor, tipo: d.tipo || '', metaId: d.meta_id || null }; });
       migrateYear(bonusRows, 2026);
       bonusNextId = bonusRows.length ? Math.max.apply(null, bonusRows.map(function(r){ return r.id||0; }))+1 : 1;
       render();
@@ -3580,6 +3581,8 @@ function lancarBonusDaMeta(id){
       bonusRows.unshift({
         id: bonusNextId++, ano: m.ano, mes: m.mes, vendedor: m.vendedor,
         descricao: desc, valor: Math.round(av.premio*100)/100, metaId: m.id,
+        // prêmio em R$ fechado é fixo; prêmio em % do faturado muda a cada mês
+        tipo: m.premioTipo === 'fixo' ? 'Fixo' : 'Variável',
       });
       persistBonus();
       render();
@@ -3629,13 +3632,17 @@ function togglePartnersValues(){ partnersValuesRevealed = !partnersValuesReveale
 
 
 
+/* Bônus de valor fechado x bônus que muda com o mês. Vazio é um estado
+   legítimo: o bônus pode ser lançado antes de alguém decidir como ele é. */
+const BONUS_TIPOS = ['Fixo','Variável'];
+
 function addBonusRow(){
   const mes = bonusFilter === "Todos" ? "Janeiro" : bonusFilter;
   if(isMonthClosed(yearFilter, mes)){
     showAlert("Este mês está fechado para novos lançamentos. Reabra em Resumo Geral para poder editar.");
     return;
   }
-  bonusRows.unshift({id: bonusNextId++, mes, ano: yearFilter, vendedor:"", descricao:"", valor:null});
+  bonusRows.unshift({id: bonusNextId++, mes, ano: yearFilter, vendedor:"", descricao:"", valor:null, tipo:""});
   persistBonus();
   render();
 }
@@ -3682,6 +3689,10 @@ function onBonusVendedorSelect(el){
 }
 function onBonusTextInput(el){
   updateBonusCell(Number(el.dataset.id), el.dataset.field, el.value);
+}
+function onBonusTipoSelect(el){
+  updateBonusCell(Number(el.dataset.id), "tipo", el.value);
+  render();   // o resumo do painel conta quantos são de cada tipo
 }
 function onBonusNumInput(el){
   const v = el.value;
@@ -3751,8 +3762,16 @@ function renderBonusSection(){
     </div>
   `;
 
+  // Contagem por tipo, nunca valor: o painel fica visível mesmo com os
+  // valores ocultos pelo botão do olho.
+  const qtdFixo     = visible.filter(function(r){ return r.tipo === 'Fixo'; }).length;
+  const qtdVariavel = visible.filter(function(r){ return r.tipo === 'Variável'; }).length;
+  const resumoTiposBonus = (qtdFixo || qtdVariavel)
+    ? ` · <b>${qtdFixo}</b> fixo${qtdFixo===1?'':'s'} · <b>${qtdVariavel}</b> variáve${qtdVariavel===1?'l':'is'}`
+    : '';
+
   const rowsHtml = visible.length === 0
-    ? `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhum bônus ou meta lançada ainda. Clique em "+ Novo bônus" para começar.</td></tr>`
+    ? `<tr class="empty-row"><td colspan="6"><span class="empty-icon">◌</span>Nenhum bônus ou meta lançada ainda. Clique em "+ Novo bônus" para começar.</td></tr>`
     : visible.map(row => `
       <tr class="${isBonusRowPending(row) ? 'row-pending' : ''}${isMonthClosed(row.ano||2026,row.mes) ? ' row-locked' : ''}">
         <td>
@@ -3764,6 +3783,7 @@ function renderBonusSection(){
         </td>
         <td><select data-id="${row.id}" onchange="onBonusVendedorSelect(this)"><option value="">—</option>${sellersForCurrentUser().map(s => `<option value="${esc(s.label)}" ${row.vendedor===s.label?'selected':''}>${esc(s.label)}</option>`).join('')}</select></td>
         <td><input type="text" data-id="${row.id}" data-field="descricao" value="${esc(row.descricao)}" placeholder="Ex: Meta do 1º trimestre batida" oninput="onBonusTextInput(this)" /></td>
+        <td class="col-tipo"><select data-id="${row.id}" onchange="onBonusTipoSelect(this)"><option value="">—</option>${BONUS_TIPOS.map(t => `<option value="${t}" ${row.tipo===t?'selected':''}>${t}</option>`).join('')}</select></td>
         <td class="col-valor"><div class="currency-wrap"><span class="currency-prefix">R$</span><input class="num" type="number" step="0.01" placeholder="—" value="${row.valor===null||row.valor===undefined?'':row.valor}" data-id="${row.id}" oninput="onBonusNumInput(this)" /></div></td>
         <td class="del-cell">
           <div class="row-actions">
@@ -3790,6 +3810,7 @@ function renderBonusSection(){
               <th class="col-mes">Mês</th>
               <th>Vendedor</th>
               <th>Descrição (bônus / meta batida)</th>
+              <th class="col-tipo">Fixo / Variável</th>
               <th class="num col-valor">Valor</th>
               <th></th>
             </tr>
@@ -3799,7 +3820,7 @@ function renderBonusSection(){
       </div>
     `, {
       flush: true,
-      meta: `<span id="count-bonus"><b>${visible.length}</b> lançamento${visible.length===1?"":"s"}${bonusFilter!=="Todos" ? " em <b>"+esc(bonusFilter)+"</b>" : ""}${visible.filter(isBonusRowPending).length ? ` · <span style="color:#B45309;">⚠️ ${visible.filter(isBonusRowPending).length} incompleto${visible.filter(isBonusRowPending).length===1?'':'s'}</span>` : ''}</span>`,
+      meta: `<span id="count-bonus"><b>${visible.length}</b> lançamento${visible.length===1?"":"s"}${bonusFilter!=="Todos" ? " em <b>"+esc(bonusFilter)+"</b>" : ""}${resumoTiposBonus}${visible.filter(isBonusRowPending).length ? ` · <span style="color:#B45309;">⚠️ ${visible.filter(isBonusRowPending).length} incompleto${visible.filter(isBonusRowPending).length===1?'':'s'}</span>` : ''}</span>`,
       actions: `<button class="btn-add" onclick="addBonusRow()">+ Novo bônus</button>`,
     })}
   `;
@@ -5946,6 +5967,7 @@ function montarRelatorioMes(mes){
   const totBonus = bonusMes.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0);
   const linhasBonus = bonusMes.map(function(r){
     return `<tr><td>${esc(r.vendedor||'—')}</td><td>${esc(r.descricao||'—')}</td>
+      <td>${esc(r.tipo||'—')}</td>
       <td class="num destaque">${fmtMoney(Number(r.valor)||0)}</td></tr>`;
   });
 
@@ -6142,7 +6164,7 @@ function montarRelatorioMes(mes){
 
       <section class="rel-sec">
         <h2>Bônus lançados <span class="rel-sub">${fmtMoney(totBonus)}</span></h2>
-        ${relTabela([{label:'Vendedora'},{label:'Descrição'},{label:'Valor',num:true}],
+        ${relTabela([{label:'Vendedora'},{label:'Descrição'},{label:'Fixo / Variável'},{label:'Valor',num:true}],
           linhasBonus, 'Nenhum bônus em ' + mes + '.')}
       </section>
 
