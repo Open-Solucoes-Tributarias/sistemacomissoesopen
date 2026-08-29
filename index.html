@@ -2722,6 +2722,39 @@ function exportResumoCSV(){
   }
 }
 
+/* O fechamento em CSV: é o arquivo que a Soraya manda para a
+   contabilidade, então sai com uma linha por pessoa e o total no fim. */
+function exportFechamentoCSV(){
+  try{
+    const periodo = bonusFilter === 'Todos' ? ('Ano ' + yearFilter) : (bonusFilter + '/' + yearFilter);
+    const linhas = fechamentoPagamentos(bonusFilter);
+    let csv = 'Fechamento para a contabilidade - ' + periodo + '\n\n';
+    csv += 'Pessoa;Sistema;Orgaos Publicos;Cursos;Bonus;Salario fixo;Total a pagar;Consultoria (a receber);Com Consultoria\n';
+    const soma = {sistema:0, publicos:0, cursos:0, bonus:0, salario:0, aPagar:0, consultoria:0, comConsultoria:0};
+    linhas.forEach(function(l){
+      Object.keys(soma).forEach(function(k){ soma[k] += l[k]; });
+      csv += [l.pessoa, csvNum(l.sistema), csvNum(l.publicos), csvNum(l.cursos), csvNum(l.bonus),
+              csvNum(l.salario), csvNum(l.aPagar), csvNum(l.consultoria), csvNum(l.comConsultoria)].join(';') + '\n';
+    });
+    csv += ['TOTAL', csvNum(soma.sistema), csvNum(soma.publicos), csvNum(soma.cursos), csvNum(soma.bonus),
+            csvNum(soma.salario), csvNum(soma.aPagar), csvNum(soma.consultoria), csvNum(soma.comConsultoria)].join(';') + '\n';
+    csv += '\nA Consultoria nao entra no total a pagar: a comissao dela so se realiza quando o cliente paga.\n';
+
+    const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'fechamento-' + yearFilter + (bonusFilter !== 'Todos' ? '-'+bonusFilter : '') + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch(e){
+    console.error('Falha ao exportar o fechamento', e);
+    showAlert('Não foi possível gerar o arquivo. Tente novamente.');
+  }
+}
+
 function showExport(){
   const entities = {};
   ENTITY_KEYS.forEach(key => {
@@ -3864,34 +3897,23 @@ function renderBonusSection(){
       </tr>
     `).join('');
 
-  /* Quanto cada vendedora fez no período, contando só o que é certo.
-     A Consultoria fica fora da soma principal de propósito: a comissão
-     dela só se realiza quando o cliente paga, então entrar no total
-     prometeria um dinheiro que pode não ter entrado no mês. Ela continua
-     visível ao lado, com o total cheio, para a conferência. */
-  const bkd = sellerBreakdownDoMes(bonusFilter);
+  /* Fechamento do período: o que vai para a contabilidade, por pessoa. */
+  const fechamento = fechamentoPagamentos(bonusFilter);
   const dinheiro = (v) => bonusValuesRevealed ? fmtMoney(v) : '••••';
-  const somaCols = {sistema:0, publicos:0, cursos:0, bonus:0, certo:0, consultoria:0, geral:0};
-  const totaisRowsHtml = sellersForCurrentUser().map(sv => {
-    const b = bkd[sv.label] || {sistema:0, consultoria:0, publicos:0, cursos:0, bonus:0};
-    const certo = b.sistema + b.publicos + b.cursos + b.bonus;
-    const geral = certo + b.consultoria;
-    somaCols.sistema += b.sistema; somaCols.publicos += b.publicos;
-    somaCols.cursos += b.cursos;   somaCols.bonus += b.bonus;
-    somaCols.certo += certo;       somaCols.consultoria += b.consultoria;
-    somaCols.geral += geral;
-    return `
+  const somaCols = {sistema:0, publicos:0, cursos:0, bonus:0, salario:0, aPagar:0, consultoria:0, comConsultoria:0};
+  fechamento.forEach(l => { Object.keys(somaCols).forEach(k => { somaCols[k] += l[k]; }); });
+  const fechamentoRowsHtml = fechamento.map(l => `
       <tr>
-        <td><span class="th-dot" style="background:${esc(sv.color)}"></span>${esc(sv.label)}</td>
-        <td class="num">${dinheiro(b.sistema)}</td>
-        <td class="num">${dinheiro(b.publicos)}</td>
-        <td class="num">${dinheiro(b.cursos)}</td>
-        <td class="num">${dinheiro(b.bonus)}</td>
-        <td class="num" style="font-weight:800;">${dinheiro(certo)}</td>
-        <td class="num col-apoio">${dinheiro(b.consultoria)}</td>
-        <td class="num col-apoio">${dinheiro(geral)}</td>
-      </tr>`;
-  }).join('');
+        <td><span class="th-dot" style="background:${esc(l.cor)}"></span>${esc(l.pessoa)}</td>
+        <td class="num">${dinheiro(l.sistema)}</td>
+        <td class="num">${dinheiro(l.publicos)}</td>
+        <td class="num">${dinheiro(l.cursos)}</td>
+        <td class="num">${dinheiro(l.bonus)}</td>
+        <td class="num">${dinheiro(l.salario)}</td>
+        <td class="num" style="font-weight:800;">${dinheiro(l.aPagar)}</td>
+        <td class="num col-apoio">${dinheiro(l.consultoria)}</td>
+        <td class="num col-apoio">${dinheiro(l.comConsultoria)}</td>
+      </tr>`).join('');
 
   return `
     ${kpiToggleHtml}
@@ -3922,42 +3944,46 @@ function renderBonusSection(){
       actions: `<button class="btn-add" onclick="addBonusRow()">+ Novo bônus</button>`,
     })}
 
-    ${panel('bonus-totais', 'Total por vendedora', `
+    ${panel('bonus-totais', 'Fechamento para a contabilidade', `
       <div class="table-scroll">
         <table class="table-plain">
           <thead>
             <tr>
-              <th>Vendedora</th>
+              <th>Pessoa</th>
               <th class="num">Sistema</th>
               <th class="num">Órgãos Públicos</th>
               <th class="num">Cursos</th>
               <th class="num">Bônus</th>
-              <th class="num">Total</th>
+              <th class="num">Salário fixo</th>
+              <th class="num">Total a pagar</th>
               <th class="num col-apoio">Consultoria</th>
               <th class="num col-apoio">Com Consultoria</th>
             </tr>
           </thead>
-          <tbody>${totaisRowsHtml || `<tr class="empty-row"><td colspan="8"><span class="empty-icon">◌</span>Nenhuma vendedora cadastrada ainda.</td></tr>`}</tbody>
-          ${totaisRowsHtml ? `<tfoot><tr>
+          <tbody>${fechamentoRowsHtml || `<tr class="empty-row"><td colspan="9"><span class="empty-icon">◌</span>Nada a pagar ${bonusFilter!=="Todos" ? 'em '+esc(bonusFilter) : 'em '+yearFilter} ainda.</td></tr>`}</tbody>
+          ${fechamentoRowsHtml ? `<tfoot><tr>
             <td>Total</td>
             <td class="num">${dinheiro(somaCols.sistema)}</td>
             <td class="num">${dinheiro(somaCols.publicos)}</td>
             <td class="num">${dinheiro(somaCols.cursos)}</td>
             <td class="num">${dinheiro(somaCols.bonus)}</td>
-            <td class="num">${dinheiro(somaCols.certo)}</td>
+            <td class="num">${dinheiro(somaCols.salario)}</td>
+            <td class="num">${dinheiro(somaCols.aPagar)}</td>
             <td class="num col-apoio">${dinheiro(somaCols.consultoria)}</td>
-            <td class="num col-apoio">${dinheiro(somaCols.geral)}</td>
+            <td class="num col-apoio">${dinheiro(somaCols.comConsultoria)}</td>
           </tr></tfoot>` : ''}
         </table>
       </div>
       <div class="totais-nota">
-        A coluna <b>Total</b> soma Sistema, Órgãos Públicos, Cursos e Bônus. A <b>Consultoria fica fora</b>
-        porque a comissão dela só se realiza quando o cliente paga — entrar no total prometeria um dinheiro
-        que pode não ter entrado no mês. As duas últimas colunas mostram a Consultoria e o total cheio, para conferência.
+        <b>Total a pagar</b> = comissões de Sistema, Órgãos Públicos e Cursos + bônus e metas + salário fixo.
+        É o valor de cada pessoa para mandar à contabilidade.
+        A <b>Consultoria fica fora</b>: a comissão dela só se realiza quando o cliente paga, então entra
+        aqui apenas como referência, nas duas últimas colunas.
       </div>
     `, {
       flush: true,
-      meta: `${bonusFilter !== "Todos" ? "em <b>"+esc(bonusFilter)+"</b>" : "no ano de <b>"+yearFilter+"</b>"}`,
+      meta: `${bonusFilter !== "Todos" ? "em <b>"+esc(bonusFilter)+"</b>" : "no ano de <b>"+yearFilter+"</b>"}${fechamento.length ? ' · a pagar <b>'+(bonusValuesRevealed ? fmtMoney(somaCols.aPagar) : '••••')+'</b>' : ''}`,
+      actions: `<button class="eye-toggle" onclick="exportFechamentoCSV()">📊 Baixar CSV</button>`,
     })}
 
     ${panel('bonus-salarios', 'Salário fixo dos colaboradores', `
@@ -4029,6 +4055,57 @@ function sellerBreakdownDoMes(mes){
   const b = getSellerBreakdown();
   partnerMonthFilter = antigo;
   return b;
+}
+
+/* O que vai para a contabilidade no mês: por pessoa, a comissão de cada
+   origem + bônus + salário fixo. É o número que a Soraya manda pagar.
+
+   A Consultoria fica FORA do total a pagar porque a comissão dela só se
+   realiza quando o cliente paga — mandar pagar antes disso seria adiantar
+   dinheiro que pode não ter entrado. Ela vem em colunas de apoio.
+
+   A lista de pessoas não é só a das vendedoras do Sistema: quem só recebe
+   salário (a equipe de consultoria, por exemplo) também precisa entrar,
+   senão faltaria gente na folha. */
+function fechamentoPagamentos(mes){
+  const bkd = sellerBreakdownDoMes(mes);
+  const noPeriodo = function(r){
+    return (r.ano||2026) === yearFilter && (mes === 'Todos' || !mes || r.mes === mes);
+  };
+  const salarioPorPessoa = {};
+  bonusRows.forEach(function(r){
+    if(!isSalarioRow(r) || !r.vendedor || !noPeriodo(r)) return;
+    const chave = Object.keys(salarioPorPessoa).find(function(k){ return name_matches_client(k, r.vendedor); }) || r.vendedor;
+    salarioPorPessoa[chave] = (salarioPorPessoa[chave] || 0) + (Number(r.valor)||0);
+  });
+
+  const nomes = [];
+  const juntar = function(n){
+    const t = String(n===null||n===undefined?'':n).trim();
+    if(!t) return;
+    if(!isAdmin && !name_matches_client(t, currentPersonName)) return;
+    if(nomes.some(function(x){ return name_matches_client(x, t); })) return;
+    nomes.push(t);
+  };
+  sellersForCurrentUser().forEach(function(sv){ juntar(sv.label); });
+  Object.keys(bkd).forEach(juntar);
+  Object.keys(salarioPorPessoa).forEach(juntar);
+
+  return nomes.map(function(nome){
+    const b = bkd[nome] || {sistema:0, consultoria:0, publicos:0, cursos:0, bonus:0};
+    const chaveSal = Object.keys(salarioPorPessoa).find(function(k){ return name_matches_client(k, nome); });
+    const salario = chaveSal ? salarioPorPessoa[chaveSal] : 0;
+    const aPagar = b.sistema + b.publicos + b.cursos + b.bonus + salario;
+    return {
+      pessoa: nome, cor: corDoVendedor(nome),
+      sistema: b.sistema, publicos: b.publicos, cursos: b.cursos,
+      bonus: b.bonus, salario: salario, aPagar: aPagar,
+      consultoria: b.consultoria, comConsultoria: aPagar + b.consultoria,
+    };
+  }).filter(function(l){
+    // gente sem nada no período só polui a folha
+    return l.aPagar !== 0 || l.consultoria !== 0;
+  }).sort(function(a,b){ return b.aPagar - a.aPagar; });
 }
 
 function getSellerGrandTotals(){
@@ -6140,6 +6217,19 @@ function montarRelatorioMes(mes){
   // faturamento — é despesa fixa da empresa, não prêmio nem venda.
   const salariosMes = bonusRows.filter(function(r){ return (r.ano||2026) === ano && r.mes === mes && isSalarioRow(r); });
   const totSalarios = salariosMes.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0);
+  // Fechamento do mês: o que cada pessoa recebe, somando comissão, bônus e
+  // salário. Sem a Consultoria, que depende do cliente ter pago.
+  const fechamentoMes = fechamentoPagamentos(mes);
+  const totalAPagar = fechamentoMes.reduce(function(a,l){ return a + l.aPagar; }, 0);
+  const linhasFechamento = fechamentoMes.map(function(l){
+    const comissoes = l.sistema + l.publicos + l.cursos;
+    return `<tr><td>${esc(l.pessoa)}</td>
+      <td class="num">${fmtMoney(comissoes)}</td>
+      <td class="num">${fmtMoney(l.bonus)}</td>
+      <td class="num">${fmtMoney(l.salario)}</td>
+      <td class="num destaque">${fmtMoney(l.aPagar)}</td></tr>`;
+  });
+
   const linhasSalarios = salariosMes.map(function(r){
     return `<tr><td>${esc(r.vendedor||'—')}</td><td>${esc(r.descricao||'—')}</td>
       <td class="num destaque">${fmtMoney(Number(r.valor)||0)}</td></tr>`;
@@ -6344,6 +6434,13 @@ function montarRelatorioMes(mes){
         <h2>Bônus lançados <span class="rel-sub">${fmtMoney(totBonus)}</span></h2>
         ${relTabela([{label:'Vendedora'},{label:'Descrição'},{label:'Valor',num:true}],
           linhasBonus, 'Nenhum bônus em ' + mes + '.')}
+      </section>
+
+      <section class="rel-sec">
+        <h2>Fechamento para a contabilidade <span class="rel-sub">${fmtMoney(totalAPagar)} — comissões + bônus + salário fixo</span></h2>
+        ${relTabela([{label:'Pessoa'},{label:'Comissões',num:true},{label:'Bônus',num:true},{label:'Salário fixo',num:true},{label:'Total a pagar',num:true}],
+          linhasFechamento, 'Nada a pagar em ' + mes + '.')}
+        <p class="rel-nota">A Consultoria não entra: a comissão dela só se realiza quando o cliente paga.</p>
       </section>
 
       ${linhasSalarios.length ? `<section class="rel-sec">

@@ -416,23 +416,26 @@ O botão **🔁** repete o salário nos meses seguintes até dezembro, pulando m
 
 O acesso segue a mesma regra do resto: quem administra vê e lança tudo; uma conta restrita vê apenas o próprio salário, porque a linha leva o nome da pessoa (`bonus`, migração 11).
 
-### Total por vendedora
+### Fechamento para a contabilidade
 
-Entre os bônus e os salários há um quadro **"Total por vendedora"**, que responde a pergunta do fim do mês: *quanto cada uma fez?* Ele acompanha o filtro de mês da aba — escolhendo "Todos", mostra o ano.
+Entre os bônus e os salários há o quadro que responde a pergunta do fim do mês: **quanto mandar pagar para cada pessoa**. Ele acompanha o filtro de mês da aba — escolhendo "Todos", mostra o ano.
 
-| Coluna | Entra no total? |
+| Coluna | Entra no "Total a pagar"? |
 |---|---|
 | Sistema | sim |
 | Órgãos Públicos | sim |
 | Cursos | sim |
 | Bônus | sim |
-| **Total** | a soma das quatro |
+| Salário fixo | sim |
+| **Total a pagar** | a soma das cinco — é o valor que vai para a contabilidade |
 | Consultoria | **não** — fica à parte, em cinza |
-| Com Consultoria | o total cheio, só para conferência |
+| Com Consultoria | o total cheio, só para referência |
 
-> **Por que a Consultoria fica fora da soma.** A comissão de Consultoria só se realiza quando o cliente paga; enquanto isso ela é expectativa, não dinheiro do mês. Somá-la no total prometeria um valor que pode não ter entrado. Ela continua visível nas duas últimas colunas, em cinza, para quem quiser o número cheio — e o **Resumo Geral** segue mostrando o total com tudo somado, como sempre.
+> **Por que a Consultoria fica fora.** A comissão de Consultoria só se realiza quando o cliente paga; enquanto isso é expectativa, não dinheiro do mês. Mandar pagar antes disso seria adiantar um valor que pode não ter entrado. Ela continua visível nas duas últimas colunas, e o **Resumo Geral** segue mostrando o total com tudo somado, como sempre.
 
-O salário fixo **não entra em nenhuma dessas colunas**: é despesa, não ganho de comissão. O total dos salários do período aparece no cabeçalho do painel de salários.
+A lista **não é só das vendedoras**: quem só recebe salário fixo — a equipe de consultoria, por exemplo — aparece também, senão faltaria gente na folha. Quem não tem nada no período fica fora, para o quadro não encher de linhas zeradas.
+
+O botão **"📊 Baixar CSV"** gera o arquivo do período, uma linha por pessoa e o total no fim, pronto para mandar. O mesmo fechamento sai também no **relatório mensal em PDF**, em seção própria.
 
 ## Backup manual
 
