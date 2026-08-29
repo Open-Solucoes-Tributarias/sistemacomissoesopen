@@ -186,6 +186,16 @@ Em todas as abas de lançamento — **Sistema**, **Consultoria**, **Órgãos Pú
 
 A ordenação é só de exibição — não muda nada no banco, e cada pessoa escolhe a sua. Acentos e maiúsculas são tratados pela regra do português: "ácua" vem antes de "alfa", que vem antes de "Beta", e "Ômega" ordena como "O". Um lançamento recém-criado, ainda sem nome, fica no topo para não sumir de vista.
 
+### Largura das colunas
+
+As tabelas de lançamento são largas e rolam na horizontal. Para o que mais se lê não ficar espremido:
+
+- a coluna do **nome** (cliente, empresa, órgão ou curso) tem largura mínima garantida, então o nome inteiro aparece em vez de ser cortado no meio;
+- a coluna do **mês** mostra o número e o nome curto — `08 Ago` —, o que evita confundir `03` com `05` de relance;
+- a coluna de **valor** ficou mais estreita: o cabeçalho é só "Valor" (o nome completo aparece ao passar o mouse) e o valor continua com o `R$` na frente.
+
+O que sobra continua acessível rolando a tabela para o lado, como já era.
+
 ## Comissão liberada x a receber
 
 A equipe de consultoria só recebe quando o **cliente paga a nota** — contrato fechado e nota emitida ainda não valem. A aba **Pagamentos Realizados** abre com os pagamentos que entraram e, logo abaixo, separa a comissão em dois casos, por pessoa:

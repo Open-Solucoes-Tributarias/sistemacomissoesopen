@@ -535,7 +535,16 @@
   }
   td.cliente input{min-width:230px;}
   td.venda select{min-width:150px;}
-  .col-valor{width:105px;}
+  /* Larguras das colunas das tabelas de lançamento.
+     Como a tabela é larga e rola na horizontal, o navegador encolhe cada
+     coluna até o conteúdo do cabeçalho — por isso o piso vai em min-width,
+     e não em width, que ele ignora nessa situação. */
+  .col-valor{min-width:96px;width:96px;}
+  .col-mes{min-width:104px;}
+  /* Nome da empresa / órgão / curso: sem piso a coluna encolhia e cortava o
+     nome. O piso empurra o resto para a rolagem horizontal, que já existe. */
+  .col-nome{min-width:290px;}
+  .col-nome input{min-width:270px;}
   .currency-wrap{display:flex;align-items:center;}
   .currency-wrap input{text-align:right;padding-left:2px;}
   .currency-prefix{
@@ -1111,6 +1120,13 @@ const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","A
 function monthNumber(m){
   const idx = MONTHS.indexOf(m);
   return idx === -1 ? '—' : String(idx+1).padStart(2,'0');
+}
+// Rótulo do mês nas listas de lançamento: "08 Ago". Só o número deixava a
+// coluna ilegível de relance — o nome curto resolve sem alargar demais.
+function monthShort(m){
+  const idx = MONTHS.indexOf(m);
+  if(idx === -1) return '—';
+  return String(idx+1).padStart(2,'0') + ' ' + m.slice(0,3);
 }
 let SELLERS = [
   {key:"soraya", label:"Soraya", color:"#5046E5"},
@@ -3141,8 +3157,8 @@ function tabelaComissoes(grupos, mostrarMesPagamento){
               <td>${i === 0 ? esc(g.nome) : ''}</td>
               <td>${esc(e.origem)}</td>
               <td>${esc(e.cliente)}</td>
-              <td>${monthNumber(e.mesVenda)}</td>
-              ${mostrarMesPagamento ? `<td>${e.mesPagamento ? monthNumber(e.mesPagamento) : '—'}</td>` : ''}
+              <td>${monthShort(e.mesVenda)}</td>
+              ${mostrarMesPagamento ? `<td>${e.mesPagamento ? monthShort(e.mesPagamento) : '—'}</td>` : ''}
               <td class="num">${fmtMoney(e.valorPago)}</td>
               <td class="num">${e.pct === null ? '—' : String(e.pct).replace('.',',')+'%'}</td>
               <td class="num" style="font-weight:800;">${fmtMoney(e.comissao)}</td>
@@ -3232,7 +3248,7 @@ function renderPagamentosSection(){
     ? `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhum pagamento marcado como realizado ainda neste filtro. Marque a caixinha "Pago" nas abas Sistema, Consultoria ou Consultoria Órgãos Públicos.</td></tr>`
     : entries.map(e => `
       <tr>
-        <td>${monthNumber(e.mesPagamento)}</td>
+        <td>${monthShort(e.mesPagamento)}</td>
         <td>${esc(e.origem)}</td>
         <td>${esc(e.label)}</td>
         <td class="num">${e.mesVenda===e.mesPagamento?'—':esc(e.mesVenda)}</td>
@@ -3258,7 +3274,7 @@ function renderPagamentosSection(){
               <th>Origem</th>
               <th>Cliente / Empresa / Órgão</th>
               <th class="num">Mês da venda (se diferente)</th>
-              <th class="num col-valor">Valor do Contrato</th>
+              <th class="num col-valor" title="Valor do Contrato">Valor</th>
             </tr>
           </thead>
           <tbody>${rowsHtml}</tbody>
@@ -3703,7 +3719,7 @@ function renderBonusSection(){
       <tr class="${isBonusRowPending(row) ? 'row-pending' : ''}${isMonthClosed(row.ano||2026,row.mes) ? ' row-locked' : ''}">
         <td>
           <select data-id="${row.id}" onchange="onBonusMonthSelect(this)" title="${esc(row.mes)}">
-            ${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthNumber(m)}</option>`).join('')}
+            ${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthShort(m)}</option>`).join('')}
           </select>
           ${isBonusRowPending(row) ? '<span class="pending-badge" title="Falta vendedor ou valor">⚠️</span>' : ''}
           ${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}
@@ -3733,7 +3749,7 @@ function renderBonusSection(){
         <table>
           <thead>
             <tr>
-              <th style="width:58px">Mês</th>
+              <th class="col-mes">Mês</th>
               <th>Vendedor</th>
               <th>Descrição (bônus / meta batida)</th>
               <th class="num col-valor">Valor</th>
@@ -4101,10 +4117,10 @@ function renderParceirosSection(){
         <table class="table-plain">
           <thead>
             <tr>
-              <th style="width:58px">Mês</th>
+              <th class="col-mes">Mês</th>
               <th>Origem</th>
               <th>Cliente / Empresa / Curso</th>
-              <th class="num col-valor">Valor do Contrato</th>
+              <th class="num col-valor" title="Valor do Contrato">Valor</th>
               <th>Parceiro</th>
               <th class="num">%</th>
               <th class="num">Honorário</th>
@@ -4524,7 +4540,7 @@ function renderVendasSection(){
       <tr class="${isVendasRowPending(row) ? 'row-pending' : ''}${isMonthClosed(row.ano||2026,row.mes) ? ' row-locked' : ''}${isVendasRowDuplicate(row) ? ' row-duplicate' : ''}">
         <td>
           <select data-id="${row.id}" onchange="onMonthSelect(this)" title="${esc(row.mes)}">
-            ${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthNumber(m)}</option>`).join('')}
+            ${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthShort(m)}</option>`).join('')}
           </select>
           ${isVendasRowPending(row) ? '<span class="pending-badge" title="Lançamento incompleto: falta valor ou percentual">⚠️</span>' : ''}
           ${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}
@@ -4555,7 +4571,7 @@ function renderVendasSection(){
         <td><input type="text" data-id="${row.id}" data-field="formaPagamento" value="${esc(row.formaPagamento)}" placeholder="Forma de pagamento" oninput="onTextInput(this)" /></td>
         <td class="pagamento-cell">
           <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" onchange="onPagamentoToggle(this)" /><span>${row.pago?'Pago':'Pendente'}</span></label>
-          ${row.pago ? `<select data-id="${row.id}" onchange="onPagamentoMesSelect(this)">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthNumber(m)}</option>`).join('')}</select>` : ''}
+          ${row.pago ? `<select data-id="${row.id}" onchange="onPagamentoMesSelect(this)">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>` : ''}
         </td>
         <td class="obs-cell"><input type="text" data-id="${row.id}" data-field="observacoes" value="${esc(row.observacoes)}" placeholder="Anotação livre..." oninput="onTextInput(this)" /></td>
         ${visibleSellers.map(s => {
@@ -4612,11 +4628,11 @@ function renderVendasSection(){
         <table>
           <thead>
             <tr>
-              <th style="width:58px">Mês</th>
-              <th>Nome do Cliente</th>
+              <th class="col-mes">Mês</th>
+              <th class="col-nome">Nome do Cliente</th>
               <th>Venda</th>
               <th style="width:140px">Quem vendeu</th>
-              <th class="num col-valor">Valor do Contrato</th>
+              <th class="num col-valor" title="Valor do Contrato">Valor</th>
               <th>Parceiro</th>
               <th>Participação</th>
               <th>Forma de Pagamento</th>
@@ -5178,7 +5194,7 @@ function renderEntitySection(key){
   const rowsHtml = visible.length === 0
     ? `<tr class="empty-row"><td colspan="${colCount}"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
     : visible.map(row => {
-        let cells = `<td><select data-entity="${key}" data-id="${row.id}" onchange="onEntityMonthSelect(this)" title="${esc(row.mes)}">${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthNumber(m)}</option>`).join('')}</select>${isEntityRowPending(row) ? '<span class="pending-badge" title="Lançamento incompleto: falta valor ou percentual">⚠️</span>' : ''}${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}${isEntityRowDuplicate(key,row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo nome neste mês — confira se não é duplicado">🔁 Duplicado</span>` : ''}</td>`;
+        let cells = `<td class="col-mes"><select data-entity="${key}" data-id="${row.id}" onchange="onEntityMonthSelect(this)" title="${esc(row.mes)}">${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>${isEntityRowPending(row) ? '<span class="pending-badge" title="Lançamento incompleto: falta valor ou percentual">⚠️</span>' : ''}${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}${isEntityRowDuplicate(key,row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo nome neste mês — confira se não é duplicado">🔁 Duplicado</span>` : ''}</td>`;
         cfg.fields.forEach((f, fi) => {
           if(fi === 1 && cfg.hasVendasPorVendedor){
             const d = resumoDivisao(row);
@@ -5209,11 +5225,11 @@ function renderEntitySection(key){
               ${row.parceiro ? `<div class="calc-value" id="calcParceiro-${key}-${row.id}">${fmtMoney((Number(row.valorContrato)||0) * (parsePercent(row.participacao)/100))}</div>` : ''}
             </td>`;
           } else if(f.type === "text"){
-            cells += `<td><input type="text" data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" /></td>`;
+            cells += `<td${fi===0?' class="col-nome"':''}><input type="text" data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" /></td>`;
             if(f.key === "formaPagamento" && cfg.hasPagamento){
               cells += `<td class="pagamento-cell">
                 <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" onchange="onPagamentoToggle(this,'${key}')" /><span>${row.pago?'Pago':'Pendente'}</span></label>
-                ${row.pago ? `<select data-id="${row.id}" onchange="onPagamentoMesSelect(this,'${key}')">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthNumber(m)}</option>`).join('')}</select>` : ''}
+                ${row.pago ? `<select data-id="${row.id}" onchange="onPagamentoMesSelect(this,'${key}')">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>` : ''}
               </td>`;
             }
           } else if(f.type === "number"){
@@ -5302,8 +5318,8 @@ function renderEntitySection(key){
         <table>
           <thead>
             <tr>
-              <th style="width:58px">Mês</th>
-              ${cfg.fields.map((f,fi) => `<th${f.key==='valorContrato'?' class="num col-valor"':(f.key==='participacao'?' class="num col-pct"':(f.type==='number'?' class="num"':''))}>${f.label}</th>${fi===0&&cfg.hasVendasPorVendedor?('<th style="width:150px">'+(isAdmin?'Vendas por vendedora':'Sua venda')+'</th>'):''}${f.key==='formaPagamento'&&cfg.hasPagamento?'<th style="width:110px">Pagamento</th>':''}`).join('')}
+              <th class="col-mes">Mês</th>
+              ${cfg.fields.map((f,fi) => `<th${f.key==='valorContrato'?' class="num col-valor" title="Valor do Contrato"':(f.key==='participacao'?' class="num col-pct"':(f.type==='number'?' class="num"':(fi===0?' class="col-nome"':'')))}>${f.key==='valorContrato'?'Valor':f.label}</th>${fi===0&&cfg.hasVendasPorVendedor?('<th style="width:150px">'+(isAdmin?'Vendas por vendedora':'Sua venda')+'</th>'):''}${f.key==='formaPagamento'&&cfg.hasPagamento?'<th style="width:110px">Pagamento</th>':''}`).join('')}
               <th class="num">% Comissão</th>
               <th>Vendedor</th>
               <th class="num">% Comissão V2</th>
