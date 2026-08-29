@@ -1090,6 +1090,10 @@
   .contrato-linha-input::placeholder{color:var(--ink-faint);font-weight:400;}
   .contrato-cnpj-aviso{display:block;font-size:10.5px;color:#B45309;font-weight:700;padding:1px 8px 0;}
   .col-cnpj{min-width:180px;}
+  /* Colunas de apoio: estão ali para conferência, não para competir com o
+     total. Ficam em cinza para o olho ir primeiro no número que importa. */
+  table.table-plain td.col-apoio, thead th.col-apoio{color:var(--ink-faint);}
+  .totais-nota{padding:12px 16px 16px;font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.55;}
   .col-rent{min-width:206px;}
   /* Rentável x não rentável: dois botões, um só ativo. Clicar no que já
      está ativo desmarca — o contrato pode entrar antes da avaliação. */
@@ -3775,12 +3779,10 @@ function updateBonusSummaries(){
     countEl.innerHTML = `<b>${visible.length}</b> lançamento${visible.length===1?"":"s"} ${bonusFilter!=="Todos" ? "em <b>"+esc(bonusFilter)+"</b>" : ""}`;
   }
   const salarios = getSalarioVisible();
-  const salEl = document.getElementById('kpi-salario-total');
-  if(salEl) salEl.textContent = bonusValuesRevealed
-    ? fmtMoney(salarios.reduce((a,r)=>a+(Number(r.valor)||0),0)) : '••••••';
   const salCountEl = document.getElementById('count-salario');
   if(salCountEl){
-    salCountEl.innerHTML = `<b>${salarios.length}</b> salário${salarios.length===1?'':'s'}${bonusFilter!=="Todos" ? " em <b>"+esc(bonusFilter)+"</b>" : " no ano"}`;
+    const totSal = salarios.reduce((a,r)=>a+(Number(r.valor)||0),0);
+    salCountEl.innerHTML = `<b>${salarios.length}</b> salário${salarios.length===1?'':'s'}${bonusFilter!=="Todos" ? " em <b>"+esc(bonusFilter)+"</b>" : " no ano"}${salarios.length ? ' · '+(bonusValuesRevealed ? fmtMoney(totSal) : '••••••') : ''}`;
   }
 }
 
@@ -3812,12 +3814,7 @@ function renderBonusSection(){
       <div class="kpi-label">Total em bônus/metas</div>
       <div class="kpi-value" id="kpi-bonus-total">${fmtMoney(totalBonus)}</div>
     </div>
-  ` + (salarios.length ? `
-    <div class="kpi-card" style="--kc:var(--ink-soft)">
-      <div class="kpi-label"><span class="kpi-dot"></span>Salários fixos</div>
-      <div class="kpi-value${bonusValuesRevealed?'':' masked'}" id="kpi-salario-total">${bonusValuesRevealed ? fmtMoney(totalSalarios) : '••••••'}</div>
-    </div>
-  ` : '');
+  `;
 
   const rowsHtml = visible.length === 0
     ? `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhum bônus ou meta lançada ainda. Clique em "+ Novo bônus" para começar.</td></tr>`
@@ -3867,6 +3864,35 @@ function renderBonusSection(){
       </tr>
     `).join('');
 
+  /* Quanto cada vendedora fez no período, contando só o que é certo.
+     A Consultoria fica fora da soma principal de propósito: a comissão
+     dela só se realiza quando o cliente paga, então entrar no total
+     prometeria um dinheiro que pode não ter entrado no mês. Ela continua
+     visível ao lado, com o total cheio, para a conferência. */
+  const bkd = sellerBreakdownDoMes(bonusFilter);
+  const dinheiro = (v) => bonusValuesRevealed ? fmtMoney(v) : '••••';
+  const somaCols = {sistema:0, publicos:0, cursos:0, bonus:0, certo:0, consultoria:0, geral:0};
+  const totaisRowsHtml = sellersForCurrentUser().map(sv => {
+    const b = bkd[sv.label] || {sistema:0, consultoria:0, publicos:0, cursos:0, bonus:0};
+    const certo = b.sistema + b.publicos + b.cursos + b.bonus;
+    const geral = certo + b.consultoria;
+    somaCols.sistema += b.sistema; somaCols.publicos += b.publicos;
+    somaCols.cursos += b.cursos;   somaCols.bonus += b.bonus;
+    somaCols.certo += certo;       somaCols.consultoria += b.consultoria;
+    somaCols.geral += geral;
+    return `
+      <tr>
+        <td><span class="th-dot" style="background:${esc(sv.color)}"></span>${esc(sv.label)}</td>
+        <td class="num">${dinheiro(b.sistema)}</td>
+        <td class="num">${dinheiro(b.publicos)}</td>
+        <td class="num">${dinheiro(b.cursos)}</td>
+        <td class="num">${dinheiro(b.bonus)}</td>
+        <td class="num" style="font-weight:800;">${dinheiro(certo)}</td>
+        <td class="num col-apoio">${dinheiro(b.consultoria)}</td>
+        <td class="num col-apoio">${dinheiro(geral)}</td>
+      </tr>`;
+  }).join('');
+
   return `
     ${kpiToggleHtml}
     <div class="kpis">${kpiCardsHtml}</div>
@@ -3896,6 +3922,44 @@ function renderBonusSection(){
       actions: `<button class="btn-add" onclick="addBonusRow()">+ Novo bônus</button>`,
     })}
 
+    ${panel('bonus-totais', 'Total por vendedora', `
+      <div class="table-scroll">
+        <table class="table-plain">
+          <thead>
+            <tr>
+              <th>Vendedora</th>
+              <th class="num">Sistema</th>
+              <th class="num">Órgãos Públicos</th>
+              <th class="num">Cursos</th>
+              <th class="num">Bônus</th>
+              <th class="num">Total</th>
+              <th class="num col-apoio">Consultoria</th>
+              <th class="num col-apoio">Com Consultoria</th>
+            </tr>
+          </thead>
+          <tbody>${totaisRowsHtml || `<tr class="empty-row"><td colspan="8"><span class="empty-icon">◌</span>Nenhuma vendedora cadastrada ainda.</td></tr>`}</tbody>
+          ${totaisRowsHtml ? `<tfoot><tr>
+            <td>Total</td>
+            <td class="num">${dinheiro(somaCols.sistema)}</td>
+            <td class="num">${dinheiro(somaCols.publicos)}</td>
+            <td class="num">${dinheiro(somaCols.cursos)}</td>
+            <td class="num">${dinheiro(somaCols.bonus)}</td>
+            <td class="num">${dinheiro(somaCols.certo)}</td>
+            <td class="num col-apoio">${dinheiro(somaCols.consultoria)}</td>
+            <td class="num col-apoio">${dinheiro(somaCols.geral)}</td>
+          </tr></tfoot>` : ''}
+        </table>
+      </div>
+      <div class="totais-nota">
+        A coluna <b>Total</b> soma Sistema, Órgãos Públicos, Cursos e Bônus. A <b>Consultoria fica fora</b>
+        porque a comissão dela só se realiza quando o cliente paga — entrar no total prometeria um dinheiro
+        que pode não ter entrado no mês. As duas últimas colunas mostram a Consultoria e o total cheio, para conferência.
+      </div>
+    `, {
+      flush: true,
+      meta: `${bonusFilter !== "Todos" ? "em <b>"+esc(bonusFilter)+"</b>" : "no ano de <b>"+yearFilter+"</b>"}`,
+    })}
+
     ${panel('bonus-salarios', 'Salário fixo dos colaboradores', `
       <div class="table-scroll">
         <table>
@@ -3913,7 +3977,7 @@ function renderBonusSection(){
       </div>
     `, {
       flush: true,
-      meta: `<span id="count-salario"><b>${salarios.length}</b> salário${salarios.length===1?'':'s'}${bonusFilter!=="Todos" ? " em <b>"+esc(bonusFilter)+"</b>" : " no ano"}</span>`,
+      meta: `<span id="count-salario"><b>${salarios.length}</b> salário${salarios.length===1?'':'s'}${bonusFilter!=="Todos" ? " em <b>"+esc(bonusFilter)+"</b>" : " no ano"}${salarios.length ? ' · '+(bonusValuesRevealed ? fmtMoney(totalSalarios) : '••••••') : ''}</span>`,
       actions: `<button class="btn-add" onclick="addSalarioRow()">+ Novo salário</button>`,
     })}
   `;
@@ -3954,6 +4018,17 @@ function getSellerBreakdown(){
   });
 
   return by;
+}
+
+/* getSellerBreakdown lê o filtro de mês do Resumo Geral. Para usar o
+   mesmo cálculo com o filtro de outra aba, aponta o filtro pro mês pedido
+   e devolve no fim — mesmo jeito que o relatório em PDF faz. */
+function sellerBreakdownDoMes(mes){
+  const antigo = partnerMonthFilter;
+  partnerMonthFilter = mes || 'Todos';
+  const b = getSellerBreakdown();
+  partnerMonthFilter = antigo;
+  return b;
 }
 
 function getSellerGrandTotals(){

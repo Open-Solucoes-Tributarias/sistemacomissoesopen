@@ -416,6 +416,24 @@ O botão **🔁** repete o salário nos meses seguintes até dezembro, pulando m
 
 O acesso segue a mesma regra do resto: quem administra vê e lança tudo; uma conta restrita vê apenas o próprio salário, porque a linha leva o nome da pessoa (`bonus`, migração 11).
 
+### Total por vendedora
+
+Entre os bônus e os salários há um quadro **"Total por vendedora"**, que responde a pergunta do fim do mês: *quanto cada uma fez?* Ele acompanha o filtro de mês da aba — escolhendo "Todos", mostra o ano.
+
+| Coluna | Entra no total? |
+|---|---|
+| Sistema | sim |
+| Órgãos Públicos | sim |
+| Cursos | sim |
+| Bônus | sim |
+| **Total** | a soma das quatro |
+| Consultoria | **não** — fica à parte, em cinza |
+| Com Consultoria | o total cheio, só para conferência |
+
+> **Por que a Consultoria fica fora da soma.** A comissão de Consultoria só se realiza quando o cliente paga; enquanto isso ela é expectativa, não dinheiro do mês. Somá-la no total prometeria um valor que pode não ter entrado. Ela continua visível nas duas últimas colunas, em cinza, para quem quiser o número cheio — e o **Resumo Geral** segue mostrando o total com tudo somado, como sempre.
+
+O salário fixo **não entra em nenhuma dessas colunas**: é despesa, não ganho de comissão. O total dos salários do período aparece no cabeçalho do painel de salários.
+
 ## Backup manual
 
 Dentro do próprio sistema, o botão **"⬇ Exportar dados"** (no topo da tela) gera um backup completo em texto — útil pra guardar uma cópia de segurança de vez em quando, independente do banco de dados.
