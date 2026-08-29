@@ -1075,6 +1075,44 @@
     font-size:11.5px;font-weight:700;color:var(--ink-soft);
   }
   .painel-equipe-nota{font-size:12.5px;color:var(--ink-soft);font-weight:600;line-height:1.5;margin-bottom:12px;}
+
+  /* Empresas com contrato assinado (equipe de consultoria) */
+  .contrato-linha-input, .contrato-linha-select{
+    width:100%;border:1px solid transparent;background:transparent;border-radius:6px;
+    font-family:var(--font);font-size:13px;color:var(--ink);font-weight:600;
+    padding:6px 8px;outline:none;
+  }
+  .contrato-linha-select{color:var(--primary);font-weight:700;cursor:pointer;}
+  .contrato-linha-input:hover, .contrato-linha-select:hover{border-color:var(--border);}
+  .contrato-linha-input:focus, .contrato-linha-select:focus{
+    border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);background:var(--surface);
+  }
+  .contrato-linha-input::placeholder{color:var(--ink-faint);font-weight:400;}
+  .contrato-cnpj-aviso{display:block;font-size:10.5px;color:#B45309;font-weight:700;padding:1px 8px 0;}
+  .col-cnpj{min-width:180px;}
+  .col-rent{min-width:206px;}
+  /* Rentável x não rentável: dois botões, um só ativo. Clicar no que já
+     está ativo desmarca — o contrato pode entrar antes da avaliação. */
+  .rent-toggle{display:flex;gap:6px;}
+  .rent-btn{
+    flex:1;font-family:var(--font);font-size:11.5px;font-weight:800;cursor:pointer;white-space:nowrap;
+    padding:7px 8px;border-radius:999px;border:1px solid var(--border);
+    background:var(--surface);color:var(--ink-faint);transition:all .15s;
+  }
+  .rent-btn:hover:not(:disabled){border-color:var(--ink-faint);color:var(--ink-soft);}
+  .rent-btn.sim.on{background:#DCFCE7;border-color:#86EFAC;color:#15803D;}
+  .rent-btn.nao.on{background:var(--danger-soft);border-color:#FCA5A5;color:#B91C1C;}
+  .rent-btn:disabled{cursor:default;}
+  .contrato-resumo{
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+    padding:12px 16px 0;font-size:12.5px;font-weight:700;color:var(--ink-soft);
+  }
+  .contrato-tag{padding:4px 10px;border-radius:999px;font-size:11.5px;font-weight:800;}
+  .contrato-tag.sim{background:#DCFCE7;color:#15803D;}
+  .contrato-tag.nao{background:var(--danger-soft);color:#B91C1C;}
+  .contrato-tag.aval{background:var(--border-soft);color:var(--ink-soft);}
+  .contrato-nota{padding:10px 16px 0;font-size:12px;color:#B45309;font-weight:600;line-height:1.5;}
+  .contrato-add{padding:14px 16px;}
   .painel-equipe-lista{display:flex;flex-wrap:wrap;gap:8px;}
   .painel-equipe-item{
     display:inline-flex;align-items:center;gap:8px;cursor:pointer;
@@ -5428,6 +5466,172 @@ function persistPainelContratos(){
   }, 450);
 }
 
+
+/* ---------- Empresas com contrato assinado ----------
+   "Contratos assinados" é só um número: não diz QUAIS empresas entraram,
+   nem se o negócio valeu a pena. Aqui fica uma linha por empresa nova —
+   quem trouxe, em que mês, nome, CNPJ e a avaliação do gestor.
+
+   O campo numérico continua digitado à mão e não é calculado a partir
+   daqui, pra não mexer no que já está lançado; o sistema só mostra os
+   dois lado a lado quando divergem, como conferência. */
+let contratosNovos = [];
+let contratosNovosNextId = 1;
+let contratosNovosTimer = null;
+
+async function tryLoadContratosNovosAsync(){
+  try{
+    const dbRows = await sbSelect('contratos_consultoria', 'select=*&order=id.asc');
+    carregouDoBanco['contratos-novos'] = true;
+    if(dbRows){
+      contratosNovos = dbRows.map(function(d){
+        return {
+          id: d.id, ano: d.ano, mes: d.mes, pessoa: d.pessoa || '',
+          empresa: d.empresa || '', cnpj: d.cnpj || '',
+          rentavel: (d.rentavel === null || d.rentavel === undefined) ? null : !!d.rentavel,
+        };
+      });
+      contratosNovosNextId = contratosNovos.length
+        ? Math.max.apply(null, contratosNovos.map(function(r){ return r.id||0; })) + 1 : 1;
+      render();
+    }
+  }catch(e){ console.error(e); }
+}
+
+function persistContratosNovos(){
+  saving = true; updateSaveStatus();
+  if(contratosNovosTimer) clearTimeout(contratosNovosTimer);
+  contratosNovosTimer = setTimeout(function(){
+    (async function(){
+      try{
+        const dbRows = contratosNovos.map(function(r){
+          return {
+            id: r.id, ano: r.ano, mes: r.mes, pessoa: r.pessoa,
+            empresa: r.empresa || '', cnpj: r.cnpj || '',
+            rentavel: (r.rentavel === null || r.rentavel === undefined) ? null : !!r.rentavel,
+          };
+        });
+        await sbUpsert('contratos_consultoria', dbRows, 'id');
+        // só apaga o que sumiu daqui se a lista do banco já tiver sido lida
+        const existing = carregouDoBanco['contratos-novos']
+          ? ((await sbSelect('contratos_consultoria','select=id')) || []) : [];
+        const localIds = contratosNovos.map(function(r){ return r.id; });
+        const toDelete = existing.map(function(x){ return x.id; })
+          .filter(function(id){ return localIds.indexOf(id) === -1; });
+        if(toDelete.length) await sbDeleteIn('contratos_consultoria','id', toDelete);
+        saveError = false;
+      }catch(e){ console.error(e); saveError = true; }
+      finally{ saving = false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+
+/* CNPJ: máscara 00.000.000/0000-00 e conferência dos dois dígitos
+   verificadores. A conferência avisa, mas nunca bloqueia — o contrato
+   pode ser cadastrado antes de alguém achar o número certo. */
+function cnpjDigitos(v){ return String(v===null||v===undefined?'':v).replace(/\D/g,'').slice(0,14); }
+function formatCnpj(v){
+  const d = cnpjDigitos(v);
+  if(!d) return '';
+  let s = d.slice(0,2);
+  if(d.length > 2)  s += '.' + d.slice(2,5);
+  if(d.length > 5)  s += '.' + d.slice(5,8);
+  if(d.length > 8)  s += '/' + d.slice(8,12);
+  if(d.length > 12) s += '-' + d.slice(12,14);
+  return s;
+}
+function cnpjValido(v){
+  const d = cnpjDigitos(v);
+  if(d.length !== 14) return false;
+  if(/^(\d)\1{13}$/.test(d)) return false;
+  const digito = function(len){
+    let soma = 0, peso = len - 7;
+    for(let i = 0; i < len; i++){
+      soma += Number(d[i]) * peso--;
+      if(peso < 2) peso = 9;
+    }
+    const r = soma % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  return digito(12) === Number(d[12]) && digito(13) === Number(d[13]);
+}
+
+function contratosNovosDe(pessoa){
+  return contratosNovos.filter(function(c){
+    return c.ano === yearFilter && name_matches_client(c.pessoa, pessoa);
+  }).sort(function(a,b){
+    const d = MONTHS.indexOf(a.mes) - MONTHS.indexOf(b.mes);
+    return d !== 0 ? d : ((a.id||0) - (b.id||0));
+  });
+}
+
+function addContratoNovo(pessoa){
+  if(!isAdmin) return;
+  const novo = {
+    id: contratosNovosNextId++, ano: yearFilter,
+    mes: painelContratoMes || MONTHS[0], pessoa: pessoa,
+    empresa: '', cnpj: '', rentavel: null,
+  };
+  contratosNovos.push(novo);
+  persistContratosNovos();
+  render();
+  setTimeout(function(){
+    const el = document.getElementById('contrato-emp-' + novo.id);
+    if(el) el.focus();
+  }, 40);
+}
+
+/* Sem render: re-desenhar a cada tecla tiraria o foco do campo. */
+function onContratoNovoTexto(el, id, campo){
+  const c = contratosNovos.find(function(x){ return x.id === id; });
+  if(!c) return;
+  if(campo === 'cnpj'){
+    const antes = el.value, pos = el.selectionStart;
+    el.value = formatCnpj(el.value);
+    if(pos !== null){
+      const novaPos = pos + (el.value.length - antes.length);
+      try{ el.setSelectionRange(novaPos, novaPos); }catch(e){}
+    }
+    c.cnpj = el.value;
+    const aviso = document.getElementById('contrato-cnpj-aviso-' + id);
+    if(aviso) aviso.textContent = (cnpjDigitos(c.cnpj) && !cnpjValido(c.cnpj)) ? 'CNPJ incompleto' : '';
+  } else {
+    c[campo] = el.value;
+  }
+  persistContratosNovos();
+}
+
+function setContratoNovoMes(el, id){
+  const c = contratosNovos.find(function(x){ return x.id === id; });
+  if(!c) return;
+  c.mes = el.value;
+  persistContratosNovos();
+  render();
+}
+
+function setContratoRentavel(id, valor){
+  if(!isAdmin) return;
+  const c = contratosNovos.find(function(x){ return x.id === id; });
+  if(!c) return;
+  c.rentavel = (c.rentavel === valor) ? null : valor;   // clicar de novo desmarca
+  persistContratosNovos();
+  render();
+}
+
+function excluirContratoNovo(id){
+  const c = contratosNovos.find(function(x){ return x.id === id; });
+  if(!c) return;
+  showConfirm(
+    'Excluir ' + (c.empresa ? '"' + c.empresa + '"' : 'esta empresa') + ' da lista de ' + c.pessoa + '?',
+    function(){
+      contratosNovos = contratosNovos.filter(function(x){ return x.id !== id; });
+      persistContratosNovos();
+      render();
+    },
+    'Excluir'
+  );
+}
+
 function setPainelEditandoContratos(v){ painelEditandoContratos = !!v; render(); }
 
 function togglePessoaContratos(nome){
@@ -5852,6 +6056,20 @@ function montarRelatorioMes(mes){
       <td class="num">${(valorMetrica(v, mes, 'reunioes')||0).toLocaleString('pt-BR')}</td></tr>`;
   });
 
+  // Empresas que assinaram contrato no mês, com a avaliação do gestor.
+  const linhasEmpresasNovas = contratosNovos
+    .filter(function(c){ return c.ano === ano && c.mes === mes; })
+    .sort(function(a,b){
+      return String(a.pessoa||'').localeCompare(String(b.pessoa||''), 'pt-BR') || ((a.id||0) - (b.id||0));
+    })
+    .map(function(c){
+      const aval = c.rentavel === true ? 'Rentável' : (c.rentavel === false ? 'Não rentável' : '—');
+      return `<tr><td>${esc(c.empresa || '—')}</td>
+        <td>${esc(formatCnpj(c.cnpj) || '—')}</td>
+        <td>${esc(c.pessoa)}</td>
+        <td>${aval}</td></tr>`;
+    });
+
   partnerMonthFilter = filtroAntigo;
 
   const agora = new Date();
@@ -5967,6 +6185,12 @@ function montarRelatorioMes(mes){
         <h2>Equipe de consultoria</h2>
         ${relTabela([{label:'Pessoa'},{label:'Contratos assinados',num:true},{label:'Reuniões realizadas',num:true}],
           linhasConsult, 'Ninguém na equipe de consultoria ainda.')}
+      </section>
+
+      <section class="rel-sec">
+        <h2>Empresas que assinaram contrato <span class="rel-sub">novas contas trazidas pela equipe de consultoria</span></h2>
+        ${relTabela([{label:'Empresa'},{label:'CNPJ'},{label:'Quem trouxe'},{label:'O negócio foi'}],
+          linhasEmpresasNovas, 'Nenhuma empresa nova cadastrada em ' + mes + '.')}
       </section>
 
       <footer class="rel-rodape">Relatório gerado pelo sistema de comissões da Open Soluções Tributárias · ${esc(mes)}/${ano}</footer>
@@ -6268,6 +6492,10 @@ function renderPainelContratos(){
     });
   }).join('');
 
+  const empresas = pessoas.map(function(v){
+    return painelEmpresasNovas(v, v.toLowerCase().replace(/[^a-z0-9]+/g,'-'));
+  }).join('');
+
   return `
     <div class="painel-topo-sub">
       <button class="eye-toggle" onclick="setPainelEditandoContratos(${painelEditandoContratos?'false':'true'})">${painelEditandoContratos?'✕ Fechar':'👤 Quem está na equipe'}</button>
@@ -6277,7 +6505,100 @@ function renderPainelContratos(){
       <div>${formulario}</div>
       <div>${quadros}</div>
     </div>
+    ${empresas}
   `;
+}
+
+
+/* Painel de empresas novas de uma pessoa, no ano aberto. É a lista que dá
+   nome ao número "contratos assinados": quais empresas entraram e se o
+   negócio valeu a pena. Vai em largura total, embaixo dos quadros — a
+   tabela não caberia na coluna estreita da direita. */
+function painelEmpresasNovas(pessoa, slugPessoa){
+  const lista = contratosNovosDe(pessoa);
+  const editavel = isAdmin;
+  const rent     = lista.filter(function(c){ return c.rentavel === true;  }).length;
+  const naoRent  = lista.filter(function(c){ return c.rentavel === false; }).length;
+  const semAval  = lista.length - rent - naoRent;
+
+  const linhas = lista.map(function(c){
+    const avisoCnpj = (cnpjDigitos(c.cnpj) && !cnpjValido(c.cnpj)) ? 'CNPJ incompleto' : '';
+    return `<tr>
+      <td class="col-mes">${editavel
+        ? `<select class="contrato-linha-select" onchange="setContratoNovoMes(this,${c.id})">${
+            MONTHS.map(function(m){ return `<option value="${m}" ${c.mes===m?'selected':''}>${monthShort(m)}</option>`; }).join('')
+          }</select>`
+        : esc(monthShort(c.mes))}</td>
+      <td class="col-nome">${editavel
+        ? `<input class="contrato-linha-input" id="contrato-emp-${c.id}" type="text" placeholder="Nome da empresa"
+                  value="${esc(c.empresa)}" oninput="onContratoNovoTexto(this,${c.id},'empresa')" />`
+        : esc(c.empresa || '—')}</td>
+      <td class="col-cnpj">${editavel
+        ? `<input class="contrato-linha-input" type="text" inputmode="numeric" placeholder="00.000.000/0000-00"
+                  value="${esc(formatCnpj(c.cnpj))}" oninput="onContratoNovoTexto(this,${c.id},'cnpj')" />
+           <span class="contrato-cnpj-aviso" id="contrato-cnpj-aviso-${c.id}">${esc(avisoCnpj)}</span>`
+        : esc(formatCnpj(c.cnpj) || '—')}</td>
+      <td class="col-rent">
+        <div class="rent-toggle">
+          <button type="button" class="rent-btn sim${c.rentavel===true?' on':''}" ${editavel?'':'disabled'}
+                  title="O negócio valeu a pena" onclick="setContratoRentavel(${c.id},true)">Rentável</button>
+          <button type="button" class="rent-btn nao${c.rentavel===false?' on':''}" ${editavel?'':'disabled'}
+                  title="O negócio não valeu a pena" onclick="setContratoRentavel(${c.id},false)">Não rentável</button>
+        </div>
+      </td>
+      ${editavel ? `<td class="del-cell"><div class="row-actions">
+        <button class="action-btn danger" title="Excluir esta empresa" onclick="excluirContratoNovo(${c.id})">✕</button>
+      </div></td>` : ''}
+    </tr>`;
+  }).join('');
+
+  const tabela = lista.length ? `
+    <div class="table-scroll">
+      <table class="table-plain">
+        <thead><tr>
+          <th class="col-mes">Mês</th>
+          <th class="col-nome">Empresa</th>
+          <th class="col-cnpj">CNPJ</th>
+          <th class="col-rent">O negócio foi</th>
+          ${editavel ? '<th></th>' : ''}
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    </div>
+    <div class="contrato-resumo">
+      <span>${lista.length} empresa${lista.length===1?'':'s'} em ${yearFilter}:</span>
+      <span class="contrato-tag sim">${rent} rentáve${rent===1?'l':'is'}</span>
+      <span class="contrato-tag nao">${naoRent} não rentáve${naoRent===1?'l':'is'}</span>
+      ${semAval ? `<span class="contrato-tag aval">${semAval} sem avaliação</span>` : ''}
+    </div>`
+    : `<div class="meta-empty" style="padding:22px 16px;">Nenhuma empresa cadastrada para ${esc(pessoa)} em ${yearFilter}.</div>`;
+
+  // Conferência: o número digitado em "contratos assinados" e a quantidade
+  // de empresas cadastradas deveriam bater. Quando não batem, avisa — sem
+  // corrigir nada sozinho, porque só ela sabe qual dos dois está certo.
+  let nota = '';
+  if(editavel){
+    const divergentes = MONTHS.map(function(m){
+      const lancado = valorMetrica(pessoa, m, 'contratos') || 0;
+      const cadastradas = lista.filter(function(c){ return c.mes === m; }).length;
+      return { mes:m, lancado:lancado, cadastradas:cadastradas };
+    }).filter(function(d){ return (d.lancado || d.cadastradas) && d.lancado !== d.cadastradas; });
+    if(divergentes.length){
+      nota = `<div class="contrato-nota">⚖️ Confira: o número de <b>contratos assinados</b> não bate com as empresas cadastradas — ${
+        divergentes.map(function(d){ return `<b>${esc(d.mes)}</b>: ${d.lancado} lançado${d.lancado===1?'':'s'}, ${d.cadastradas} cadastrada${d.cadastradas===1?'':'s'}`; }).join(' · ')
+      }.</div>`;
+    }
+  }
+
+  const botao = editavel ? `<div class="contrato-add">
+    <button class="modal-btn modal-btn-ghost" style="width:100%;" onclick="addContratoNovo('${escJs(pessoa)}')">+ Empresa com contrato assinado</button>
+  </div>` : '';
+
+  return panel('painel-empresas-' + slugPessoa, 'Empresas com contrato assinado — ' + esc(pessoa),
+    tabela + nota + botao, {
+      meta: `<b>${lista.length}</b> empresa${lista.length===1?'':'s'} · <b>${rent}</b> rentáve${rent===1?'l':'is'}`,
+      flush: true,
+    });
 }
 
 function setPainelContratoMesDireto(mes){ painelContratoMes = mes; carregarFormContratos(); render(); }
@@ -6870,6 +7191,7 @@ function boot(){
     tryLoadPainelTotaisAsync(),
     tryLoadPainelVendedorasAsync(),
     tryLoadPainelContratosAsync(),
+    tryLoadContratosNovosAsync(),
   ];
   Promise.allSettled(loaders).then(function(){
     initialDataLoaded = true;

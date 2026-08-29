@@ -36,6 +36,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_vendedor_responsavel_migration.sql → migração 7: quem efetivamente vendeu (Sistema e Cursos)
 ├── supabase_vendas_curso_por_vendedora_migration.sql → migração 8: divide o faturamento do curso entre as vendedoras
 ├── supabase_contratos_reunioes_migration.sql → migração 9: equipe de consultoria (contratos e reuniões)
+├── supabase_contratos_novos_migration.sql → migração 10: empresas com contrato assinado (nome, CNPJ e rentabilidade)
 └── .gitignore
 ```
 
@@ -119,6 +120,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 8. Rode `supabase_vendedor_responsavel_migration.sql` — cria a coluna "Quem vendeu" nas abas Sistema e Cursos, e faz o painel contar uma venda por pessoa.
 9. Rode `supabase_vendas_curso_por_vendedora_migration.sql` — troca o "quem vendeu" do curso pela divisão do faturamento por vendedora.
 10. Rode `supabase_contratos_reunioes_migration.sql` — cria a equipe de consultoria (contratos e reuniões).
+11. Rode `supabase_contratos_novos_migration.sql` — cria a lista de empresas que assinaram contrato, com CNPJ e avaliação de rentabilidade.
 11. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
 12. Só depois publique esta versão atualizada do `index.html`.
 
@@ -136,6 +138,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `bonus` | Bônus e metas batidas |
 | `metas` | Regras de meta: gatilho da empresa + prêmio de quem bate |
 | `relatorios_equipe` | Indicadores mensais digitados: andamento da equipe e contratos/reuniões (Relatório de Desempenho) |
+| `contratos_consultoria` | Empresas que assinaram contrato: quem trouxe, mês, nome, CNPJ e se o negócio foi rentável |
 | `partners` | Parceiros cadastrados |
 | `venda_products` | Catálogo de produtos da aba Sistema |
 | `sellers` | Vendedoras do Sistema (lista editável) |
@@ -310,6 +313,27 @@ Nem todo mundo é medido pelos mesmos indicadores. A **equipe de consultoria** �
 Para incluir alguém, use **"Quem está na equipe"** no topo da aba: marque quem já existe no sistema, ou cadastre um nome novo pelo botão do fim da lista. A lista fica no banco (`entity_vendors` com `entidade='painel_contratos'`), então vale para todo mundo.
 
 > Quem está nessa lista **não entra no ranking de vendas** e não aparece nos cartões do dashboard — o ranking mede quem vende, e essas pessoas são medidas por outra coisa. As duas listas são independentes: a mesma pessoa pode estar nas duas, se fizer sentido.
+
+#### Empresas com contrato assinado
+
+O número de contratos assinados não diz **quais** empresas entraram, nem se o negócio valeu a pena. Embaixo dos quadros de cada pessoa há um painel **"Empresas com contrato assinado — <Pessoa>"**, com uma linha por empresa nova:
+
+| Campo | O que é |
+|---|---|
+| Mês | em que mês o contrato foi assinado |
+| Empresa | nome da empresa que entrou |
+| CNPJ | preenchido com máscara automática (`00.000.000/0000-00`) |
+| O negócio foi | **Rentável** ou **Não rentável** — um clique escolhe, clicar de novo desmarca |
+
+Só entram empresas com **contrato já assinado**. A avaliação de rentabilidade começa em branco de propósito: a empresa é cadastrada quando o contrato é fechado, e o julgamento vem depois, quando há como julgar. O rodapé do painel conta quantas são rentáveis, não rentáveis e quantas ainda estão sem avaliação.
+
+O CNPJ é conferido pelos dois dígitos verificadores. Quando não fecha, aparece um **"CNPJ incompleto"** discreto embaixo do campo — é só um aviso, nunca impede de salvar.
+
+> **Conferência com o número digitado.** O campo *"contratos assinados"* continua sendo digitado à mão e **não** é calculado a partir desta lista — mudar isso apagaria o histórico já lançado. O que o sistema faz é mostrar os dois lado a lado: quando o número do mês não bate com a quantidade de empresas cadastradas, aparece um aviso âmbar dizendo exatamente qual mês e quais os dois números. Corrigir (ou não) é decisão de quem administra.
+
+As empresas do mês também saem no **relatório mensal em PDF**, numa seção própria com empresa, CNPJ, quem trouxe e a avaliação.
+
+Como no resto do sistema, quem administra vê e edita tudo; uma conta restrita só enxergaria as empresas que ela mesma trouxe, e sem editar (`contratos_consultoria`, migração 10).
 
 ## Relatório mensal em PDF
 
