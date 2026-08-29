@@ -1,0 +1,21 @@
+-- ============================================================
+-- Migração 11: salário fixo do colaborador
+-- ============================================================
+-- A aba Bônus e Metas passou a receber também o salário fixo de quem é
+-- pago assim. Ele fica na mesma tabela — é mais um valor que a pessoa
+-- recebe no mês —, mas é marcado por uma coluna, porque NÃO pode entrar
+-- em nenhuma soma de bônus, comissão ou faturamento: salário é despesa
+-- fixa da empresa, não prêmio por desempenho nem venda.
+--
+-- tipo = 'Salário fixo'  → linha de salário
+-- tipo nulo (ou qualquer outra coisa) → bônus/meta, como sempre foi.
+--
+-- Nada precisa ser convertido: todos os lançamentos que já existem são
+-- bônus e continuam com tipo nulo.
+--
+-- O RLS da tabela bonus não muda e já cobre o caso: "select own or admin"
+-- compara o nome em `vendedor`, então cada pessoa vê o próprio salário e
+-- ninguém vê o do colega. Escrita continua só para admin.
+-- ============================================================
+
+alter table bonus add column if not exists tipo text;
