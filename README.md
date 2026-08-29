@@ -38,6 +38,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_contratos_reunioes_migration.sql → migração 9: equipe de consultoria (contratos e reuniões)
 ├── supabase_contratos_novos_migration.sql → migração 10: empresas com contrato assinado (nome, CNPJ e rentabilidade)
 ├── supabase_salario_fixo_migration.sql → migração 11: salário fixo do colaborador na aba Bônus e Metas
+├── supabase_fechamento_fora_migration.sql → migração 12: quem fica de fora do fechamento para a contabilidade
 └── .gitignore
 ```
 
@@ -123,6 +124,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 10. Rode `supabase_contratos_reunioes_migration.sql` — cria a equipe de consultoria (contratos e reuniões).
 11. Rode `supabase_contratos_novos_migration.sql` — cria a lista de empresas que assinaram contrato, com CNPJ e avaliação de rentabilidade.
 12. Rode `supabase_salario_fixo_migration.sql` — permite lançar o salário fixo do colaborador sem misturá-lo com bônus e comissões.
+13. Rode `supabase_fechamento_fora_migration.sql` — permite tirar pessoas do fechamento para a contabilidade.
 11. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
 12. Só depois publique esta versão atualizada do `index.html`.
 
@@ -144,7 +146,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `partners` | Parceiros cadastrados |
 | `venda_products` | Catálogo de produtos da aba Sistema |
 | `sellers` | Vendedoras do Sistema (lista editável) |
-| `entity_vendors` | Vendedores(as) por aba (Consultoria / Órgãos Públicos / Cursos), quem aparece no Relatório de Desempenho (`entidade='painel'`) e quem é acompanhado por contratos/reuniões (`entidade='painel_contratos'`) |
+| `entity_vendors` | Vendedores(as) por aba (Consultoria / Órgãos Públicos / Cursos), quem aparece no Relatório de Desempenho (`entidade='painel'`), quem é acompanhado por contratos/reuniões (`entidade='painel_contratos'`) e quem fica de fora do fechamento (`entidade='fechamento_fora'`) |
 | `closed_months` | Meses fechados para edição |
 | `extra_years` | Anos adicionados manualmente |
 | `app_user_access` | Nível de acesso de cada conta de login (admin ou restrita + nome pra filtrar) |
@@ -436,6 +438,10 @@ Entre os bônus e os salários há o quadro que responde a pergunta do fim do m�
 A lista **não é só das vendedoras**: quem só recebe salário fixo — a equipe de consultoria, por exemplo — aparece também, senão faltaria gente na folha. Quem não tem nada no período fica fora, para o quadro não encher de linhas zeradas.
 
 O botão **"📊 Baixar CSV"** gera o arquivo do período, uma linha por pessoa e o total no fim, pronto para mandar. O mesmo fechamento sai também no **relatório mensal em PDF**, em seção própria.
+
+**Quem entra na folha** — o botão **"👥 Quem entra"** abre a lista de todas as pessoas que o sistema conhece, com uma caixa marcada para cada uma. Desmarcar alguém tira essa pessoa da tabela, do total, do CSV e do PDF. Não apaga lançamento nenhum: é só o que vai para a contabilidade, e o cabeçalho do painel avisa quantas estão de fora.
+
+> O sistema guarda **quem fica de fora**, não quem fica dentro. É de propósito: assim uma pessoa cadastrada depois aparece na folha sozinha, em vez de sumir calada. Esquecer alguém num relatório de pagamento é bem pior do que ter uma linha a mais para tirar. A lista fica no banco (`entity_vendors` com `entidade='fechamento_fora'`), então vale para todo mundo, e só admin edita.
 
 ## Backup manual
 

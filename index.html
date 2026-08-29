@@ -3915,6 +3915,23 @@ function renderBonusSection(){
         <td class="num col-apoio">${dinheiro(l.comConsultoria)}</td>
       </tr>`).join('');
 
+  const editorFechamentoHtml = (isAdmin && fechamentoEditando) ? panel('bonus-fechamento-quem', 'Quem entra no fechamento', `
+    <div class="painel-equipe-nota">
+      Desmarque quem não deve aparecer na folha — o valor dessa pessoa sai da tabela, do total, do CSV e do PDF.
+      Isso não apaga lançamento nenhum: é só o que vai para a contabilidade. Quem for cadastrado depois entra
+      marcado, para ninguém sumir da folha sem alguém decidir.
+    </div>
+    <div class="painel-equipe-lista">
+      ${fechamentoCandidatos(bonusFilter).map(function(n){
+        const on = estaNoFechamento(n);
+        return `<label class="painel-equipe-item${on?' on':''}">
+          <input type="checkbox" ${on?'checked':''} onchange="toggleFechamentoPessoa('${escJs(n)}')" />
+          <span>${esc(n)}</span>
+        </label>`;
+      }).join('')}
+    </div>
+  `) : '';
+
   return `
     ${kpiToggleHtml}
     <div class="kpis">${kpiCardsHtml}</div>
@@ -3982,9 +3999,10 @@ function renderBonusSection(){
       </div>
     `, {
       flush: true,
-      meta: `${bonusFilter !== "Todos" ? "em <b>"+esc(bonusFilter)+"</b>" : "no ano de <b>"+yearFilter+"</b>"}${fechamento.length ? ' · a pagar <b>'+(bonusValuesRevealed ? fmtMoney(somaCols.aPagar) : '••••')+'</b>' : ''}`,
-      actions: `<button class="eye-toggle" onclick="exportFechamentoCSV()">📊 Baixar CSV</button>`,
+      meta: `${bonusFilter !== "Todos" ? "em <b>"+esc(bonusFilter)+"</b>" : "no ano de <b>"+yearFilter+"</b>"}${fechamento.length ? ' · a pagar <b>'+(bonusValuesRevealed ? fmtMoney(somaCols.aPagar) : '••••')+'</b>' : ''}${fechamentoFora.length ? ' · <span title="'+esc(fechamentoFora.join(', '))+'">'+fechamentoFora.length+' fora</span>' : ''}`,
+      actions: `${isAdmin ? `<button class="eye-toggle" onclick="setFechamentoEditando(${fechamentoEditando?'false':'true'})">${fechamentoEditando?'✕ Fechar':'👥 Quem entra'}</button>` : ''}<button class="eye-toggle" onclick="exportFechamentoCSV()">📊 Baixar CSV</button>`,
     })}
+    ${editorFechamentoHtml}
 
     ${panel('bonus-salarios', 'Salário fixo dos colaboradores', `
       <div class="table-scroll">
@@ -4057,6 +4075,52 @@ function sellerBreakdownDoMes(mes){
   return b;
 }
 
+/* Quem NÃO entra no fechamento. Guarda-se a lista de fora, e não a de
+   dentro, de propósito: assim uma pessoa nova aparece na folha sozinha, em
+   vez de sumir calada — esquecer alguém num relatório de pagamento é bem
+   pior do que ter uma linha a mais para tirar. */
+let fechamentoFora = [];
+let fechamentoEditando = false;
+let fechamentoForaTimer = null;
+
+async function tryLoadFechamentoForaAsync(){
+  try{
+    const db = await sbSelect('entity_vendors', 'select=vendor_name&entidade=eq.fechamento_fora&order=id.asc');
+    carregouDoBanco['fechamento-fora'] = true;
+    if(db) fechamentoFora = db.map(function(v){ return v.vendor_name; });
+    render();
+  }catch(e){ console.error(e); }
+}
+
+function persistFechamentoFora(){
+  saving = true; updateSaveStatus();
+  if(fechamentoForaTimer) clearTimeout(fechamentoForaTimer);
+  fechamentoForaTimer = setTimeout(function(){
+    (async function(){
+      try{
+        if(!carregouDoBanco['fechamento-fora']) return;   // nunca apagar sem ter lido antes
+        await sbDeleteAll('entity_vendors', 'entidade=eq.fechamento_fora');
+        const linhas = fechamentoFora.map(function(v){ return { entidade:'fechamento_fora', vendor_name:v }; });
+        if(linhas.length) await sbUpsert('entity_vendors', linhas, 'entidade,vendor_name');
+        saveError = false;
+      }catch(e){ console.error(e); saveError = true; }
+      finally{ saving = false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+
+function estaNoFechamento(nome){
+  return !fechamentoFora.some(function(v){ return name_matches_client(v, nome); });
+}
+function toggleFechamentoPessoa(nome){
+  if(!isAdmin) return;
+  const i = fechamentoFora.findIndex(function(v){ return name_matches_client(v, nome); });
+  if(i >= 0) fechamentoFora.splice(i, 1); else fechamentoFora.push(String(nome).trim());
+  persistFechamentoFora();
+  render();
+}
+function setFechamentoEditando(v){ fechamentoEditando = !!v; render(); }
+
 /* O que vai para a contabilidade no mês: por pessoa, a comissão de cada
    origem + bônus + salário fixo. É o número que a Soraya manda pagar.
 
@@ -4067,7 +4131,7 @@ function sellerBreakdownDoMes(mes){
    A lista de pessoas não é só a das vendedoras do Sistema: quem só recebe
    salário (a equipe de consultoria, por exemplo) também precisa entrar,
    senão faltaria gente na folha. */
-function fechamentoPagamentos(mes){
+function fechamentoPagamentos(mes, todos){
   const bkd = sellerBreakdownDoMes(mes);
   const noPeriodo = function(r){
     return (r.ano||2026) === yearFilter && (mes === 'Todos' || !mes || r.mes === mes);
@@ -4103,9 +4167,20 @@ function fechamentoPagamentos(mes){
       consultoria: b.consultoria, comConsultoria: aPagar + b.consultoria,
     };
   }).filter(function(l){
-    // gente sem nada no período só polui a folha
-    return l.aPagar !== 0 || l.consultoria !== 0;
+    if(todos) return true;
+    if(!estaNoFechamento(l.pessoa)) return false;       // tirada da folha à mão
+    return l.aPagar !== 0 || l.consultoria !== 0;       // sem nada no período só polui
   }).sort(function(a,b){ return b.aPagar - a.aPagar; });
+}
+
+/* Quem pode aparecer na folha: todo mundo que o sistema conhece, mais
+   quem tem valor no período mesmo sem estar em nenhuma lista. */
+function fechamentoCandidatos(mes){
+  const out = pessoasConhecidas();
+  fechamentoPagamentos(mes, true).forEach(function(l){
+    if(!out.some(function(x){ return name_matches_client(x, l.pessoa); })) out.push(l.pessoa);
+  });
+  return out.sort(function(a,b){ return a.localeCompare(b, 'pt-BR', {sensitivity:'base'}); });
 }
 
 function getSellerGrandTotals(){
@@ -7495,6 +7570,7 @@ function boot(){
     tryLoadPainelVendedorasAsync(),
     tryLoadPainelContratosAsync(),
     tryLoadContratosNovosAsync(),
+    tryLoadFechamentoForaAsync(),
   ];
   Promise.allSettled(loaders).then(function(){
     initialDataLoaded = true;
