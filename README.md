@@ -314,7 +314,7 @@ Nem todo mundo é medido pelos mesmos indicadores. A **equipe de consultoria** �
 
 É uma **lista separada** da de vendedoras, com **dois indicadores** por pessoa e por mês: *contratos assinados* e *reuniões realizadas*. Escolhe-se a pessoa, o mês, digita os dois números e salva. Ao lado, cada pessoa tem um quadro com os meses lançados e o total do ano.
 
-Para incluir alguém, use **"Quem está na equipe"** no topo da aba: marque quem já existe no sistema, ou cadastre um nome novo pelo botão do fim da lista. A lista fica no banco (`entity_vendors` com `entidade='painel_contratos'`), então vale para todo mundo.
+Para incluir alguém, use **"👤 Quem está na equipe"** no topo da aba — ou o botão **"+ Incluir mais pessoas na equipe de consultoria"** no fim da página, que abre a mesma lista e leva a tela até ela (o topo fica longe de quem está lendo os painéis de empresas lá embaixo). Marque quem já existe no sistema, ou cadastre um nome novo pelo botão do fim da lista. A lista fica no banco (`entity_vendors` com `entidade='painel_contratos'`), então vale para todo mundo.
 
 > Quem está nessa lista **não entra no ranking de vendas** e não aparece nos cartões do dashboard — o ranking mede quem vende, e essas pessoas são medidas por outra coisa. As duas listas são independentes: a mesma pessoa pode estar nas duas, se fizer sentido.
 

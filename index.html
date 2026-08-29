@@ -1006,6 +1006,8 @@
 
   .painel-topo-acoes{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
   .painel-topo-sub{display:flex;justify-content:flex-end;margin-bottom:12px;}
+  .equipe-rodape{display:flex;justify-content:center;margin-top:4px;}
+  .equipe-rodape .modal-btn{min-width:320px;}
   .painel-periodo{
     display:flex;align-items:center;gap:10px;flex-wrap:wrap;
     background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--primary);
@@ -5976,6 +5978,14 @@ function excluirContratoNovo(id){
 }
 
 function setPainelEditandoContratos(v){ painelEditandoContratos = !!v; render(); }
+function abrirQuemEstaNaEquipe(){
+  painelEditandoContratos = true;
+  render();
+  setTimeout(function(){
+    const el = document.getElementById('sec-painel-contratos-quem');
+    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 40);
+}
 
 function togglePessoaContratos(nome){
   if(!isAdmin) return;
@@ -6884,6 +6894,9 @@ function renderPainelContratos(){
       <div>${quadros}</div>
     </div>
     ${empresas}
+    ${isAdmin ? `<div class="equipe-rodape">
+      <button class="modal-btn modal-btn-ghost" onclick="abrirQuemEstaNaEquipe()">+ Incluir mais pessoas na equipe de consultoria</button>
+    </div>` : ''}
   `;
 }
 
