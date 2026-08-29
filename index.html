@@ -1007,6 +1007,21 @@
   .painel-topo-acoes{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
   .painel-topo-sub{display:flex;justify-content:flex-end;margin-bottom:12px;}
   .equipe-rodape{display:flex;justify-content:center;margin-top:4px;}
+  .rank-peso{
+    float:right;font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:none;
+    color:var(--ink-faint);background:var(--border-soft);border-radius:999px;padding:2px 7px;
+  }
+  .pesos-lista{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;}
+  .peso-item{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;background:var(--surface);
+  }
+  .peso-item.zerado{opacity:.55;}
+  .peso-nome{font-size:12.5px;font-weight:700;color:var(--ink);}
+  .peso-item select{
+    border:1px solid var(--border);border-radius:6px;padding:5px 8px;background:var(--surface);
+    font-family:var(--font);font-size:12px;font-weight:700;color:var(--primary);cursor:pointer;
+  }
   .equipe-rodape .modal-btn{min-width:320px;}
   .painel-periodo{
     display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -1335,6 +1350,38 @@ const METRICAS = [
   {key:'qtdSistemas',     col:'qtd_sistemas',     label:'Qtd. sistemas vendidos',  auto:true},
 ];
 const METRICAS_MANUAIS = METRICAS.filter(m => !m.auto);
+
+/* Peso de cada indicador no ranking.
+
+   Contar quantos indicadores cada pessoa lidera trata "interação" e "venda
+   de sistema" como a mesma coisa, e não são: o que paga a empresa é reunião
+   realizada, venda de curso, venda de sistema e quantidade de vendas. Os
+   outros são caminho, não resultado — e interação, o mais fácil de inflar,
+   é o que menos vale.
+
+   O peso é editável por quem administra (tabela painel_pesos); estes são
+   só os valores iniciais. Peso 0 tira o indicador da pontuação sem tirá-lo
+   do painel. */
+const PESOS_PADRAO = {
+  // o que a empresa mais valoriza: o que vira contrato
+  reunioes: 5, vendasCursos: 5, vendasSistemas: 5, qtdSistemas: 5,
+  // importam, mas são caminho e não resultado
+  propostas: 2, prospeccaoZero: 2, prospeccao: 2, negociosAbertos: 2,
+  // volume de contato, o mais fácil de inflar
+  interacao: 1,
+};
+let painelPesos = null;          // null = ainda não leu o banco, usa o padrão
+let painelPesosTimer = null;
+let painelEditandoPesos = false;
+function pesoDaMetrica(key){
+  const p = (painelPesos || PESOS_PADRAO)[key];
+  return (p === null || p === undefined) ? 1 : Number(p);
+}
+function pesosAtuais(){
+  const out = {};
+  METRICAS.forEach(function(m){ out[m.key] = pesoDaMetrica(m.key); });
+  return out;
+}
 
 /* Nem todo mundo do comercial é medido pelos mesmos indicadores. Tem gente
    — o Davidson é o primeiro caso — acompanhada por dois números só:
@@ -2199,6 +2246,50 @@ async function tryLoadPainelTotaisAsync(){
       render();
     }
   } catch(e){ console.error(e); }
+}
+
+async function tryLoadPainelPesosAsync(){
+  try{
+    const db = await sbSelect('painel_pesos', 'select=metrica,peso');
+    carregouDoBanco['painel-pesos'] = true;
+    if(db && db.length){
+      const m = {};
+      db.forEach(function(r){ m[r.metrica] = Number(r.peso); });
+      painelPesos = Object.assign({}, PESOS_PADRAO, m);
+      render();
+    }
+  }catch(e){ console.error(e); }
+}
+
+function persistPainelPesos(){
+  saving = true; updateSaveStatus();
+  if(painelPesosTimer) clearTimeout(painelPesosTimer);
+  painelPesosTimer = setTimeout(function(){
+    (async function(){
+      try{
+        const linhas = METRICAS.map(function(m){ return { metrica: m.key, peso: pesoDaMetrica(m.key) }; });
+        await sbUpsert('painel_pesos', linhas, 'metrica');
+        saveError = false;
+      }catch(e){ console.error(e); saveError = true; }
+      finally{ saving = false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+
+function setPesoMetrica(el, key){
+  if(!isAdmin) return;
+  painelPesos = Object.assign({}, painelPesos || PESOS_PADRAO);
+  painelPesos[key] = Number(el.value);
+  persistPainelPesos();
+  render();
+}
+function setPainelEditandoPesos(v){ painelEditandoPesos = !!v; render(); }
+function restaurarPesosPadrao(){
+  showConfirm('Voltar todos os pesos para o padrão? Reuniões, vendas de cursos, vendas de sistemas e quantidade de vendas voltam a valer 5; interação volta a valer 1.', function(){
+    painelPesos = Object.assign({}, PESOS_PADRAO);
+    persistPainelPesos();
+    render();
+  }, 'Restaurar');
 }
 
 async function tryLoadRelatoriosFromStorageAsync(){
@@ -6353,14 +6444,14 @@ function montarRelatorioMes(mes){
   });
   const rk = rankingDoMes(mes);
   const campeaoTxt = rk.campeoes.length
-    ? rk.campeoes.map(function(c){ return c.vendedor; }).join(' e ') + ' — ' + rk.campeoes[0].vitorias + ' de ' + METRICAS.length + ' indicadores'
+    ? rk.campeoes.map(function(c){ return c.vendedor; }).join(' e ') + ' — ' + fmtPontos(rk.campeoes[0].pontos) + ' de 100 pontos'
     : 'sem lançamentos neste mês';
 
   const rankingHtml = `
     <div class="rel-ranking">
       ${rk.porMetrica.map(function(item){
         return `<div class="rel-ranking-item">
-          <span>${esc(item.metrica)}</span>
+          <span>${esc(item.metrica)}${item.peso === 0 ? ' (não conta)' : ' · peso ' + item.peso}</span>
           ${item.lideres.length
             ? `<span class="rel-lideres">${item.lideres.map(function(l){
                  return `<span class="rel-lider"><i style="background:${esc(corDoVendedor(l.vendedor))}"></i>${esc(l.vendedor)}</span>`;
@@ -6374,13 +6465,13 @@ function montarRelatorioMes(mes){
         <div>
           <span class="rel-campea-rot">${rk.campeoes.length > 1 ? 'Melhores do mês · empate' : 'Melhor do mês'}</span>
           <b>${rk.campeoes.map(function(c){ return esc(c.vendedor); }).join(' e ')}</b>
-          <span class="rel-campea-sub">${rk.campeoes[0].vitorias} de ${METRICAS.length} indicadores vencidos</span>
+          <span class="rel-campea-sub">${fmtPontos(rk.campeoes[0].pontos)} de 100 pontos · liderou ${rk.campeoes[0].vitorias} de ${METRICAS.length} indicadores</span>
         </div>
         <div class="rel-campea-lista">${rk.geral.map(function(g){
-          return `<span>${g.posicao}º ${esc(g.vendedor)} (${g.vitorias})</span>`;
+          return `<span>${g.posicao}º ${esc(g.vendedor)} (${fmtPontos(g.pontos)})</span>`;
         }).join('')}</div>
       </div>` : ''}
-    <p class="rel-nota">Vence quem liderar mais indicadores no mês. Empate conta vitória para todas as empatadas; quem está zerado num indicador não vence nele.</p>`;
+    <p class="rel-nota">Cada indicador vale um peso e cada pessoa leva a fatia que teve dele no mês; os pontos de todas somam 100. Quem faz metade do que a líder fez leva metade dos pontos daquele indicador.</p>`;
 
   // Gráficos: os mesmos do painel, com os dados do mês (barras) e do ano (linhas).
   const legendaHtml = `<div class="rel-legenda">${vendsPainel.map(function(v){
@@ -6635,12 +6726,27 @@ function excluirPainelLancamento(vendedor, mes){
    Aqui vale o que a Soraya pediu: conta quantas vezes o nome da pessoa
    aparece liderando. Empate num indicador dá vitória para todas as
    empatadas, e quem está zerado não vence nada. */
+/* Ranking com peso.
+
+   A primeira versão contava quantos indicadores cada pessoa liderava. Isso
+   tratava "interação" e "venda de sistema" como equivalentes, e ignorava a
+   margem: liderar por 1 valia igual a liderar pelo dobro.
+
+   Agora a pontuação é a FATIA que a pessoa tem do total da equipe em cada
+   indicador, multiplicada pelo peso daquele indicador. Como as fatias de um
+   indicador somam 100%, os pontos de todo mundo somam 100 — o placar lê-se
+   direto: "de cada 100 pontos do ano, fulana ficou com 38".
+
+   Indicador em que a equipe inteira está zerada sai do cálculo, em vez de
+   dar zero a todas; e peso 0 tira o indicador da conta sem tirá-lo da tela. */
 function rankingDoMes(periodo){
   const vends = vendedoresDoPainel();
-  const vitorias = {};
-  vends.forEach(v => { vitorias[v] = 0; });
+  const vitorias = {}, pontos = {};
+  vends.forEach(v => { vitorias[v] = 0; pontos[v] = 0; });
 
+  let pesoEmJogo = 0;
   const porMetrica = METRICAS.map(m => {
+    const peso = pesoDaMetrica(m.key);
     const valores = vends
       .map(v => ({ vendedor: v, valor: valorNoPeriodo(v, m.key, periodo) }))
       .sort((a,b) => b.valor - a.valor);
@@ -6648,25 +6754,45 @@ function rankingDoMes(periodo){
     const lideres = valores.filter(x => x.valor > 0 && x.valor === valores[0].valor);
     lideres.forEach(l => { vitorias[l.vendedor] += 1; });
 
+    const soma = valores.reduce((a,x) => a + (Number(x.valor)||0), 0);
+    if(soma > 0 && peso > 0){
+      pesoEmJogo += peso;
+      valores.forEach(x => { pontos[x.vendedor] += peso * (x.valor / soma); });
+    }
+
     return {
       metrica: m.label,
+      chave: m.key,
+      peso: peso,
       lideres: lideres,
       todos: valores,
+      soma: soma,
       formatado: lideres.length ? fmtMetrica(m, lideres[0].valor) : '',
     };
   });
 
   const geral = vends
-    .map(v => ({ vendedor: v, vitorias: vitorias[v] }))
-    .sort((a,b) => b.vitorias - a.vitorias);
-  // Empate ocupa o mesmo lugar (1º, 1º, 3º...)
+    .map(v => ({
+      vendedor: v,
+      vitorias: vitorias[v],
+      pontos: pesoEmJogo ? (100 * pontos[v] / pesoEmJogo) : 0,
+    }))
+    .sort((a,b) => b.pontos - a.pontos);
+
+  // Empate ocupa o mesmo lugar (1º, 1º, 3º...). Duas pessoas só empatam de
+  // verdade quando a diferença é menor que meio décimo de ponto.
+  const mesmoPonto = (a,b) => Math.abs(a - b) < 0.05;
   let pos = 0;
   geral.forEach(function(g, idx){
-    if(idx === 0 || g.vitorias !== geral[idx-1].vitorias) pos = idx + 1;
+    if(idx === 0 || !mesmoPonto(g.pontos, geral[idx-1].pontos)) pos = idx + 1;
     g.posicao = pos;
   });
-  const campeoes = geral.filter(g => g.vitorias > 0 && g.vitorias === geral[0].vitorias);
-  return { porMetrica, geral, campeoes };
+  const campeoes = geral.filter(g => g.pontos > 0 && mesmoPonto(g.pontos, geral[0].pontos));
+  return { porMetrica, geral, campeoes, pesoEmJogo };
+}
+
+function fmtPontos(v){
+  return (Number(v)||0).toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1});
 }
 
 /* ---------------- Painel da Equipe: gráficos em SVG ---------------- */
@@ -7138,24 +7264,24 @@ function renderPainelDashboard(vends){
           <div class="painel-melhor-esq">
             <div class="painel-melhor-rot">${rk.campeoes.length > 1 ? (ehMes ? 'Melhores do mês · empate' : 'Melhores do ano · empate') : (ehMes ? 'Melhor do mês' : 'Melhor do ano')}</div>
             <div class="painel-melhor-nome">${rk.campeoes.map(c => esc(c.vendedor)).join(' e ')}</div>
-            <div class="painel-melhor-sub">${rk.campeoes[0].vitorias} de ${METRICAS.length} indicador${rk.campeoes[0].vitorias===1?'':'es'} vencido${rk.campeoes[0].vitorias===1?'':'s'}</div>
+            <div class="painel-melhor-sub">${fmtPontos(rk.campeoes[0].pontos)} de 100 pontos · liderou ${rk.campeoes[0].vitorias} de ${METRICAS.length} indicador${rk.campeoes[0].vitorias===1?'':'es'}</div>
           </div>
           <div class="painel-melhor-pontos">
-            <div class="painel-melhor-rot">Indicadores vencidos</div>
-            <div>${rk.geral.map(g => `<span class="${g.posicao===1&&g.vitorias>0?'destaque':''}">${g.posicao}º ${esc(g.vendedor)} · ${g.vitorias}</span>`).join('')}</div>
+            <div class="painel-melhor-rot">Pontos</div>
+            <div>${rk.geral.map(g => `<span class="${g.posicao===1&&g.pontos>0?'destaque':''}">${g.posicao}º ${esc(g.vendedor)} · ${fmtPontos(g.pontos)}</span>`).join('')}</div>
           </div>
         </div>` : ''}
         <div class="painel-ranking-grid">
           ${rk.porMetrica.map(item => {
             if(!item.lideres.length){
               return `<div class="rank-card vazio">
-                <div class="rank-metrica">${esc(item.metrica)}</div>
+                <div class="rank-metrica">${esc(item.metrica)}<span class="rank-peso">${item.peso === 0 ? 'não conta' : 'peso ' + item.peso}</span></div>
                 <div class="rank-sem">sem lançamento</div>
               </div>`;
             }
             const cor = esc(corDoVendedor(item.lideres[0].vendedor));
             return `<div class="rank-card" style="--vc:${cor}"${item.lideres.length > 1 ? ' title="Empate"' : ''}>
-              <div class="rank-metrica">${esc(item.metrica)}</div>
+              <div class="rank-metrica">${esc(item.metrica)}<span class="rank-peso" title="Peso deste indicador no placar">${item.peso === 0 ? 'não conta' : 'peso ' + item.peso}</span></div>
               <div class="rank-lider">
                 ${item.lideres.map(l => `<span style="--vc:${esc(corDoVendedor(l.vendedor))}"><i></i>${esc(l.vendedor)}</span>`).join('')}
               </div>
@@ -7163,11 +7289,35 @@ function renderPainelDashboard(vends){
             </div>`;
           }).join('')}
         </div>
-        <div class="painel-nota">Vence quem <b>liderar mais indicadores</b> ${ehMes ? 'no mês' : 'no ano'}, dos ${METRICAS.length}. Empate num indicador conta vitória para todas as empatadas; quem está zerado num indicador não vence nele. Não há pontuação por 2º ou 3º lugar — só a liderança conta.</div>
+        <div class="painel-nota">
+          Cada indicador vale um <b>peso</b>, e cada pessoa leva a fatia que teve dele ${ehMes ? 'no mês' : 'no ano'}.
+          Os pontos de todo mundo somam <b>100</b>, então o placar lê-se direto: de cada 100 pontos, quanto foi de cada uma.
+          Não é só quem lidera — quem faz metade do que a líder fez leva metade dos pontos daquele indicador.
+          ${isAdmin ? 'Os pesos são seus: use “Pesos do ranking” para mudar o que a empresa valoriza.' : ''}
+        </div>
       `;
     ranking = panel('painel-ranking', ehMes ? ('Ranking de ' + painelPeriodo) : 'Ranking do ano', corpo, {
       meta: `<span class="painel-periodo-tag">${esc(rotuloPeriodo())}</span>`,
-    });
+      actions: isAdmin ? `<button class="eye-toggle" onclick="setPainelEditandoPesos(${painelEditandoPesos?'false':'true'})">${painelEditandoPesos?'✕ Fechar':'⚖️ Pesos do ranking'}</button>` : '',
+    }) + (isAdmin && painelEditandoPesos ? panel('painel-pesos', 'Pesos do ranking', `
+      <div class="painel-equipe-nota">
+        O peso diz quanto cada indicador vale no placar. <b>Peso 5</b> vale cinco vezes mais que <b>peso 1</b>;
+        <b>peso 0</b> tira o indicador da pontuação, mas ele continua aparecendo no painel.
+        Mudar aqui recalcula o ranking na hora, do mês e do ano, e vale para todo mundo.
+      </div>
+      <div class="pesos-lista">
+        ${METRICAS.map(function(m){
+          const peso = pesoDaMetrica(m.key);
+          return `<label class="peso-item${peso===0?' zerado':''}">
+            <span class="peso-nome">${esc(m.label)}</span>
+            <select onchange="setPesoMetrica(this,'${m.key}')">
+              ${[0,1,2,3,4,5].map(function(n){ return `<option value="${n}" ${peso===n?'selected':''}>${n===0?'0 — não conta':'peso '+n}</option>`; }).join('')}
+            </select>
+          </label>`;
+        }).join('')}
+      </div>
+      <button class="modal-btn modal-btn-ghost" style="width:100%;margin-top:14px;" onclick="restaurarPesosPadrao()">Restaurar os pesos padrão</button>
+    `) : '');
   }
 
   const seletorMetrica = `<label class="ordem-wrap"><span>Indicador</span>
@@ -7579,6 +7729,7 @@ function boot(){
     tryLoadClosedMonthsFromStorageAsync(),
     tryLoadMetasFromStorageAsync(),
     tryLoadRelatoriosFromStorageAsync(),
+    tryLoadPainelPesosAsync(),
     tryLoadPainelTotaisAsync(),
     tryLoadPainelVendedorasAsync(),
     tryLoadPainelContratosAsync(),

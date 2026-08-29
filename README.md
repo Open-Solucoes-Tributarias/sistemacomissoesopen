@@ -39,6 +39,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_contratos_novos_migration.sql → migração 10: empresas com contrato assinado (nome, CNPJ e rentabilidade)
 ├── supabase_salario_fixo_migration.sql → migração 11: salário fixo do colaborador na aba Bônus e Metas
 ├── supabase_fechamento_fora_migration.sql → migração 12: quem fica de fora do fechamento para a contabilidade
+├── supabase_pesos_ranking_migration.sql → migração 13: pesos dos indicadores no ranking da equipe
 └── .gitignore
 ```
 
@@ -125,6 +126,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 11. Rode `supabase_contratos_novos_migration.sql` — cria a lista de empresas que assinaram contrato, com CNPJ e avaliação de rentabilidade.
 12. Rode `supabase_salario_fixo_migration.sql` — permite lançar o salário fixo do colaborador sem misturá-lo com bônus e comissões.
 13. Rode `supabase_fechamento_fora_migration.sql` — permite tirar pessoas do fechamento para a contabilidade.
+14. Rode `supabase_pesos_ranking_migration.sql` — cria os pesos dos indicadores do ranking.
 11. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
 12. Só depois publique esta versão atualizada do `index.html`.
 
@@ -143,6 +145,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `metas` | Regras de meta: gatilho da empresa + prêmio de quem bate |
 | `relatorios_equipe` | Indicadores mensais digitados: andamento da equipe e contratos/reuniões (Relatório de Desempenho) |
 | `contratos_consultoria` | Empresas que assinaram contrato: quem trouxe, mês, nome, CNPJ e se o negócio foi rentável |
+| `painel_pesos` | Peso de cada indicador no ranking da equipe |
 | `partners` | Parceiros cadastrados |
 | `venda_products` | Catálogo de produtos da aba Sistema |
 | `sellers` | Vendedoras do Sistema (lista editável) |
@@ -292,13 +295,26 @@ Abre pelo **ranking**, que é o que essa aba tem de mais importante: um quadro e
 
 No ranking, cada indicador mostra quem liderou; **quem empata aparece junto**, com o valor uma vez só.
 
-**A campeã do mês é quem liderou mais indicadores** — conta-se quantas vezes o nome da pessoa aparece na frente, e pronto. Não há pontuação por 2º ou 3º lugar.
+**A campeã é quem faz mais pontos.** Cada indicador vale um **peso**, e cada pessoa leva a **fatia que teve dele** no período. Como as fatias de um indicador somam 100%, os pontos de todo mundo somam **100** — o placar lê-se direto: *"de cada 100 pontos do ano, Angela ficou com 37,9"*.
 
-- Empate num indicador conta **vitória para todas as empatadas**.
-- Quem está **zerado** num indicador não vence nele.
-- Se duas pessoas terminarem com o mesmo número de vitórias, o quadro mostra as duas como melhores do mês.
+Pesos definidos pela diretoria comercial:
 
-> **Por que não é uma soma de pontos.** A primeira versão dava N pontos ao 1º lugar, N−1 ao 2º e assim por diante. Num time de quatro, quatro segundos lugares (3+3+3+3 = 12) valiam mais que uma liderança isolada, e acabava campeã quem não tinha vencido nada — foi exatamente o que apareceu num mês real, com a segunda colocada de todos os indicadores no topo. Contar lideranças resolve isso.
+| Peso | Indicadores | Por quê |
+|---|---|---|
+| **5** | Reuniões realizadas, Vendas de cursos, Vendas de sistemas, Qtd. sistemas vendidos | é o que vira contrato |
+| **2** | Propostas, Prospecção, Prospecção zero, Negócios abertos | é caminho para o contrato, não o contrato |
+| **1** | Interação | volume de contato, o mais fácil de inflar |
+
+- **Não é só quem lidera.** Quem faz metade do que a líder fez leva metade dos pontos daquele indicador — a margem conta.
+- **Indicador em que a equipe inteira está zerada sai da conta**, em vez de dar zero a todas.
+- **Peso 0** tira o indicador da pontuação, mas ele continua aparecendo no painel.
+- Empate no ponto (diferença menor que 0,1) coloca as duas como melhores do período.
+
+Os cartões por indicador continuam mostrando **quem liderou cada quesito**, agora com o peso ao lado, e o quadro da campeã mostra também quantos indicadores ela liderou — para o dono da empresa ver as duas leituras.
+
+**Mudar os pesos** — o botão **"⚖️ Pesos do ranking"**, no cabeçalho do quadro, abre a lista com um seletor de 0 a 5 por indicador. Mudar recalcula o ranking na hora, do mês e do ano, e vale para todo mundo (`painel_pesos`, migração 13). Só admin edita; o botão *"Restaurar os pesos padrão"* volta à tabela acima.
+
+> **Por que não é contagem de lideranças, nem soma de colocações.** A primeira versão dava N pontos ao 1º lugar, N−1 ao 2º e assim por diante: num time de quatro, quatro segundos lugares valiam mais que uma liderança isolada, e acabava campeã quem não tinha vencido nada. A segunda versão passou a contar lideranças, o que resolveu aquilo mas criou outro problema — liderar "interação" valia o mesmo que liderar "vendas de sistemas", e dava para ser campeã do ano vencendo só os indicadores de menor importância. Peso + fatia resolve os dois: o que a empresa valoriza pesa mais, e o tamanho da contribuição conta.
 
 > Os totais de venda são calculados pelo banco, e o painel os relê **depois de cada gravação** nas abas Sistema e Cursos, além de toda vez que a aba é aberta. Não precisa recarregar a página para o mês aparecer.
 
