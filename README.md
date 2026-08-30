@@ -343,9 +343,11 @@ Para incluir alguém, use **"👤 Quem está na equipe"** no topo da aba — ou 
 
 > Quem está nessa lista **não entra no ranking de vendas** e não aparece nos cartões do dashboard — o ranking mede quem vende, e essas pessoas são medidas por outra coisa. As duas listas são independentes: a mesma pessoa pode estar nas duas, se fizer sentido.
 
-### Renovações do sistema
+## Renovações do sistema
 
-Renovar contrato não é vender: não tem prospecção, não tem proposta, não gera comissão de venda nova. É um **processo próprio**, tocado por uma dupla — hoje **Uilma e Luciana** —, e por isso tem a aba **"Renovações"** dentro do Relatório de Desempenho, com lista de gente própria.
+Renovar contrato não é vender: não tem prospecção, não tem proposta, não gera comissão de venda nova. É um **processo próprio**, tocado por uma dupla — hoje **Uilma e Luciana** —, com lista de gente própria.
+
+Fica em **aba própria no menu lateral, em Lançamentos, logo abaixo de Sistema**. É um cadastro de contratos por mês, com valor e responsável, igual em natureza a Consultoria e Cursos — e é para a aba Sistema que as renovações confirmadas vão. Ela morou por um tempo dentro do Relatório de Desempenho, mas ali era leitura de indicadores, não lançamento: com quase 200 empresas por ano, o cadastro estava a dois cliques de profundidade dentro da aba cujo assunto (o ranking) justamente não conta renovação.
 
 O cadastro é o mínimo que responde à pergunta do mês:
 
@@ -361,7 +363,7 @@ A carteira fica grande depressa — são quase 200 empresas por ano —, então 
 
 A situação começa **em aberto** de propósito: a empresa entra na lista quando a renovação começa a ser tratada, e o desfecho vem depois. Os cartões do topo contam renovadas, não renovadas, em aberto e a **taxa de renovação** — que só considera as decididas, então as em aberto não puxam o número para baixo —, cada um com a soma dos valores: quanto foi renovado, quanto se perdeu e quanto ainda está em jogo. As pílulas abaixo filtram a lista por situação, e o quadro **"Por responsável"** fecha o ano de cada uma, com a taxa individual.
 
-#### Da renovação para a aba Sistema
+### Da renovação para a aba Sistema
 
 A renovação que se confirma é faturamento do mês e precisa entrar na lista de comissões como qualquer outra venda. O botão **"📤 Lançar N no Sistema"** faz essa ponte:
 
@@ -377,7 +379,7 @@ As vendas nascem com a observação **"Renovação"**, para se distinguirem na a
 - **Mês fechado é pulado**, e o sistema avisa quais ficaram de fora.
 - **Desmarcar depois não apaga a venda.** O sistema avisa: mexer na situação aqui não desfaz nada na aba Sistema; se a venda não valer mais, exclua também por lá. Comissão já lançada não some sozinha.
 
-#### Renovação não conta no ranking
+### Renovação não conta no ranking
 
 A venda que nasce de uma renovação vale **comissão como qualquer outra** e entra no Resumo Geral, no faturamento do mês e no fechamento para a contabilidade. O que ela **não** faz é contar no **ranking de desempenho**: renovar um contrato que já era da casa não é a mesma coisa que trazer cliente novo, e a carteira de renovação é grande o bastante para decidir sozinha quem é campeã do ano.
 
@@ -387,13 +389,13 @@ Na aba Sistema, essas vendas aparecem com o selo verde **"♻️ Renovação"** 
 
 Enquanto não são lançadas, as renovações não entram em lugar nenhum — a lista sozinha é acompanhamento de carteira. As renovações do mês também saem em seção própria do relatório em PDF.
 
-#### Repetir a carteira no ano seguinte
+### Repetir a carteira no ano seguinte
 
 A mesma carteira vence de novo doze meses depois. O botão **"📅 Repetir em 2027"** copia todas as empresas do ano aberto para o ano seguinte, mantendo **empresa, valor, mês e responsável** — e zerando o que é do ano anterior: a situação volta para **em aberto** e o vínculo com a venda é desfeito, senão o ano novo nasceria com renovações já dadas como resolvidas e lançadas.
 
 Empresas que já existam no ano de destino (mesmo nome e mês) são puladas, então repetir duas vezes não duplica nada. Se o ano ainda não existir no sistema, ele é criado junto.
 
-#### Importar a planilha de renovações
+### Importar a planilha de renovações
 
 São muitas empresas, e elas já viviam numa planilha. O botão **"📄 Importar planilha"** lê o arquivo — ler é trabalho do sistema, não de quem digita.
 

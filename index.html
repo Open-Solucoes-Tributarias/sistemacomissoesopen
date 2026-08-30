@@ -1285,6 +1285,7 @@ const ENTITY_KEYS = ["consultoria","publicos","cursos"];
 
 const TABS = [
   {key:"vendas", label:"Sistema"},
+  {key:"renovacoes", label:"Renovações"},
   {key:"consultoria", label:"Consultoria"},
   {key:"publicos", label:"Consultoria Órgãos Públicos"},
   {key:"cursos", label:"Cursos"},
@@ -1299,7 +1300,7 @@ const TABS = [
 // existir em TABS; o rótulo mostrado continua vindo de lá.
 const NAV_GROUPS = [
   {label:"Visão geral",  keys:["parceiros","pagamentos"]},
-  {label:"Lançamentos",  keys:["vendas","consultoria","publicos","cursos"]},
+  {label:"Lançamentos",  keys:["vendas","renovacoes","consultoria","publicos","cursos"]},
   {label:"Equipe",       keys:["painel","bonus"]},
   {label:"Administração", keys:["usuarios"]},
 ];
@@ -1313,6 +1314,7 @@ const NAV_ICONS = {
   publicos:    SVG_OPEN + '<path d="M3 10.5 12 4l9 6.5"/><path d="M5 10.5v8M9.5 10.5v8M14.5 10.5v8M19 10.5v8"/><path d="M3 20.5h18"/></svg>',
   cursos:      SVG_OPEN + '<path d="M12 4 2.5 8.5 12 13l9.5-4.5L12 4Z"/><path d="M6.5 11v5c0 1.4 2.5 2.6 5.5 2.6s5.5-1.2 5.5-2.6v-5"/></svg>',
   bonus:       SVG_OPEN + '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg>',
+  renovacoes:  SVG_OPEN + '<path d="M20.5 12a8.5 8.5 0 0 1-14.6 5.9"/><path d="M3.5 12a8.5 8.5 0 0 1 14.6-5.9"/><path d="M18.1 2.6v3.5h-3.5"/><path d="M5.9 21.4v-3.5h3.5"/></svg>',
   painel:      SVG_OPEN + '<path d="M16.5 20.5v-2a4 4 0 0 0-4-4h-6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="3.5"/><path d="M22 20.5v-2a4 4 0 0 0-3-3.87"/><path d="M16.5 3.6a4 4 0 0 1 0 7.75"/></svg>',
   usuarios:    SVG_OPEN + '<path d="M12 2.5 4 6v5.5c0 5 3.4 9.3 8 10.5 4.6-1.2 8-5.5 8-10.5V6l-8-3.5Z"/><circle cx="12" cy="11" r="2.6"/><path d="M8.2 17.3a4.2 4.2 0 0 1 7.6 0"/></svg>',
 };
@@ -7722,14 +7724,13 @@ function renderPainelSection(){
       <button class="painel-aba${painelAba==='lancamento'?' active':''}" onclick="setPainelAba('lancamento')">Lançamento</button>
       <button class="painel-aba${painelAba==='dashboard'?' active':''}" onclick="setPainelAba('dashboard')">Dashboard</button>
       <button class="painel-aba${painelAba==='contratos'?' active':''}" onclick="setPainelAba('contratos')">Equipe de consultoria</button>
-      <button class="painel-aba${painelAba==='renovacoes'?' active':''}" onclick="setPainelAba('renovacoes')">Renovações</button>
     </div>` : '';
-  const btnEquipe = (isAdmin && painelAba !== 'contratos' && painelAba !== 'renovacoes') ? `
+  const btnEquipe = (isAdmin && painelAba !== 'contratos') ? `
     <button class="eye-toggle" onclick="setPainelEditandoEquipe(${painelEditandoEquipe ? 'false' : 'true'})"
             title="Escolhe quem aparece neste painel — não mexe nas outras abas">
       ${painelEditandoEquipe ? '✕ Fechar' : '👥 Quem aparece'}
     </button>` : '';
-  const editorEquipe = (isAdmin && painelEditandoEquipe && painelAba !== 'contratos' && painelAba !== 'renovacoes') ? panel('painel-equipe', 'Quem aparece neste painel', `
+  const editorEquipe = (isAdmin && painelEditandoEquipe && painelAba !== 'contratos') ? panel('painel-equipe', 'Quem aparece neste painel', `
     <div class="painel-equipe-nota">Marque as pessoas que este painel acompanha. Desmarcar alguém só tira do painel — os lançamentos, as comissões e as outras abas continuam iguais.</div>
     <div class="painel-equipe-lista">
       ${pessoasConhecidas().map(function(n){
@@ -7744,9 +7745,9 @@ function renderPainelSection(){
   const conteudo = !isAdmin ? renderPainelDashboard(vends)
     : painelAba === 'lancamento' ? renderPainelLancamento(vends)
     : painelAba === 'contratos'  ? renderPainelContratos()
-    : painelAba === 'renovacoes' ? renderPainelRenovacoes()
     : renderPainelDashboard(vends);
-  const olhaVendas   = isAdmin && painelAba !== 'contratos' && painelAba !== 'renovacoes';
+  if(painelAba === 'renovacoes') painelAba = 'lancamento';   // virou aba própria no menu
+  const olhaVendas   = isAdmin && painelAba !== 'contratos';
   const faltaSistema = olhaVendas ? vendasSemResponsavel().length : 0;
   const faltaCursos  = olhaVendas ? entityRowsSemDivisao('cursos').length : 0;
   const partes = [];
@@ -8706,6 +8707,7 @@ function render(){
     : activeTab === "bonus" ? renderBonusSection()
     : activeTab === "pagamentos" ? renderPagamentosSection()
     : activeTab === "painel" ? renderPainelSection()
+    : activeTab === "renovacoes" ? renderPainelRenovacoes()
     : activeTab === "usuarios" ? renderUsuariosSection()
     : renderEntitySection(activeTab);
 
