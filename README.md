@@ -42,6 +42,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_pesos_ranking_migration.sql → migração 13: pesos dos indicadores no ranking da equipe
 ├── supabase_renovacoes_migration.sql   → migração 14: renovações do sistema (empresa, responsável e desfecho)
 ├── supabase_renovacoes_valor_migration.sql → migração 15: valor do contrato nas renovações
+├── supabase_renovacoes_venda_migration.sql → migração 16: liga a renovação à venda que ela gera no Sistema
 └── .gitignore
 ```
 
@@ -131,6 +132,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 14. Rode `supabase_pesos_ranking_migration.sql` — cria os pesos dos indicadores do ranking.
 15. Rode `supabase_renovacoes_migration.sql` — cria a aba de renovações do sistema.
 16. Rode `supabase_renovacoes_valor_migration.sql` — acrescenta o valor do contrato nas renovações.
+17. Rode `supabase_renovacoes_venda_migration.sql` — liga a renovação à venda lançada na aba Sistema.
 11. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
 12. Só depois publique esta versão atualizada do `index.html`.
 
@@ -150,7 +152,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `relatorios_equipe` | Indicadores mensais digitados: andamento da equipe e contratos/reuniões (Relatório de Desempenho) |
 | `contratos_consultoria` | Empresas que assinaram contrato: quem trouxe, mês, nome, CNPJ e se o negócio foi rentável |
 | `painel_pesos` | Peso de cada indicador no ranking da equipe |
-| `renovacoes` | Empresas renovando o sistema: mês, responsável, nome, valor e se renovou |
+| `renovacoes` | Empresas renovando o sistema: mês, responsável, nome, valor, se renovou e a venda que gerou |
 | `partners` | Parceiros cadastrados |
 | `venda_products` | Catálogo de produtos da aba Sistema |
 | `sellers` | Vendedoras do Sistema (lista editável) |
@@ -357,7 +359,23 @@ A carteira fica grande depressa — são quase 200 empresas por ano —, então 
 
 A situação começa **em aberto** de propósito: a empresa entra na lista quando a renovação começa a ser tratada, e o desfecho vem depois. Os cartões do topo contam renovadas, não renovadas, em aberto e a **taxa de renovação** — que só considera as decididas, então as em aberto não puxam o número para baixo —, cada um com a soma dos valores: quanto foi renovado, quanto se perdeu e quanto ainda está em jogo. As pílulas abaixo filtram a lista por situação, e o quadro **"Por responsável"** fecha o ano de cada uma, com a taxa individual.
 
-> **Renovação não entra no ranking de vendas nem nos totais de faturamento.** É processo, não venda nova — misturar inflaria o desempenho de quem faz renovação e distorceria a comparação com quem prospecta e vende. As renovações do mês saem em seção própria do relatório em PDF.
+#### Da renovação para a aba Sistema
+
+A renovação que se confirma é faturamento do mês e precisa entrar na lista de comissões como qualquer outra venda. O botão **"📤 Lançar N no Sistema"** faz essa ponte:
+
+1. Marque as empresas como **Renovado**;
+2. Clique em *Lançar no Sistema* — abre uma conferência com o que vai ser lançado, quantas são e quanto somam;
+3. Opcionalmente escolha o **produto** que essas vendas terão na aba Sistema;
+4. Confirme. Cada renovação vira uma **venda do mês**, com o nome da empresa como cliente, o valor do contrato, o mês da renovação e **"Quem vendeu" = quem cuidou da renovação**.
+
+As vendas nascem com a observação **"Renovação"**, para se distinguirem na aba Sistema, e **sem percentual de comissão** — esse você preenche por lá, como em qualquer venda.
+
+- **Nunca lança duas vezes.** A renovação guarda o id da venda que gerou, então some da fila e ganha a etiqueta **"no Sistema"**, que ao ser clicada leva direto à venda correspondente. Isso vale mesmo depois de recarregar a página.
+- **Só entram as marcadas como Renovado** que ainda não foram lançadas, respeitando o filtro de mês.
+- **Mês fechado é pulado**, e o sistema avisa quais ficaram de fora.
+- **Desmarcar depois não apaga a venda.** O sistema avisa: mexer na situação aqui não desfaz nada na aba Sistema; se a venda não valer mais, exclua também por lá. Comissão já lançada não some sozinha.
+
+> Enquanto não são lançadas, as renovações **não entram no ranking nem nos totais de faturamento** — a lista sozinha é acompanhamento de carteira. Depois de lançadas, contam como venda de sistema do mês, no nome de quem renovou, e aparecem no desempenho como qualquer outra venda. As renovações do mês também saem em seção própria do relatório em PDF.
 
 #### Importar a planilha de renovações
 
