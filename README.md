@@ -41,6 +41,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_fechamento_fora_migration.sql → migração 12: quem fica de fora do fechamento para a contabilidade
 ├── supabase_pesos_ranking_migration.sql → migração 13: pesos dos indicadores no ranking da equipe
 ├── supabase_renovacoes_migration.sql   → migração 14: renovações do sistema (empresa, responsável e desfecho)
+├── supabase_renovacoes_valor_migration.sql → migração 15: valor do contrato nas renovações
 └── .gitignore
 ```
 
@@ -129,6 +130,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 13. Rode `supabase_fechamento_fora_migration.sql` — permite tirar pessoas do fechamento para a contabilidade.
 14. Rode `supabase_pesos_ranking_migration.sql` — cria os pesos dos indicadores do ranking.
 15. Rode `supabase_renovacoes_migration.sql` — cria a aba de renovações do sistema.
+16. Rode `supabase_renovacoes_valor_migration.sql` — acrescenta o valor do contrato nas renovações.
 11. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
 12. Só depois publique esta versão atualizada do `index.html`.
 
@@ -148,7 +150,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `relatorios_equipe` | Indicadores mensais digitados: andamento da equipe e contratos/reuniões (Relatório de Desempenho) |
 | `contratos_consultoria` | Empresas que assinaram contrato: quem trouxe, mês, nome, CNPJ e se o negócio foi rentável |
 | `painel_pesos` | Peso de cada indicador no ranking da equipe |
-| `renovacoes` | Empresas renovando o sistema: mês, responsável, nome e se renovou |
+| `renovacoes` | Empresas renovando o sistema: mês, responsável, nome, valor e se renovou |
 | `partners` | Parceiros cadastrados |
 | `venda_products` | Catálogo de produtos da aba Sistema |
 | `sellers` | Vendedoras do Sistema (lista editável) |
@@ -347,12 +349,31 @@ O cadastro é o mínimo que responde à pergunta do mês:
 |---|---|
 | Mês | o mês da renovação |
 | Empresa | só o nome mesmo |
+| Valor | o valor do contrato |
 | Responsável | quem cuidou (só quem está na lista de renovações aparece aqui) |
 | Situação | **Renovado** ou **Não renovado** — um clique escolhe, clicar de novo volta para *em aberto* |
 
-A situação começa **em aberto** de propósito: a empresa entra na lista quando a renovação começa a ser tratada, e o desfecho vem depois. Os cartões do topo contam renovadas, não renovadas, em aberto e a **taxa de renovação** — que só considera as decididas, então as em aberto não puxam o número para baixo. As pílulas abaixo filtram a lista por situação, e o quadro **"Por responsável"** fecha o ano de cada uma, com a taxa individual.
+A situação começa **em aberto** de propósito: a empresa entra na lista quando a renovação começa a ser tratada, e o desfecho vem depois. Os cartões do topo contam renovadas, não renovadas, em aberto e a **taxa de renovação** — que só considera as decididas, então as em aberto não puxam o número para baixo —, cada um com a soma dos valores: quanto foi renovado, quanto se perdeu e quanto ainda está em jogo. As pílulas abaixo filtram a lista por situação, e o quadro **"Por responsável"** fecha o ano de cada uma, com a taxa individual.
 
 > **Renovação não entra no ranking de vendas nem nos totais de faturamento.** É processo, não venda nova — misturar inflaria o desempenho de quem faz renovação e distorceria a comparação com quem prospecta e vende. As renovações do mês saem em seção própria do relatório em PDF.
+
+#### Importar a planilha de renovações
+
+São muitas empresas, e elas já viviam numa planilha. O botão **"📄 Importar planilha"** lê o arquivo — ler é trabalho do sistema, não de quem digita.
+
+Três caminhos, todos no mesmo lugar:
+
+1. **Arquivo `.xlsx`** — o Excel direto, sem converter nada;
+2. **Arquivo `.csv`** — inclusive o que o Excel do Windows salva em latin-1, que é detectado sozinho;
+3. **Colar** — selecionar as células no Excel, Ctrl+C e colar na caixa.
+
+As colunas esperadas são **empresa · valor · mês de renovação**, nessa ordem. Se a primeira linha for cabeçalho, ele é reconhecido pelos nomes (*empresa/cliente/razão*, *valor/preço/mensalidade*, *mês/renovação/vencimento*) e a ordem deixa de importar.
+
+O sistema entende o mês escrito de várias formas — `Agosto`, `ago`, `08`, `8`, `09/2026`, `2026-08-15` e a data do Excel (aquele número serial) —, e o valor tanto como número quanto como `R$ 1.234,56`. Quando o mês traz o ano e ele ainda não existe no sistema, o ano é criado junto, para a linha não ficar gravada e invisível.
+
+Antes de gravar aparece uma **prévia** com tudo o que foi lido, linha a linha, e um seletor para atribuir um responsável a todas de uma vez (pode ficar em branco). Duas coisas ficam de fora, sinalizadas em âmbar: **empresas já cadastradas** no mesmo mês e ano, e **linhas cujo mês não foi reconhecido** — nada é importado pela metade sem você ver.
+
+> Nenhuma biblioteca externa é usada para isso: a política de segurança da página bloqueia scripts de fora, então o `.xlsx` (que é um ZIP de XMLs) é aberto com o `DecompressionStream` do próprio navegador. Se algum navegador não tiver esse recurso, o sistema avisa e sugere o CSV ou o colar.
 
 Para mudar quem cuida, use **"👤 Quem cuida das renovações"** no topo da aba (`entity_vendors` com `entidade='renovacoes'`). Como no resto do sistema, admin vê e edita tudo; uma conta restrita veria apenas as renovações no nome dela, sem editar (`renovacoes`, migração 14).
 

@@ -1113,6 +1113,21 @@
   .totais-nota{padding:12px 16px 16px;font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.55;}
   .col-rent{min-width:206px;}
   .col-resp{min-width:150px;}
+  .kpi-sub{font-size:11.5px;font-weight:700;color:var(--ink-faint);margin-top:2px;font-variant-numeric:tabular-nums;}
+  .import-arquivo{display:block;margin:4px 0 10px;}
+  .import-arquivo input{display:none;}
+  .import-arquivo span{
+    display:block;text-align:center;cursor:pointer;
+    border:1.5px dashed var(--ring);border-radius:var(--radius-sm);
+    padding:14px;background:var(--primary-soft);color:var(--primary);
+    font-family:var(--font);font-size:13.5px;font-weight:800;transition:all .15s;
+  }
+  .import-arquivo span:hover{background:var(--ring);color:var(--navy);}
+  .import-resumo{font-size:12.5px;font-weight:700;color:var(--ink-soft);margin-top:10px;line-height:1.5;}
+  .import-alerta{color:#B45309;}
+  .import-previa{max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm);}
+  .import-previa table.table-plain tbody td{padding:7px 10px;font-size:12.5px;}
+  .kpi-card.total .kpi-sub{color:rgba(255,255,255,.75);}
   /* Rentável x não rentável: dois botões, um só ativo. Clicar no que já
      está ativo desmarca — o contrato pode entrar antes da avaliação. */
   .rent-toggle{display:flex;gap:6px;}
@@ -2734,6 +2749,69 @@ function renderModal(){
       </div>
     `;
   }
+  if(m.type === 'import-renovacoes'){
+    const d = m.dados;
+    const novos = d ? d.itens.filter(function(i){ return i.mes && !i.duplicada; }) : [];
+    const problemas = d ? d.itens.filter(function(i){ return i.aviso; }) : [];
+    const previa = d ? d.itens.slice(0, 60) : [];
+    const pessoas = pessoasDeRenovacao();
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-wide">
+          <div class="modal-msg">Importar planilha de renovações</div>
+          <div class="painel-equipe-nota">
+            A planilha precisa ter, nesta ordem, <b>empresa</b>, <b>valor</b> e <b>mês de renovação</b> —
+            com ou sem cabeçalho. Aceito <b>.xlsx</b> e <b>.csv</b>; se preferir, selecione as células no
+            Excel, copie com Ctrl+C e cole no campo de baixo.
+          </div>
+          <label class="import-arquivo">
+            <input type="file" accept=".xlsx,.csv,.txt,.tsv" onchange="onArquivoRenovacoes(this)" />
+            <span>📄 Escolher arquivo da planilha</span>
+          </label>
+          <textarea class="modal-textarea" style="min-height:90px;" placeholder="…ou cole aqui as células copiadas do Excel"
+                    oninput="onColarRenovacoes(this)"></textarea>
+          ${m.lendo ? `<div class="modal-msg" style="margin:10px 0 0;">Lendo a planilha…</div>` : ''}
+          ${m.erro ? `<div class="modal-error">${esc(m.erro)}</div>` : ''}
+          ${d ? `
+            <div class="import-resumo">
+              <b>${novos.length}</b> ${novos.length===1?'empresa nova':'empresas novas'} de <b>${d.itens.length}</b> linha${d.itens.length===1?'':'s'} lida${d.itens.length===1?'':'s'}
+              ${problemas.length ? ` · <span class="import-alerta">${problemas.length} com aviso</span>` : ''}
+              ${d.cols.temCabecalho ? ' · cabeçalho reconhecido' : ' · sem cabeçalho, usei a ordem empresa / valor / mês'}
+            </div>
+            <label class="painel-campo" style="margin:12px 0 8px;">
+              <span>Responsável por todas (pode deixar em branco e preencher depois)</span>
+              <select onchange="setImportPessoa(this)">
+                <option value="">—</option>
+                ${pessoas.map(function(n){ return `<option value="${esc(n)}" ${m.pessoa===n?'selected':''}>${esc(n)}</option>`; }).join('')}
+              </select>
+            </label>
+            <div class="table-scroll import-previa">
+              <table class="table-plain">
+                <thead><tr><th>Empresa</th><th class="num">Valor</th><th>Mês</th><th>Ano</th><th></th></tr></thead>
+                <tbody>${previa.map(function(i){
+                  return `<tr class="${i.aviso ? 'row-pending' : ''}">
+                    <td>${esc(i.empresa)}</td>
+                    <td class="num">${i.valor === null ? '—' : fmtMoney(i.valor)}</td>
+                    <td>${i.mes ? esc(i.mes) : '—'}</td>
+                    <td>${i.ano}</td>
+                    <td>${i.aviso ? `<span class="import-alerta">${esc(i.aviso)}</span>` : '✓'}</td>
+                  </tr>`;
+                }).join('')}</tbody>
+              </table>
+            </div>
+            ${d.itens.length > previa.length ? `<div class="import-resumo">…e mais ${d.itens.length - previa.length} linha${d.itens.length - previa.length === 1 ? '' : 's'}.</div>` : ''}
+            ${problemas.length ? `<div class="import-resumo import-alerta">Linhas com aviso não são importadas: as duplicadas já estão cadastradas, e as sem mês reconhecido precisam do mês na planilha.</div>` : ''}
+          ` : ''}
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
+            <button class="modal-btn modal-btn-primary" ${novos.length ? '' : 'disabled'} onclick="confirmarImportacaoRenovacoes()">
+              ${novos.length ? 'Importar ' + novos.length + (novos.length===1?' empresa':' empresas') : 'Importar'}
+            </button>
+          </div>
+        </div>
+      </div>`;
+  }
+
   let bodyHtml = `<div class="modal-msg">${esc(m.message)}</div>`;
   let actionsHtml = '';
   let wideClass = '';
@@ -5945,6 +6023,7 @@ async function tryLoadRenovacoesAsync(){
       renovacoes = db.map(function(d){
         return {
           id: d.id, ano: d.ano, mes: d.mes, pessoa: d.pessoa || '', empresa: d.empresa || '',
+          valor: (d.valor === null || d.valor === undefined) ? null : Number(d.valor),
           renovado: (d.renovado === null || d.renovado === undefined) ? null : !!d.renovado,
         };
       });
@@ -5964,6 +6043,7 @@ function persistRenovacoes(){
         const dbRows = renovacoes.map(function(r){
           return {
             id: r.id, ano: r.ano, mes: r.mes, pessoa: r.pessoa, empresa: r.empresa || '',
+            valor: numOrNull(r.valor),
             renovado: (r.renovado === null || r.renovado === undefined) ? null : !!r.renovado,
           };
         });
@@ -5996,7 +6076,7 @@ function addRenovacao(){
     id: renovacoesNextId++, ano: yearFilter,
     mes: (painelPeriodo && painelPeriodo !== 'Ano') ? painelPeriodo : MONTHS[new Date().getMonth()],
     pessoa: pessoas.length === 1 ? pessoas[0] : '',
-    empresa: '', renovado: null,
+    empresa: '', valor: null, renovado: null,
   };
   renovacoes.push(nova);
   persistRenovacoes();
@@ -6012,6 +6092,13 @@ function onRenovacaoTexto(el, id){
   if(!r) return;
   r.empresa = el.value;
   persistRenovacoes();
+}
+function onRenovacaoValor(el, id){
+  const r = renovacoes.find(function(x){ return x.id === id; });
+  if(!r) return;
+  r.valor = el.value === '' ? null : parseFloat(el.value);
+  persistRenovacoes();
+  atualizarResumoRenovacoes();
 }
 function setRenovacaoCampo(el, id, campo){
   const r = renovacoes.find(function(x){ return x.id === id; });
@@ -6044,7 +6131,342 @@ function excluirRenovacao(id){
     'Excluir'
   );
 }
+/* ---------- Importar a planilha de renovações ----------
+   São muitas empresas e elas já existem numa planilha. Ler o arquivo é
+   trabalho do sistema, não dela.
+
+   O .xlsx é um ZIP de XMLs, e o navegador sabe descompactar sozinho
+   (DecompressionStream), então dá para ler o arquivo direto, sem depender
+   de biblioteca externa — o que seria impossível aqui, porque a política
+   de segurança da página bloqueia scripts de fora. CSV e colar do Excel
+   funcionam pelo mesmo caminho, só mudando como as linhas são separadas. */
+
+async function lerZip(buffer){
+  const dv = new DataView(buffer);
+  const N = buffer.byteLength;
+  let eocd = -1;
+  for(let i = N - 22; i >= 0 && i >= N - 22 - 65535; i--){
+    if(dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; }
+  }
+  if(eocd < 0) throw new Error('Não consegui ler o arquivo — ele não parece uma planilha .xlsx.');
+  const total = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const arquivos = {};
+  for(let i = 0; i < total; i++){
+    if(dv.getUint32(p, true) !== 0x02014b50) break;
+    const metodo   = dv.getUint16(p + 10, true);
+    const compSize = dv.getUint32(p + 20, true);
+    const nomeLen  = dv.getUint16(p + 28, true);
+    const extraLen = dv.getUint16(p + 30, true);
+    const comLen   = dv.getUint16(p + 32, true);
+    const offset   = dv.getUint32(p + 42, true);
+    const nome = new TextDecoder().decode(new Uint8Array(buffer, p + 46, nomeLen));
+    arquivos[nome] = { metodo: metodo, compSize: compSize, offset: offset };
+    p += 46 + nomeLen + extraLen + comLen;
+  }
+  return { buffer: buffer, dv: dv, arquivos: arquivos };
+}
+
+async function lerDoZip(zip, nome){
+  const e = zip.arquivos[nome];
+  if(!e) return null;
+  if(zip.dv.getUint32(e.offset, true) !== 0x04034b50) return null;
+  const nomeLen  = zip.dv.getUint16(e.offset + 26, true);
+  const extraLen = zip.dv.getUint16(e.offset + 28, true);
+  const inicio = e.offset + 30 + nomeLen + extraLen;
+  const dados = new Uint8Array(zip.buffer, inicio, e.compSize);
+  if(e.metodo === 0) return new TextDecoder().decode(dados);
+  if(typeof DecompressionStream === 'undefined'){
+    throw new Error('Este navegador não consegue abrir .xlsx. Salve a planilha como CSV, ou copie as células no Excel e cole no campo abaixo.');
+  }
+  const fluxo = new Blob([dados]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return await new Response(fluxo).text();
+}
+
+function colunaParaIndice(ref){
+  const letras = String(ref || '').replace(/[^A-Z]/g, '');
+  let n = 0;
+  for(let i = 0; i < letras.length; i++) n = n * 26 + (letras.charCodeAt(i) - 64);
+  return n - 1;
+}
+
+/* Data no Excel é um número de dias desde 1900 (com o bug do ano bissexto
+   de 1900 que a Microsoft nunca corrigiu, daí o -2). */
+function dataDoExcel(n){
+  const ms = (Number(n) - 25569) * 86400000;
+  const d = new Date(ms);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+async function linhasDoXlsx(buffer){
+  const zip = await lerZip(buffer);
+  const textos = [];
+  const ss = await lerDoZip(zip, 'xl/sharedStrings.xml');
+  if(ss){
+    const itens = ss.match(/<si>[\s\S]*?<\/si>/g) || [];
+    itens.forEach(function(si){
+      const partes = si.match(/<t[^>]*>([\s\S]*?)<\/t>/g) || [];
+      textos.push(partes.map(function(t){
+        return t.replace(/<[^>]+>/g, '')
+                .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"')
+                .replace(/&apos;/g,"'").replace(/&amp;/g,'&');
+      }).join(''));
+    });
+  }
+  const nomeAba = Object.keys(zip.arquivos)
+    .filter(function(n){ return /^xl\/worksheets\/sheet\d+\.xml$/.test(n); })
+    .sort()[0];
+  if(!nomeAba) throw new Error('Não achei nenhuma aba dentro da planilha.');
+  const xml = await lerDoZip(zip, nomeAba);
+  if(!xml) throw new Error('Não consegui abrir a primeira aba da planilha.');
+
+  const linhas = [];
+  const blocos = xml.match(/<row[\s\S]*?(?:\/>|<\/row>)/g) || [];
+  blocos.forEach(function(bloco){
+    const celulas = bloco.match(/<c[\s\S]*?(?:\/>|<\/c>)/g) || [];
+    const linha = [];
+    celulas.forEach(function(c){
+      const ref  = (c.match(/\sr="([A-Z]+\d+)"/) || [])[1] || '';
+      const tipo = (c.match(/\st="([a-zA-Z]+)"/) || [])[1] || 'n';
+      const idx  = ref ? colunaParaIndice(ref) : linha.length;
+      let valor = null;
+      if(tipo === 'inlineStr'){
+        const t = c.match(/<t[^>]*>([\s\S]*?)<\/t>/);
+        valor = t ? t[1].replace(/<[^>]+>/g,'') : '';
+      } else {
+        const v = c.match(/<v[^>]*>([\s\S]*?)<\/v>/);
+        const bruto = v ? v[1] : '';
+        if(tipo === 's') valor = textos[Number(bruto)] !== undefined ? textos[Number(bruto)] : '';
+        else if(tipo === 'b') valor = bruto === '1';
+        else if(tipo === 'str' || tipo === 'd') valor = bruto;
+        else valor = bruto === '' ? null : Number(bruto);
+      }
+      if(typeof valor === 'string'){
+        valor = valor.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"')
+                     .replace(/&apos;/g,"'").replace(/&amp;/g,'&');
+      }
+      while(linha.length < idx) linha.push(null);
+      linha[idx] = valor;
+    });
+    if(linha.some(function(x){ return x !== null && x !== undefined && String(x).trim() !== ''; })) linhas.push(linha);
+  });
+  return linhas;
+}
+
+/* CSV/TSV: separador é o que mais aparece na primeira linha. Aspas com
+   vírgula dentro são respeitadas. */
+function linhasDeTexto(texto){
+  const bruto = String(texto || '').replace(/\r\n?/g, '\n').replace(/^﻿/, '');
+  const primeira = bruto.split('\n')[0] || '';
+  const conta = function(ch){ return (primeira.split(ch).length - 1); };
+  const sep = conta('\t') ? '\t' : (conta(';') >= conta(',') && conta(';') ? ';' : ',');
+  const linhas = [];
+  let campo = '', linha = [], entreAspas = false;
+  for(let i = 0; i < bruto.length; i++){
+    const ch = bruto[i];
+    if(entreAspas){
+      if(ch === '"'){
+        if(bruto[i+1] === '"'){ campo += '"'; i++; } else entreAspas = false;
+      } else campo += ch;
+    } else if(ch === '"'){ entreAspas = true; }
+    else if(ch === sep){ linha.push(campo); campo = ''; }
+    else if(ch === '\n'){ linha.push(campo); linhas.push(linha); linha = []; campo = ''; }
+    else campo += ch;
+  }
+  linha.push(campo);
+  if(linha.length) linhas.push(linha);
+  return linhas.filter(function(l){ return l.some(function(x){ return String(x||'').trim() !== ''; }); });
+}
+
+function semAcento(t){
+  return String(t === null || t === undefined ? '' : t)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+/* Aceita "Agosto", "ago", "08", "8", "08/2026", "2026-08-15" e a data
+   serial do Excel. Devolve {mes, ano} — o ano só quando a célula traz. */
+function mesDaPlanilha(v){
+  if(v === null || v === undefined || v === '') return null;
+  if(typeof v === 'number'){
+    if(v >= 1 && v <= 12 && Number.isInteger(v)) return { mes: MONTHS[v-1], ano: null };
+    const d = dataDoExcel(v);
+    if(d && d.getFullYear() > 1950 && d.getFullYear() < 2200) return { mes: MONTHS[d.getUTCMonth()], ano: d.getUTCFullYear() };
+    return null;
+  }
+  const t = semAcento(v);
+  if(!t) return null;
+  const iso = t.match(/^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?/);
+  if(iso) return { mes: MONTHS[Number(iso[2])-1] || null, ano: Number(iso[1]) };
+  const barra = t.match(/^(\d{1,2})\s*[\/\-.]\s*(\d{2,4})$/);
+  if(barra){
+    const m = Number(barra[1]);
+    let a = Number(barra[2]); if(a < 100) a += 2000;
+    if(m >= 1 && m <= 12) return { mes: MONTHS[m-1], ano: a };
+  }
+  const br = t.match(/^(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2,4})$/);
+  if(br){
+    const m = Number(br[2]); let a = Number(br[3]); if(a < 100) a += 2000;
+    if(m >= 1 && m <= 12) return { mes: MONTHS[m-1], ano: a };
+  }
+  const so = t.match(/^(\d{1,2})$/);
+  if(so && Number(so[1]) >= 1 && Number(so[1]) <= 12) return { mes: MONTHS[Number(so[1])-1], ano: null };
+  const nome = t.replace(/[^a-z]/g, '');
+  const achou = MONTHS.find(function(m){ return semAcento(m).slice(0,3) === nome.slice(0,3); });
+  if(achou){
+    const ano = (String(v).match(/(20\d{2})/) || [])[1];
+    return { mes: achou, ano: ano ? Number(ano) : null };
+  }
+  return null;
+}
+
+/* "R$ 1.234,56" → 1234.56. Ponto sozinho em grupos de 3 é milhar. */
+function valorDaPlanilha(v){
+  if(v === null || v === undefined || v === '') return null;
+  if(typeof v === 'number') return v;
+  let t = String(v).replace(/[R$\s ]/gi, '').trim();
+  if(!t) return null;
+  if(t.indexOf(',') >= 0) t = t.replace(/\./g, '').replace(',', '.');
+  else if(/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
+  const n = parseFloat(t);
+  return isNaN(n) ? null : n;
+}
+
+/* Descobre quais colunas são empresa, valor e mês. Se a primeira linha for
+   cabeçalho, usa os nomes; senão assume a ordem que ela combinou. */
+function mapearColunas(linhas){
+  const cab = linhas[0] || [];
+  const rotulos = cab.map(semAcento);
+  const acha = function(re){ return rotulos.findIndex(function(r){ return re.test(r); }); };
+  const iEmp = acha(/empresa|cliente|razao|nome/);
+  const iVal = acha(/valor|preco|mensalidade|contrato/);
+  const iMes = acha(/mes|renova|vencim|data/);
+  if(iEmp >= 0 && (iVal >= 0 || iMes >= 0)){
+    return { empresa: iEmp, valor: iVal, mes: iMes, temCabecalho: true };
+  }
+  return { empresa: 0, valor: 1, mes: 2, temCabecalho: false };
+}
+
+function prepararImportacaoRenovacoes(linhas, origem){
+  if(!linhas.length) throw new Error('A planilha veio vazia.');
+  const cols = mapearColunas(linhas);
+  const corpo = cols.temCabecalho ? linhas.slice(1) : linhas;
+  const existentes = {};
+  renovacoes.forEach(function(r){
+    existentes[semAcento(r.empresa) + '|' + r.mes + '|' + r.ano] = true;
+  });
+
+  const itens = [];
+  corpo.forEach(function(l){
+    const empresa = String(l[cols.empresa] === null || l[cols.empresa] === undefined ? '' : l[cols.empresa]).trim();
+    if(!empresa) return;
+    const valor = cols.valor >= 0 ? valorDaPlanilha(l[cols.valor]) : null;
+    const m = cols.mes >= 0 ? mesDaPlanilha(l[cols.mes]) : null;
+    const ano = (m && m.ano) ? m.ano : yearFilter;
+    const mes = m ? m.mes : null;
+    const chave = semAcento(empresa) + '|' + mes + '|' + ano;
+    const duplicada = !!existentes[chave];
+    if(!duplicada && mes) existentes[chave] = true;
+    itens.push({
+      empresa: empresa, valor: valor, mes: mes, ano: ano,
+      duplicada: duplicada,
+      aviso: !mes ? 'mês não reconhecido' : (duplicada ? 'já cadastrada' : ''),
+    });
+  });
+  if(!itens.length) throw new Error('Não achei nenhuma empresa na planilha. Confira se a primeira coluna tem o nome da empresa.');
+  return { itens: itens, cols: cols, origem: origem };
+}
+
+function abrirImportarRenovacoes(){
+  if(!isAdmin) return;
+  modalState = { type:'import-renovacoes', pessoa:'', dados:null, erro:'', lendo:false };
+  render();
+}
+
+async function onArquivoRenovacoes(input){
+  const arq = input.files && input.files[0];
+  if(!arq) return;
+  modalState.lendo = true; modalState.erro = ''; render();
+  try{
+    let linhas;
+    if(/\.(csv|txt|tsv)$/i.test(arq.name)){
+      let texto = await arq.text();
+      // planilha salva pelo Excel em Windows costuma vir em latin-1
+      if(texto.indexOf('�') >= 0){
+        texto = new TextDecoder('iso-8859-1').decode(await arq.arrayBuffer());
+      }
+      linhas = linhasDeTexto(texto);
+    } else {
+      linhas = await linhasDoXlsx(await arq.arrayBuffer());
+    }
+    modalState.dados = prepararImportacaoRenovacoes(linhas, arq.name);
+    modalState.erro = '';
+  }catch(e){
+    console.error(e);
+    modalState.dados = null;
+    modalState.erro = e && e.message ? e.message : 'Não consegui ler esse arquivo.';
+  }
+  modalState.lendo = false;
+  render();
+}
+
+function onColarRenovacoes(el){
+  const texto = el.value;
+  if(!String(texto).trim()){ modalState.dados = null; modalState.erro = ''; render(); return; }
+  try{
+    modalState.dados = prepararImportacaoRenovacoes(linhasDeTexto(texto), 'texto colado');
+    modalState.erro = '';
+  }catch(e){
+    modalState.dados = null;
+    modalState.erro = e && e.message ? e.message : 'Não consegui ler o que foi colado.';
+  }
+  render();
+}
+
+function setImportPessoa(el){ modalState.pessoa = el.value; }
+
+function confirmarImportacaoRenovacoes(){
+  const m = modalState;
+  if(!m || !m.dados) return;
+  const novos = m.dados.itens.filter(function(i){ return i.mes && !i.duplicada; });
+  if(!novos.length){ showAlert('Não há nada novo para importar.'); return; }
+  const anos = {};
+  novos.forEach(function(i){
+    renovacoes.push({
+      id: renovacoesNextId++, ano: i.ano, mes: i.mes,
+      pessoa: m.pessoa || '', empresa: i.empresa, valor: i.valor, renovado: null,
+    });
+    anos[i.ano] = true;
+  });
+  // ano que ainda não existe no filtro precisa ser criado, senão a linha
+  // fica gravada mas invisível
+  Object.keys(anos).map(Number).forEach(function(a){
+    if(a !== 2026 && extraYears.indexOf(a) === -1 && a !== yearFilter){
+      extraYears.push(a);
+      persistExtraYears();
+    }
+  });
+  persistRenovacoes();
+  closeModal();
+  showAlert(novos.length + (novos.length === 1 ? ' empresa importada.' : ' empresas importadas.'));
+}
+
 function setRenovacaoFiltro(f){ renovacaoFiltro = f; render(); }
+/* Digitar valor não re-desenha a tela (perderia o foco), então os cartões
+   do topo são atualizados na mão. */
+function atualizarResumoRenovacoes(){
+  const todas = renovacoesDoAno();
+  const soma = function(l){ return l.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0); };
+  const grupos = {
+    'renov-kpi-sim':    todas.filter(function(r){ return r.renovado === true; }),
+    'renov-kpi-nao':    todas.filter(function(r){ return r.renovado === false; }),
+    'renov-kpi-aberto': todas.filter(function(r){ return r.renovado === null || r.renovado === undefined; }),
+    'renov-kpi-total':  todas,
+  };
+  Object.keys(grupos).forEach(function(id){
+    const el = document.getElementById(id);
+    if(el) el.textContent = fmtMoney(soma(grupos[id])) + (el.dataset.sufixo || '');
+  });
+}
 
 async function tryLoadPainelContratosAsync(){
   try{
@@ -6699,9 +7121,12 @@ function montarRelatorioMes(mes){
   const renovTaxa = (renovOk + renovNao)
     ? (Math.round(1000*renovOk/(renovOk+renovNao))/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1}) + '% renovaram'
     : 'nenhuma decidida ainda';
+  const renovValor = renovMes.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0);
   const linhasRenov = renovMes.map(function(r){
     const sit = r.renovado === true ? 'Renovado' : (r.renovado === false ? 'Não renovado' : 'Em aberto');
-    return `<tr><td>${esc(r.empresa || '—')}</td><td>${esc(r.pessoa || '—')}</td><td>${sit}</td></tr>`;
+    return `<tr><td>${esc(r.empresa || '—')}</td>
+      <td class="num">${(r.valor === null || r.valor === undefined) ? '—' : fmtMoney(r.valor)}</td>
+      <td>${esc(r.pessoa || '—')}</td><td>${sit}</td></tr>`;
   });
 
   // Empresas que assinaram contrato no mês, com a avaliação do gestor.
@@ -6849,8 +7274,8 @@ function montarRelatorioMes(mes){
       </section>
 
       ${linhasRenov.length ? `<section class="rel-sec">
-        <h2>Renovações do sistema <span class="rel-sub">${renovOk} de ${renovMes.length} · ${renovTaxa}</span></h2>
-        ${relTabela([{label:'Empresa'},{label:'Responsável'},{label:'Situação'}], linhasRenov, '')}
+        <h2>Renovações do sistema <span class="rel-sub">${renovOk} de ${renovMes.length} · ${renovTaxa} · ${fmtMoney(renovValor)} em contratos</span></h2>
+        ${relTabela([{label:'Empresa'},{label:'Valor',num:true},{label:'Responsável'},{label:'Situação'}], linhasRenov, '')}
         <p class="rel-nota">Renovação é processo, não venda nova — não entra no ranking nem nos totais de venda.</p>
       </section>` : ''}
 
@@ -7321,6 +7746,7 @@ function renderPainelRenovacoes(){
   const emAberto    = todas.filter(function(r){ return r.renovado === null || r.renovado === undefined; });
   const decididas   = renovadas.length + perdidas.length;
   const taxa        = decididas ? Math.round(1000 * renovadas.length / decididas) / 10 : null;
+  const somaValor   = function(l){ return l.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0); };
 
   const lista = todas.filter(function(r){
     if(renovacaoFiltro === 'Renovado') return r.renovado === true;
@@ -7365,6 +7791,10 @@ function renderPainelRenovacoes(){
         ? `<input class="contrato-linha-input" id="renov-emp-${r.id}" type="text" placeholder="Nome da empresa"
                   value="${esc(r.empresa)}" oninput="onRenovacaoTexto(this,${r.id})" />`
         : esc(r.empresa || '—')}</td>
+      <td class="col-valor">${editavel
+        ? `<div class="currency-wrap"><span class="currency-prefix">R$</span><input class="num contrato-linha-input" type="number" step="0.01" placeholder="—"
+                  value="${r.valor===null||r.valor===undefined?'':r.valor}" oninput="onRenovacaoValor(this,${r.id})" /></div>`
+        : (r.valor === null || r.valor === undefined ? '—' : fmtMoney(r.valor))}</td>
       <td class="col-resp">${editavel
         ? `<select class="contrato-linha-select" onchange="setRenovacaoCampo(this,${r.id},'pessoa')">${opcoesPessoa(r.pessoa)}</select>`
         : esc(r.pessoa || '—')}</td>
@@ -7396,18 +7826,22 @@ function renderPainelRenovacoes(){
       <div class="kpi-card" style="--kc:#15803D">
         <div class="kpi-label"><span class="kpi-dot"></span>Renovadas</div>
         <div class="kpi-value">${renovadas.length}</div>
+        <div class="kpi-sub" id="renov-kpi-sim">${fmtMoney(somaValor(renovadas))}</div>
       </div>
       <div class="kpi-card" style="--kc:var(--danger)">
         <div class="kpi-label"><span class="kpi-dot"></span>Não renovadas</div>
         <div class="kpi-value">${perdidas.length}</div>
+        <div class="kpi-sub" id="renov-kpi-nao" data-sufixo=" perdidos">${fmtMoney(somaValor(perdidas))} perdidos</div>
       </div>
       <div class="kpi-card" style="--kc:var(--ink-faint)">
         <div class="kpi-label"><span class="kpi-dot"></span>Em aberto</div>
         <div class="kpi-value">${emAberto.length}</div>
+        <div class="kpi-sub" id="renov-kpi-aberto" data-sufixo=" em jogo">${fmtMoney(somaValor(emAberto))} em jogo</div>
       </div>
       <div class="kpi-card total">
         <div class="kpi-label">Taxa de renovação</div>
         <div class="kpi-value">${taxa === null ? '—' : taxa.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) + '%'}</div>
+        <div class="kpi-sub" id="renov-kpi-total" data-sufixo=" no ano">${fmtMoney(somaValor(todas))} no ano</div>
       </div>
     </div>`;
 
@@ -7419,6 +7853,7 @@ function renderPainelRenovacoes(){
     return `<tr>
       <td><span class="th-dot" style="background:${esc(corDoVendedor(v))}"></span>${esc(v)}</td>
       <td class="num">${minhas.length}</td>
+      <td class="num">${fmtMoney(minhas.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0))}</td>
       <td class="num">${ok}</td>
       <td class="num">${nao}</td>
       <td class="num col-apoio">${ab}</td>
@@ -7433,6 +7868,7 @@ function renderPainelRenovacoes(){
         <thead><tr>
           <th class="col-mes">Mês</th>
           <th class="col-nome">Empresa</th>
+          <th class="num col-valor" title="Valor do contrato">Valor</th>
           <th class="col-resp">Responsável</th>
           <th class="col-rent">Situação</th>
           ${editavel ? '<th></th>' : ''}
@@ -7455,6 +7891,7 @@ function renderPainelRenovacoes(){
   `, {
     flush: true,
     meta: `<b>${todas.length}</b> empresa${todas.length===1?'':'s'} em ${yearFilter}`,
+    actions: editavel ? `<button class="btn-add" onclick="abrirImportarRenovacoes()">📄 Importar planilha</button>` : '',
   });
 
   const resumo = pessoas.length ? panel('painel-renov-pessoas', 'Por responsável', `
@@ -7463,6 +7900,7 @@ function renderPainelRenovacoes(){
         <thead><tr>
           <th>Responsável</th>
           <th class="num">Empresas</th>
+          <th class="num">Valor</th>
           <th class="num">Renovadas</th>
           <th class="num">Não renovadas</th>
           <th class="num col-apoio">Em aberto</th>
