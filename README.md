@@ -43,6 +43,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_renovacoes_migration.sql   → migração 14: renovações do sistema (empresa, responsável e desfecho)
 ├── supabase_renovacoes_valor_migration.sql → migração 15: valor do contrato nas renovações
 ├── supabase_renovacoes_venda_migration.sql → migração 16: liga a renovação à venda que ela gera no Sistema
+├── supabase_venda_renovacao_migration.sql → migração 17: venda de renovação fica fora do ranking
 └── .gitignore
 ```
 
@@ -133,6 +134,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 15. Rode `supabase_renovacoes_migration.sql` — cria a aba de renovações do sistema.
 16. Rode `supabase_renovacoes_valor_migration.sql` — acrescenta o valor do contrato nas renovações.
 17. Rode `supabase_renovacoes_venda_migration.sql` — liga a renovação à venda lançada na aba Sistema.
+18. Rode `supabase_venda_renovacao_migration.sql` — tira as vendas de renovação do ranking de desempenho.
 11. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
 12. Só depois publique esta versão atualizada do `index.html`.
 
@@ -142,7 +144,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 
 | Tabela | Conteúdo |
 |---|---|
-| `vendas` | Lançamentos da aba Sistema (inclui `vendedor_responsavel` — quem efetivamente fez a venda) |
+| `vendas` | Lançamentos da aba Sistema (inclui `vendedor_responsavel` — quem efetivamente fez a venda — e `renovacao`, que tira a venda do ranking) |
 | `vendas_comissoes` | Comissão de cada vendedor(a) por lançamento do Sistema (valor e, opcionalmente, a % que o gerou) |
 | `lancamentos` | Lançamentos de Consultoria, Consultoria Órgãos Públicos e Cursos (uma tabela só, filtrada pela coluna `entidade`) |
 | `lancamentos_extra_vendedores` | Vendedores extras (4º em diante) por lançamento |
@@ -375,7 +377,21 @@ As vendas nascem com a observação **"Renovação"**, para se distinguirem na a
 - **Mês fechado é pulado**, e o sistema avisa quais ficaram de fora.
 - **Desmarcar depois não apaga a venda.** O sistema avisa: mexer na situação aqui não desfaz nada na aba Sistema; se a venda não valer mais, exclua também por lá. Comissão já lançada não some sozinha.
 
-> Enquanto não são lançadas, as renovações **não entram no ranking nem nos totais de faturamento** — a lista sozinha é acompanhamento de carteira. Depois de lançadas, contam como venda de sistema do mês, no nome de quem renovou, e aparecem no desempenho como qualquer outra venda. As renovações do mês também saem em seção própria do relatório em PDF.
+#### Renovação não conta no ranking
+
+A venda que nasce de uma renovação vale **comissão como qualquer outra** e entra no Resumo Geral, no faturamento do mês e no fechamento para a contabilidade. O que ela **não** faz é contar no **ranking de desempenho**: renovar um contrato que já era da casa não é a mesma coisa que trazer cliente novo, e a carteira de renovação é grande o bastante para decidir sozinha quem é campeã do ano.
+
+Na aba Sistema, essas vendas aparecem com o selo verde **"♻️ Renovação"** ao lado do cliente, e o botão **♻️** nas ações da linha marca ou desmarca qualquer venda — inclusive uma que você tenha digitado à mão e queira tirar do ranking.
+
+> O corte é uma **coluna do banco** (`vendas.renovacao`), não a palavra "Renovação" escrita na observação. Um critério que mexe em desempenho não pode depender de alguém digitar o texto certo. A view `painel_equipe_totais` ignora essas vendas nos indicadores *Vendas de sistemas* e *Qtd. sistemas vendidos*.
+
+Enquanto não são lançadas, as renovações não entram em lugar nenhum — a lista sozinha é acompanhamento de carteira. As renovações do mês também saem em seção própria do relatório em PDF.
+
+#### Repetir a carteira no ano seguinte
+
+A mesma carteira vence de novo doze meses depois. O botão **"📅 Repetir em 2027"** copia todas as empresas do ano aberto para o ano seguinte, mantendo **empresa, valor, mês e responsável** — e zerando o que é do ano anterior: a situação volta para **em aberto** e o vínculo com a venda é desfeito, senão o ano novo nasceria com renovações já dadas como resolvidas e lançadas.
+
+Empresas que já existam no ano de destino (mesmo nome e mês) são puladas, então repetir duas vezes não duplica nada. Se o ano ainda não existir no sistema, ele é criado junto.
 
 #### Importar a planilha de renovações
 
