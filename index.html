@@ -1112,6 +1112,7 @@
   table.table-plain td.col-apoio, thead th.col-apoio{color:var(--ink-faint);}
   .totais-nota{padding:12px 16px 16px;font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.55;}
   .col-rent{min-width:206px;}
+  .col-resp{min-width:150px;}
   /* Rentável x não rentável: dois botões, um só ativo. Clicar no que já
      está ativo desmarca — o contrato pode entrar antes da avaliação. */
   .rent-toggle{display:flex;gap:6px;}
@@ -5877,6 +5878,174 @@ function pessoasDeContratos(){
   return (painelContratos || PAINEL_CONTRATOS_PADRAO).slice();
 }
 
+/* ---------- Renovações do sistema ----------
+   Renovar contrato não é vender: não tem prospecção, não tem proposta, não
+   entra no ranking de vendas. É um processo próprio, tocado por uma dupla,
+   e o que importa saber é quais empresas renovaram, quais não renovaram e
+   quem cuidou de cada uma.
+
+   Por isso mora numa aba própria, com lista de gente própria — mesma forma
+   da equipe de consultoria. */
+const RENOVACAO_PESSOAS_PADRAO = ['Uilma','Luciana'];
+let renovacaoPessoas = null;
+let renovacaoEditandoPessoas = false;
+let renovacaoPessoasTimer = null;
+let renovacoes = [];
+let renovacoesNextId = 1;
+let renovacoesTimer = null;
+let renovacaoFiltro = 'Todos';        // 'Todos' | 'Renovado' | 'Nao' | 'Aberto'
+
+function pessoasDeRenovacao(){
+  return (renovacaoPessoas || RENOVACAO_PESSOAS_PADRAO).slice();
+}
+
+async function tryLoadRenovacaoPessoasAsync(){
+  try{
+    const db = await sbSelect('entity_vendors', 'select=vendor_name&entidade=eq.renovacoes&order=id.asc');
+    carregouDoBanco['renovacao-pessoas'] = true;
+    if(db && db.length) renovacaoPessoas = db.map(function(v){ return v.vendor_name; });
+    render();
+  }catch(e){ console.error(e); }
+}
+
+function persistRenovacaoPessoas(){
+  saving = true; updateSaveStatus();
+  if(renovacaoPessoasTimer) clearTimeout(renovacaoPessoasTimer);
+  renovacaoPessoasTimer = setTimeout(function(){
+    (async function(){
+      try{
+        if(!carregouDoBanco['renovacao-pessoas']) return;   // nunca apagar sem ter lido antes
+        await sbDeleteAll('entity_vendors', 'entidade=eq.renovacoes');
+        const linhas = (renovacaoPessoas || []).map(function(v){ return { entidade:'renovacoes', vendor_name:v }; });
+        if(linhas.length) await sbUpsert('entity_vendors', linhas, 'entidade,vendor_name');
+        saveError = false;
+      }catch(e){ console.error(e); saveError = true; }
+      finally{ saving = false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+
+function setRenovacaoEditandoPessoas(v){ renovacaoEditandoPessoas = !!v; render(); }
+
+function togglePessoaRenovacao(nome){
+  if(!isAdmin) return;
+  const lista = pessoasDeRenovacao();
+  const i = lista.findIndex(function(v){ return name_matches_client(v, nome); });
+  if(i >= 0) lista.splice(i, 1); else lista.push(String(nome).trim());
+  renovacaoPessoas = lista;
+  persistRenovacaoPessoas();
+  render();
+}
+
+async function tryLoadRenovacoesAsync(){
+  try{
+    const db = await sbSelect('renovacoes', 'select=*&order=id.asc');
+    carregouDoBanco['renovacoes'] = true;
+    if(db){
+      renovacoes = db.map(function(d){
+        return {
+          id: d.id, ano: d.ano, mes: d.mes, pessoa: d.pessoa || '', empresa: d.empresa || '',
+          renovado: (d.renovado === null || d.renovado === undefined) ? null : !!d.renovado,
+        };
+      });
+      renovacoesNextId = renovacoes.length
+        ? Math.max.apply(null, renovacoes.map(function(r){ return r.id||0; })) + 1 : 1;
+      render();
+    }
+  }catch(e){ console.error(e); }
+}
+
+function persistRenovacoes(){
+  saving = true; updateSaveStatus();
+  if(renovacoesTimer) clearTimeout(renovacoesTimer);
+  renovacoesTimer = setTimeout(function(){
+    (async function(){
+      try{
+        const dbRows = renovacoes.map(function(r){
+          return {
+            id: r.id, ano: r.ano, mes: r.mes, pessoa: r.pessoa, empresa: r.empresa || '',
+            renovado: (r.renovado === null || r.renovado === undefined) ? null : !!r.renovado,
+          };
+        });
+        await sbUpsert('renovacoes', dbRows, 'id');
+        const existing = carregouDoBanco['renovacoes'] ? ((await sbSelect('renovacoes','select=id')) || []) : [];
+        const localIds = renovacoes.map(function(r){ return r.id; });
+        const toDelete = existing.map(function(x){ return x.id; })
+          .filter(function(id){ return localIds.indexOf(id) === -1; });
+        if(toDelete.length) await sbDeleteIn('renovacoes','id', toDelete);
+        saveError = false;
+      }catch(e){ console.error(e); saveError = true; }
+      finally{ saving = false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+
+function renovacoesDoAno(){
+  return renovacoes
+    .filter(function(r){ return r.ano === yearFilter; })
+    .sort(function(a,b){
+      const d = MONTHS.indexOf(a.mes) - MONTHS.indexOf(b.mes);
+      return d !== 0 ? d : ((a.id||0) - (b.id||0));
+    });
+}
+
+function addRenovacao(){
+  if(!isAdmin) return;
+  const pessoas = pessoasDeRenovacao();
+  const nova = {
+    id: renovacoesNextId++, ano: yearFilter,
+    mes: (painelPeriodo && painelPeriodo !== 'Ano') ? painelPeriodo : MONTHS[new Date().getMonth()],
+    pessoa: pessoas.length === 1 ? pessoas[0] : '',
+    empresa: '', renovado: null,
+  };
+  renovacoes.push(nova);
+  persistRenovacoes();
+  render();
+  setTimeout(function(){
+    const el = document.getElementById('renov-emp-' + nova.id);
+    if(el) el.focus();
+  }, 40);
+}
+
+function onRenovacaoTexto(el, id){
+  const r = renovacoes.find(function(x){ return x.id === id; });
+  if(!r) return;
+  r.empresa = el.value;
+  persistRenovacoes();
+}
+function setRenovacaoCampo(el, id, campo){
+  const r = renovacoes.find(function(x){ return x.id === id; });
+  if(!r) return;
+  r[campo] = el.value;
+  persistRenovacoes();
+  render();
+}
+/* Renovado / Não renovado, com um terceiro estado: em aberto. A empresa
+   entra na lista quando a renovação começa a ser tratada, e só depois se
+   sabe o desfecho — clicar de novo no botão aceso volta para em aberto. */
+function setRenovacaoStatus(id, valor){
+  if(!isAdmin) return;
+  const r = renovacoes.find(function(x){ return x.id === id; });
+  if(!r) return;
+  r.renovado = (r.renovado === valor) ? null : valor;
+  persistRenovacoes();
+  render();
+}
+function excluirRenovacao(id){
+  const r = renovacoes.find(function(x){ return x.id === id; });
+  if(!r) return;
+  showConfirm(
+    'Excluir ' + (r.empresa ? '"' + r.empresa + '"' : 'esta empresa') + ' da lista de renovações?',
+    function(){
+      renovacoes = renovacoes.filter(function(x){ return x.id !== id; });
+      persistRenovacoes();
+      render();
+    },
+    'Excluir'
+  );
+}
+function setRenovacaoFiltro(f){ renovacaoFiltro = f; render(); }
+
 async function tryLoadPainelContratosAsync(){
   try{
     const db = await sbSelect('entity_vendors', 'select=vendor_name&entidade=eq.painel_contratos&order=id.asc');
@@ -6522,6 +6691,19 @@ function montarRelatorioMes(mes){
       <td class="num">${(valorMetrica(v, mes, 'reunioes')||0).toLocaleString('pt-BR')}</td></tr>`;
   });
 
+  // Renovações do sistema no mês: quem cuidou e o desfecho.
+  const renovMes = renovacoes.filter(function(r){ return r.ano === ano && r.mes === mes; })
+    .sort(function(a,b){ return String(a.pessoa||'').localeCompare(String(b.pessoa||''),'pt-BR') || ((a.id||0)-(b.id||0)); });
+  const renovOk  = renovMes.filter(function(r){ return r.renovado === true; }).length;
+  const renovNao = renovMes.filter(function(r){ return r.renovado === false; }).length;
+  const renovTaxa = (renovOk + renovNao)
+    ? (Math.round(1000*renovOk/(renovOk+renovNao))/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1}) + '% renovaram'
+    : 'nenhuma decidida ainda';
+  const linhasRenov = renovMes.map(function(r){
+    const sit = r.renovado === true ? 'Renovado' : (r.renovado === false ? 'Não renovado' : 'Em aberto');
+    return `<tr><td>${esc(r.empresa || '—')}</td><td>${esc(r.pessoa || '—')}</td><td>${sit}</td></tr>`;
+  });
+
   // Empresas que assinaram contrato no mês, com a avaliação do gestor.
   const linhasEmpresasNovas = contratosNovos
     .filter(function(c){ return c.ano === ano && c.mes === mes; })
@@ -6665,6 +6847,12 @@ function montarRelatorioMes(mes){
         ${relTabela([{label:'Pessoa'},{label:'Contratos assinados',num:true},{label:'Reuniões realizadas',num:true}],
           linhasConsult, 'Ninguém na equipe de consultoria ainda.')}
       </section>
+
+      ${linhasRenov.length ? `<section class="rel-sec">
+        <h2>Renovações do sistema <span class="rel-sub">${renovOk} de ${renovMes.length} · ${renovTaxa}</span></h2>
+        ${relTabela([{label:'Empresa'},{label:'Responsável'},{label:'Situação'}], linhasRenov, '')}
+        <p class="rel-nota">Renovação é processo, não venda nova — não entra no ranking nem nos totais de venda.</p>
+      </section>` : ''}
 
       <section class="rel-sec">
         <h2>Empresas que assinaram contrato <span class="rel-sub">novas contas trazidas pela equipe de consultoria</span></h2>
@@ -6863,13 +7051,14 @@ function renderPainelSection(){
       <button class="painel-aba${painelAba==='lancamento'?' active':''}" onclick="setPainelAba('lancamento')">Lançamento</button>
       <button class="painel-aba${painelAba==='dashboard'?' active':''}" onclick="setPainelAba('dashboard')">Dashboard</button>
       <button class="painel-aba${painelAba==='contratos'?' active':''}" onclick="setPainelAba('contratos')">Equipe de consultoria</button>
+      <button class="painel-aba${painelAba==='renovacoes'?' active':''}" onclick="setPainelAba('renovacoes')">Renovações</button>
     </div>` : '';
-  const btnEquipe = (isAdmin && painelAba !== 'contratos') ? `
+  const btnEquipe = (isAdmin && painelAba !== 'contratos' && painelAba !== 'renovacoes') ? `
     <button class="eye-toggle" onclick="setPainelEditandoEquipe(${painelEditandoEquipe ? 'false' : 'true'})"
             title="Escolhe quem aparece neste painel — não mexe nas outras abas">
       ${painelEditandoEquipe ? '✕ Fechar' : '👥 Quem aparece'}
     </button>` : '';
-  const editorEquipe = (isAdmin && painelEditandoEquipe && painelAba !== 'contratos') ? panel('painel-equipe', 'Quem aparece neste painel', `
+  const editorEquipe = (isAdmin && painelEditandoEquipe && painelAba !== 'contratos' && painelAba !== 'renovacoes') ? panel('painel-equipe', 'Quem aparece neste painel', `
     <div class="painel-equipe-nota">Marque as pessoas que este painel acompanha. Desmarcar alguém só tira do painel — os lançamentos, as comissões e as outras abas continuam iguais.</div>
     <div class="painel-equipe-lista">
       ${pessoasConhecidas().map(function(n){
@@ -6884,8 +7073,9 @@ function renderPainelSection(){
   const conteudo = !isAdmin ? renderPainelDashboard(vends)
     : painelAba === 'lancamento' ? renderPainelLancamento(vends)
     : painelAba === 'contratos'  ? renderPainelContratos()
+    : painelAba === 'renovacoes' ? renderPainelRenovacoes()
     : renderPainelDashboard(vends);
-  const olhaVendas   = isAdmin && painelAba !== 'contratos';
+  const olhaVendas   = isAdmin && painelAba !== 'contratos' && painelAba !== 'renovacoes';
   const faltaSistema = olhaVendas ? vendasSemResponsavel().length : 0;
   const faltaCursos  = olhaVendas ? entityRowsSemDivisao('cursos').length : 0;
   const partes = [];
@@ -7116,6 +7306,185 @@ function painelEmpresasNovas(pessoa, slugPessoa){
       meta: `<b>${lista.length}</b> empresa${lista.length===1?'':'s'} · <b>${rent}</b> rentáve${rent===1?'l':'is'}`,
       flush: true,
     });
+}
+
+
+/* Aba "Renovações": empresas que estão renovando o sistema, quem cuidou de
+   cada uma e o desfecho. Não entra no ranking — renovar não é vender. */
+function renderPainelRenovacoes(){
+  const pessoas = pessoasDeRenovacao();
+  const editavel = isAdmin;
+  const todas = renovacoesDoAno();
+
+  const renovadas   = todas.filter(function(r){ return r.renovado === true; });
+  const perdidas    = todas.filter(function(r){ return r.renovado === false; });
+  const emAberto    = todas.filter(function(r){ return r.renovado === null || r.renovado === undefined; });
+  const decididas   = renovadas.length + perdidas.length;
+  const taxa        = decididas ? Math.round(1000 * renovadas.length / decididas) / 10 : null;
+
+  const lista = todas.filter(function(r){
+    if(renovacaoFiltro === 'Renovado') return r.renovado === true;
+    if(renovacaoFiltro === 'Nao')      return r.renovado === false;
+    if(renovacaoFiltro === 'Aberto')   return r.renovado === null || r.renovado === undefined;
+    return true;
+  });
+
+  const editor = (editavel && renovacaoEditandoPessoas) ? panel('painel-renov-quem', 'Quem cuida das renovações', `
+    <div class="painel-equipe-nota">
+      Marque quem trata as renovações. Só quem estiver aqui aparece na coluna “Responsável”.
+      Desmarcar alguém não apaga as renovações que já estão no nome dela.
+    </div>
+    <div class="painel-equipe-lista">
+      ${pessoasConhecidas().map(function(n){
+        const on = pessoas.some(function(v){ return name_matches_client(v, n); });
+        return `<label class="painel-equipe-item${on?' on':''}">
+          <input type="checkbox" ${on?'checked':''} onchange="togglePessoaRenovacao('${escJs(n)}')" />
+          <span>${esc(n)}</span>
+        </label>`;
+      }).join('')}
+    </div>
+  `) : '';
+
+  const opcoesPessoa = function(atual){
+    const nomes = pessoas.slice();
+    if(atual && !nomes.some(function(v){ return name_matches_client(v, atual); })) nomes.push(atual);
+    return `<option value="">—</option>` + nomes.map(function(n){
+      return `<option value="${esc(n)}" ${atual===n?'selected':''}>${esc(n)}</option>`;
+    }).join('');
+  };
+
+  const linhas = lista.map(function(r){
+    const semDados = !r.empresa || !r.pessoa;
+    return `<tr class="${semDados ? 'row-pending' : ''}">
+      <td class="col-mes">${editavel
+        ? `<select class="contrato-linha-select" onchange="setRenovacaoCampo(this,${r.id},'mes')">${
+            MONTHS.map(function(m){ return `<option value="${m}" ${r.mes===m?'selected':''}>${monthShort(m)}</option>`; }).join('')
+          }</select>`
+        : esc(monthShort(r.mes))}</td>
+      <td class="col-nome">${editavel
+        ? `<input class="contrato-linha-input" id="renov-emp-${r.id}" type="text" placeholder="Nome da empresa"
+                  value="${esc(r.empresa)}" oninput="onRenovacaoTexto(this,${r.id})" />`
+        : esc(r.empresa || '—')}</td>
+      <td class="col-resp">${editavel
+        ? `<select class="contrato-linha-select" onchange="setRenovacaoCampo(this,${r.id},'pessoa')">${opcoesPessoa(r.pessoa)}</select>`
+        : esc(r.pessoa || '—')}</td>
+      <td class="col-rent">
+        <div class="rent-toggle">
+          <button type="button" class="rent-btn sim${r.renovado===true?' on':''}" ${editavel?'':'disabled'}
+                  title="A empresa renovou" onclick="setRenovacaoStatus(${r.id},true)">Renovado</button>
+          <button type="button" class="rent-btn nao${r.renovado===false?' on':''}" ${editavel?'':'disabled'}
+                  title="A empresa não renovou" onclick="setRenovacaoStatus(${r.id},false)">Não renovado</button>
+        </div>
+      </td>
+      ${editavel ? `<td class="del-cell"><div class="row-actions">
+        <button class="action-btn danger" title="Excluir" onclick="excluirRenovacao(${r.id})">✕</button>
+      </div></td>` : ''}
+    </tr>`;
+  }).join('');
+
+  const filtros = [
+    {k:'Todos',    rot:'Todas',        n: todas.length},
+    {k:'Renovado', rot:'Renovadas',    n: renovadas.length},
+    {k:'Nao',      rot:'Não renovadas',n: perdidas.length},
+    {k:'Aberto',   rot:'Em aberto',    n: emAberto.length},
+  ].map(function(f){
+    return `<button class="pill seller-pill${renovacaoFiltro===f.k?' active':''}" onclick="setRenovacaoFiltro('${f.k}')">${f.rot} · ${f.n}</button>`;
+  }).join('');
+
+  const cartoes = `
+    <div class="kpis">
+      <div class="kpi-card" style="--kc:#15803D">
+        <div class="kpi-label"><span class="kpi-dot"></span>Renovadas</div>
+        <div class="kpi-value">${renovadas.length}</div>
+      </div>
+      <div class="kpi-card" style="--kc:var(--danger)">
+        <div class="kpi-label"><span class="kpi-dot"></span>Não renovadas</div>
+        <div class="kpi-value">${perdidas.length}</div>
+      </div>
+      <div class="kpi-card" style="--kc:var(--ink-faint)">
+        <div class="kpi-label"><span class="kpi-dot"></span>Em aberto</div>
+        <div class="kpi-value">${emAberto.length}</div>
+      </div>
+      <div class="kpi-card total">
+        <div class="kpi-label">Taxa de renovação</div>
+        <div class="kpi-value">${taxa === null ? '—' : taxa.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) + '%'}</div>
+      </div>
+    </div>`;
+
+  const porPessoa = pessoas.map(function(v){
+    const minhas = todas.filter(function(r){ return name_matches_client(r.pessoa, v); });
+    const ok  = minhas.filter(function(r){ return r.renovado === true; }).length;
+    const nao = minhas.filter(function(r){ return r.renovado === false; }).length;
+    const ab  = minhas.length - ok - nao;
+    return `<tr>
+      <td><span class="th-dot" style="background:${esc(corDoVendedor(v))}"></span>${esc(v)}</td>
+      <td class="num">${minhas.length}</td>
+      <td class="num">${ok}</td>
+      <td class="num">${nao}</td>
+      <td class="num col-apoio">${ab}</td>
+      <td class="num">${(ok+nao) ? (Math.round(1000*ok/(ok+nao))/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%' : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  const tabela = panel('painel-renovacoes', 'Empresas em renovação', `
+    ${lista.length ? `
+    <div class="table-scroll">
+      <table class="table-plain">
+        <thead><tr>
+          <th class="col-mes">Mês</th>
+          <th class="col-nome">Empresa</th>
+          <th class="col-resp">Responsável</th>
+          <th class="col-rent">Situação</th>
+          ${editavel ? '<th></th>' : ''}
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    </div>`
+    : `<div class="meta-empty" style="padding:22px 16px;">${
+         todas.length ? 'Nenhuma empresa nesse filtro.' : 'Nenhuma empresa em renovação lançada em ' + yearFilter + '.'
+       }</div>`}
+    <div class="totais-nota">
+      Cada linha é uma empresa que está renovando o sistema. A situação começa <b>em aberto</b> e recebe
+      <b>Renovado</b> ou <b>Não renovado</b> quando se sabe o desfecho — clicar de novo no botão aceso volta para em aberto.
+      A <b>taxa de renovação</b> só conta as decididas, então as em aberto não puxam o número para baixo.
+      Renovação <b>não entra no ranking de vendas</b>: é processo, não venda nova.
+    </div>
+    ${editavel ? `<div class="contrato-add">
+      <button class="modal-btn modal-btn-ghost" style="width:100%;" onclick="addRenovacao()">+ Empresa em renovação</button>
+    </div>` : ''}
+  `, {
+    flush: true,
+    meta: `<b>${todas.length}</b> empresa${todas.length===1?'':'s'} em ${yearFilter}`,
+  });
+
+  const resumo = pessoas.length ? panel('painel-renov-pessoas', 'Por responsável', `
+    <div class="table-scroll">
+      <table class="table-plain">
+        <thead><tr>
+          <th>Responsável</th>
+          <th class="num">Empresas</th>
+          <th class="num">Renovadas</th>
+          <th class="num">Não renovadas</th>
+          <th class="num col-apoio">Em aberto</th>
+          <th class="num">Taxa</th>
+        </tr></thead>
+        <tbody>${porPessoa}</tbody>
+      </table>
+    </div>
+  `, { flush: true, meta: `todo o ano de ${yearFilter}` }) : '';
+
+  return `
+    <div class="painel-topo-sub">
+      ${editavel ? `<button class="eye-toggle" onclick="setRenovacaoEditandoPessoas(${renovacaoEditandoPessoas?'false':'true'})">${renovacaoEditandoPessoas?'✕ Fechar':'👤 Quem cuida das renovações'}</button>` : ''}
+    </div>
+    ${editor}
+    ${cartoes}
+    <div class="filters-row">
+      <div class="months seller-filter">${filtros}</div>
+    </div>
+    ${tabela}
+    ${resumo}
+  `;
 }
 
 function setPainelContratoMesDireto(mes){ painelContratoMes = mes; carregarFormContratos(); render(); }
@@ -7735,6 +8104,8 @@ function boot(){
     tryLoadPainelContratosAsync(),
     tryLoadContratosNovosAsync(),
     tryLoadFechamentoForaAsync(),
+    tryLoadRenovacaoPessoasAsync(),
+    tryLoadRenovacoesAsync(),
   ];
   Promise.allSettled(loaders).then(function(){
     initialDataLoaded = true;

@@ -40,6 +40,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_salario_fixo_migration.sql → migração 11: salário fixo do colaborador na aba Bônus e Metas
 ├── supabase_fechamento_fora_migration.sql → migração 12: quem fica de fora do fechamento para a contabilidade
 ├── supabase_pesos_ranking_migration.sql → migração 13: pesos dos indicadores no ranking da equipe
+├── supabase_renovacoes_migration.sql   → migração 14: renovações do sistema (empresa, responsável e desfecho)
 └── .gitignore
 ```
 
@@ -127,6 +128,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 12. Rode `supabase_salario_fixo_migration.sql` — permite lançar o salário fixo do colaborador sem misturá-lo com bônus e comissões.
 13. Rode `supabase_fechamento_fora_migration.sql` — permite tirar pessoas do fechamento para a contabilidade.
 14. Rode `supabase_pesos_ranking_migration.sql` — cria os pesos dos indicadores do ranking.
+15. Rode `supabase_renovacoes_migration.sql` — cria a aba de renovações do sistema.
 11. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
 12. Só depois publique esta versão atualizada do `index.html`.
 
@@ -146,6 +148,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `relatorios_equipe` | Indicadores mensais digitados: andamento da equipe e contratos/reuniões (Relatório de Desempenho) |
 | `contratos_consultoria` | Empresas que assinaram contrato: quem trouxe, mês, nome, CNPJ e se o negócio foi rentável |
 | `painel_pesos` | Peso de cada indicador no ranking da equipe |
+| `renovacoes` | Empresas renovando o sistema: mês, responsável, nome e se renovou |
 | `partners` | Parceiros cadastrados |
 | `venda_products` | Catálogo de produtos da aba Sistema |
 | `sellers` | Vendedoras do Sistema (lista editável) |
@@ -333,6 +336,25 @@ Nem todo mundo é medido pelos mesmos indicadores. A **equipe de consultoria** �
 Para incluir alguém, use **"👤 Quem está na equipe"** no topo da aba — ou o botão **"+ Incluir mais pessoas na equipe de consultoria"** no fim da página, que abre a mesma lista e leva a tela até ela (o topo fica longe de quem está lendo os painéis de empresas lá embaixo). Marque quem já existe no sistema, ou cadastre um nome novo pelo botão do fim da lista. A lista fica no banco (`entity_vendors` com `entidade='painel_contratos'`), então vale para todo mundo.
 
 > Quem está nessa lista **não entra no ranking de vendas** e não aparece nos cartões do dashboard — o ranking mede quem vende, e essas pessoas são medidas por outra coisa. As duas listas são independentes: a mesma pessoa pode estar nas duas, se fizer sentido.
+
+### Renovações do sistema
+
+Renovar contrato não é vender: não tem prospecção, não tem proposta, não gera comissão de venda nova. É um **processo próprio**, tocado por uma dupla — hoje **Uilma e Luciana** —, e por isso tem a aba **"Renovações"** dentro do Relatório de Desempenho, com lista de gente própria.
+
+O cadastro é o mínimo que responde à pergunta do mês:
+
+| Campo | O que é |
+|---|---|
+| Mês | o mês da renovação |
+| Empresa | só o nome mesmo |
+| Responsável | quem cuidou (só quem está na lista de renovações aparece aqui) |
+| Situação | **Renovado** ou **Não renovado** — um clique escolhe, clicar de novo volta para *em aberto* |
+
+A situação começa **em aberto** de propósito: a empresa entra na lista quando a renovação começa a ser tratada, e o desfecho vem depois. Os cartões do topo contam renovadas, não renovadas, em aberto e a **taxa de renovação** — que só considera as decididas, então as em aberto não puxam o número para baixo. As pílulas abaixo filtram a lista por situação, e o quadro **"Por responsável"** fecha o ano de cada uma, com a taxa individual.
+
+> **Renovação não entra no ranking de vendas nem nos totais de faturamento.** É processo, não venda nova — misturar inflaria o desempenho de quem faz renovação e distorceria a comparação com quem prospecta e vende. As renovações do mês saem em seção própria do relatório em PDF.
+
+Para mudar quem cuida, use **"👤 Quem cuida das renovações"** no topo da aba (`entity_vendors` com `entidade='renovacoes'`). Como no resto do sistema, admin vê e edita tudo; uma conta restrita veria apenas as renovações no nome dela, sem editar (`renovacoes`, migração 14).
 
 #### Empresas com contrato assinado
 
