@@ -1113,6 +1113,8 @@
   .totais-nota{padding:12px 16px 16px;font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.55;}
   .col-rent{min-width:206px;}
   .col-resp{min-width:150px;}
+  /* contrato de renovação é bem maior que os valores das outras abas */
+  .col-valor-larga{width:130px;min-width:130px;}
   .kpi-sub{font-size:11.5px;font-weight:700;color:var(--ink-faint);margin-top:2px;font-variant-numeric:tabular-nums;}
   .import-arquivo{display:block;margin:4px 0 10px;}
   .import-arquivo input{display:none;}
@@ -5972,6 +5974,8 @@ let renovacoes = [];
 let renovacoesNextId = 1;
 let renovacoesTimer = null;
 let renovacaoFiltro = 'Todos';        // 'Todos' | 'Renovado' | 'Nao' | 'Aberto'
+let renovacaoMes = 'Todos';           // 'Todos' | nome do mês
+let renovacaoBusca = '';
 
 function pessoasDeRenovacao(){
   return (renovacaoPessoas || RENOVACAO_PESSOAS_PADRAO).slice();
@@ -6074,7 +6078,8 @@ function addRenovacao(){
   const pessoas = pessoasDeRenovacao();
   const nova = {
     id: renovacoesNextId++, ano: yearFilter,
-    mes: (painelPeriodo && painelPeriodo !== 'Ano') ? painelPeriodo : MONTHS[new Date().getMonth()],
+    mes: renovacaoMes !== 'Todos' ? renovacaoMes
+       : ((painelPeriodo && painelPeriodo !== 'Ano') ? painelPeriodo : MONTHS[new Date().getMonth()]),
     pessoa: pessoas.length === 1 ? pessoas[0] : '',
     empresa: '', valor: null, renovado: null,
   };
@@ -6451,10 +6456,28 @@ function confirmarImportacaoRenovacoes(){
 }
 
 function setRenovacaoFiltro(f){ renovacaoFiltro = f; render(); }
+function setRenovacaoMes(m){ renovacaoMes = m; render(); }
+function rotuloRenovacao(){
+  return renovacaoMes === 'Todos' ? ('no ano de ' + yearFilter) : ('em ' + renovacaoMes + ' de ' + yearFilter);
+}
+function onRenovacaoBusca(el){
+  renovacaoBusca = el.value;
+  const foco = el.selectionStart;
+  render();
+  const novo = document.getElementById('busca-renovacao');
+  if(novo){ novo.focus(); try{ novo.setSelectionRange(foco, foco); }catch(e){} }
+}
 /* Digitar valor não re-desenha a tela (perderia o foco), então os cartões
    do topo são atualizados na mão. */
 function atualizarResumoRenovacoes(){
-  const todas = renovacoesDoAno();
+  // mesmo recorte da tela (mês + busca), senão o cartão diz uma coisa e a
+  // tabela mostra outra
+  const busca = semAcento(renovacaoBusca);
+  const todas = renovacoesDoAno().filter(function(r){
+    if(renovacaoMes !== 'Todos' && r.mes !== renovacaoMes) return false;
+    if(busca && semAcento(r.empresa).indexOf(busca) === -1) return false;
+    return true;
+  });
   const soma = function(l){ return l.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0); };
   const grupos = {
     'renov-kpi-sim':    todas.filter(function(r){ return r.renovado === true; }),
@@ -7739,7 +7762,17 @@ function painelEmpresasNovas(pessoa, slugPessoa){
 function renderPainelRenovacoes(){
   const pessoas = pessoasDeRenovacao();
   const editavel = isAdmin;
-  const todas = renovacoesDoAno();
+  /* O recorte de mês e busca vem ANTES dos cartões: quando ela filtra
+     Janeiro, os números do topo têm que ser os de Janeiro, senão o painel
+     diz uma coisa e a tabela mostra outra. */
+  const doAno = renovacoesDoAno();
+  const busca = semAcento(renovacaoBusca);
+  const todas = doAno.filter(function(r){
+    if(renovacaoMes !== 'Todos' && r.mes !== renovacaoMes) return false;
+    if(busca && semAcento(r.empresa).indexOf(busca) === -1) return false;
+    return true;
+  });
+  const recortado = renovacaoMes !== 'Todos' || !!busca;
 
   const renovadas   = todas.filter(function(r){ return r.renovado === true; });
   const perdidas    = todas.filter(function(r){ return r.renovado === false; });
@@ -7791,7 +7824,7 @@ function renderPainelRenovacoes(){
         ? `<input class="contrato-linha-input" id="renov-emp-${r.id}" type="text" placeholder="Nome da empresa"
                   value="${esc(r.empresa)}" oninput="onRenovacaoTexto(this,${r.id})" />`
         : esc(r.empresa || '—')}</td>
-      <td class="col-valor">${editavel
+      <td class="col-valor col-valor-larga">${editavel
         ? `<div class="currency-wrap"><span class="currency-prefix">R$</span><input class="num contrato-linha-input" type="number" step="0.01" placeholder="—"
                   value="${r.valor===null||r.valor===undefined?'':r.valor}" oninput="onRenovacaoValor(this,${r.id})" /></div>`
         : (r.valor === null || r.valor === undefined ? '—' : fmtMoney(r.valor))}</td>
@@ -7810,6 +7843,11 @@ function renderPainelRenovacoes(){
         <button class="action-btn danger" title="Excluir" onclick="excluirRenovacao(${r.id})">✕</button>
       </div></td>` : ''}
     </tr>`;
+  }).join('');
+
+  const pillsMes = ['Todos'].concat(MONTHS).map(function(m){
+    const n = m === 'Todos' ? doAno.length : doAno.filter(function(r){ return r.mes === m; }).length;
+    return `<button class="pill${renovacaoMes===m?' active':''}" onclick="setRenovacaoMes('${m}')">${m === 'Todos' ? 'Todos' : m}${n ? ' · '+n : ''}</button>`;
   }).join('');
 
   const filtros = [
@@ -7841,7 +7879,7 @@ function renderPainelRenovacoes(){
       <div class="kpi-card total">
         <div class="kpi-label">Taxa de renovação</div>
         <div class="kpi-value">${taxa === null ? '—' : taxa.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) + '%'}</div>
-        <div class="kpi-sub" id="renov-kpi-total" data-sufixo=" no ano">${fmtMoney(somaValor(todas))} no ano</div>
+        <div class="kpi-sub" id="renov-kpi-total" data-sufixo=" ${esc(rotuloRenovacao())}">${fmtMoney(somaValor(todas))} ${esc(rotuloRenovacao())}</div>
       </div>
     </div>`;
 
@@ -7868,7 +7906,7 @@ function renderPainelRenovacoes(){
         <thead><tr>
           <th class="col-mes">Mês</th>
           <th class="col-nome">Empresa</th>
-          <th class="num col-valor" title="Valor do contrato">Valor</th>
+          <th class="num col-valor col-valor-larga" title="Valor do contrato">Valor</th>
           <th class="col-resp">Responsável</th>
           <th class="col-rent">Situação</th>
           ${editavel ? '<th></th>' : ''}
@@ -7877,7 +7915,7 @@ function renderPainelRenovacoes(){
       </table>
     </div>`
     : `<div class="meta-empty" style="padding:22px 16px;">${
-         todas.length ? 'Nenhuma empresa nesse filtro.' : 'Nenhuma empresa em renovação lançada em ' + yearFilter + '.'
+         doAno.length ? 'Nenhuma empresa nesse filtro.' : 'Nenhuma empresa em renovação lançada em ' + yearFilter + '.'
        }</div>`}
     <div class="totais-nota">
       Cada linha é uma empresa que está renovando o sistema. A situação começa <b>em aberto</b> e recebe
@@ -7890,7 +7928,7 @@ function renderPainelRenovacoes(){
     </div>` : ''}
   `, {
     flush: true,
-    meta: `<b>${todas.length}</b> empresa${todas.length===1?'':'s'} em ${yearFilter}`,
+    meta: `<b>${todas.length}</b> empresa${todas.length===1?'':'s'} ${esc(rotuloRenovacao())}${recortado ? ` <span class="col-apoio">de ${doAno.length} no ano</span>` : ''}`,
     actions: editavel ? `<button class="btn-add" onclick="abrirImportarRenovacoes()">📄 Importar planilha</button>` : '',
   });
 
@@ -7909,7 +7947,7 @@ function renderPainelRenovacoes(){
         <tbody>${porPessoa}</tbody>
       </table>
     </div>
-  `, { flush: true, meta: `todo o ano de ${yearFilter}` }) : '';
+  `, { flush: true, meta: esc(rotuloRenovacao()) }) : '';
 
   return `
     <div class="painel-topo-sub">
@@ -7918,7 +7956,14 @@ function renderPainelRenovacoes(){
     ${editor}
     ${cartoes}
     <div class="filters-row">
+      <div class="months">${pillsMes}</div>
+    </div>
+    <div class="filters-row">
       <div class="months seller-filter">${filtros}</div>
+    </div>
+    <div class="search-row">
+      <input id="busca-renovacao" class="search-input" type="text" placeholder="🔍 Buscar empresa..."
+             value="${esc(renovacaoBusca)}" oninput="onRenovacaoBusca(this)" />
     </div>
     ${tabela}
     ${resumo}

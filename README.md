@@ -353,6 +353,8 @@ O cadastro é o mínimo que responde à pergunta do mês:
 | Responsável | quem cuidou (só quem está na lista de renovações aparece aqui) |
 | Situação | **Renovado** ou **Não renovado** — um clique escolhe, clicar de novo volta para *em aberto* |
 
+A carteira fica grande depressa — são quase 200 empresas por ano —, então a aba tem **filtro por mês** (com a contagem em cada pílula), **filtro por situação** e uma **busca por nome**, que ignora acentos e maiúsculas. Os três se combinam, e os cartões do topo acompanham o recorte: filtrando Março, os números são os de Março, e o cabeçalho do quadro diz *"17 empresas em Março de 2026 de 199 no ano"*.
+
 A situação começa **em aberto** de propósito: a empresa entra na lista quando a renovação começa a ser tratada, e o desfecho vem depois. Os cartões do topo contam renovadas, não renovadas, em aberto e a **taxa de renovação** — que só considera as decididas, então as em aberto não puxam o número para baixo —, cada um com a soma dos valores: quanto foi renovado, quanto se perdeu e quanto ainda está em jogo. As pílulas abaixo filtram a lista por situação, e o quadro **"Por responsável"** fecha o ano de cada uma, com a taxa individual.
 
 > **Renovação não entra no ranking de vendas nem nos totais de faturamento.** É processo, não venda nova — misturar inflaria o desempenho de quem faz renovação e distorceria a comparação com quem prospecta e vende. As renovações do mês saem em seção própria do relatório em PDF.
