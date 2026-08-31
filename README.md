@@ -45,6 +45,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_renovacoes_venda_migration.sql → migração 16: liga a renovação à venda que ela gera no Sistema
 ├── supabase_venda_renovacao_migration.sql → migração 17: venda de renovação fica fora do ranking
 ├── supabase_vendas_safe_renovacao_migration.sql → migração 18: a view vendas_safe devolve a coluna renovacao
+├── supabase_venda_novo_contrato_migration.sql → migração 19: tag de contrato novo na aba Sistema
 └── .gitignore
 ```
 
@@ -137,6 +138,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 17. Rode `supabase_renovacoes_venda_migration.sql` — liga a renovação à venda lançada na aba Sistema.
 18. Rode `supabase_venda_renovacao_migration.sql` — tira as vendas de renovação do ranking de desempenho.
 19. Rode `supabase_vendas_safe_renovacao_migration.sql` — faz a view `vendas_safe` devolver a coluna `renovacao` (sem isso o selo some ao recarregar).
+20. Rode `supabase_venda_novo_contrato_migration.sql` — cria a tag de contrato novo.
 11. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
 12. Só depois publique esta versão atualizada do `index.html`.
 
@@ -386,6 +388,20 @@ As vendas nascem com a observação **"Renovação"**, para se distinguirem na a
 A venda que nasce de uma renovação vale **comissão como qualquer outra** e entra no Resumo Geral, no faturamento do mês e no fechamento para a contabilidade. O que ela **não** faz é contar no **ranking de desempenho**: renovar um contrato que já era da casa não é a mesma coisa que trazer cliente novo, e a carteira de renovação é grande o bastante para decidir sozinha quem é campeã do ano.
 
 Na aba Sistema, essas vendas aparecem com o selo verde **"♻️ Renovação"** ao lado do cliente, e o botão **♻️** nas ações da linha marca ou desmarca qualquer venda — inclusive uma que você tenha digitado à mão e queira tirar do ranking.
+
+#### Contrato novo x renovação
+
+A aba Sistema tem duas marcas, uma o oposto da outra:
+
+| Marca | O que significa | Conta no ranking? |
+|---|---|---|
+| **✨ Contrato novo** | conta nova que entrou no mês | **sim**, como qualquer venda |
+| **♻️ Renovação** | contrato que já era da casa e foi renovado | **não** |
+| *(sem marca)* | o resto — o contrato mensal que se repete, por exemplo | sim |
+
+Os botões **✨** e **♻️** nas ações da linha marcam e desmarcam. **Uma exclui a outra**: marcar como contrato novo desmarca a renovação, e vice-versa — nenhuma venda pode ser as duas coisas.
+
+Acima da tabela, uma linha de filtros mostra a contagem no recorte que está na tela — *"Todas · 9 · ✨ Contratos novos · 4 · ♻️ Renovações · 3 · Sem marcação · 2"* — e clicar em qualquer uma filtra a lista. Combina com o filtro de mês e o de vendedora, então dá para responder na hora quantas contas novas cada pessoa trouxe num mês.
 
 > **Atenção para quem for mexer no banco:** o aplicativo não lê a tabela `vendas`, e sim a view `vendas_safe`, que faz o mascaramento por coluna. Toda coluna nova precisa entrar também na view — senão ela é gravada e nunca mais lida. Foi o que aconteceu com `renovacao` na primeira versão: o selo aparecia e sumia no recarregamento (corrigido na migração 18).
 
