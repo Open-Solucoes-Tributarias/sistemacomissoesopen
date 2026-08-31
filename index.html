@@ -4703,7 +4703,7 @@ function renderParceirosSection(){
 
     ${sectionsToolbarHtml()}
 
-    ${panel('resumo-grafico', `Evolução mensal — ${yearFilter}`, renderMonthlyChart(), {meta: 'todas as origens somadas'})}
+    ${panel('resumo-grafico', `Evolução mensal das comissões — ${yearFilter}`, renderMonthlyChart() + `<div class="painel-nota">São as <b>comissões</b> de todas as origens somadas — Sistema, Consultoria, Órgãos Públicos, Cursos e bônus —, não o faturamento dos contratos. Salário fixo fica de fora.</div>`, {meta: 'comissões, todas as origens'})}
 
     ${metasPanelHtml}
 
