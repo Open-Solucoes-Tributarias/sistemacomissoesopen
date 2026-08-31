@@ -6638,44 +6638,100 @@ function renovacoesProntasParaSistema(mes){
    anterior: a situação volta para "em aberto" e o vínculo com a venda é
    desfeito — senão o ano novo já nasceria com renovações dadas como
    resolvidas e lançadas. */
-function repetirCarteiraNoProximoAno(){
-  if(!isAdmin) return;
-  const destino = yearFilter + 1;
-  const origem = renovacoes.filter(function(r){ return r.ano === yearFilter && r.empresa && r.empresa.trim(); });
-  if(!origem.length){ showAlert('Não há empresas em renovação em ' + yearFilter + ' para repetir.'); return; }
+/* ---------- Montar a carteira do ano seguinte ----------
+   O ciclo se fecha aqui: o que foi CONTRATO NOVO num ano vence no ano
+   seguinte e vira renovação. Se depender de alguém lembrar disso em
+   janeiro, um dia não vai lembrar — então a carteira do ano que vem é
+   montada de duas fontes, e o sistema avisa sozinho quando falta algo.
 
+   Fonte 1: as renovações do ano, que vencem de novo doze meses depois.
+   Fonte 2: as vendas marcadas com "✨ Contrato novo" no ano — a conta que
+            entrou agora é a renovação do ano que vem.
+
+   Nos dois casos a cópia zera o que é do ano anterior: situação volta para
+   "em aberto" e o vínculo com a venda é desfeito. */
+
+function contratosNovosParaCarteira(anoOrigem, anoDestino){
   const jaLa = {};
   renovacoes.forEach(function(r){
-    if(r.ano === destino) jaLa[semAcento(r.empresa) + '|' + r.mes] = true;
+    if(r.ano === anoDestino) jaLa[semAcento(r.empresa) + '|' + r.mes] = true;
   });
-  const novas = origem.filter(function(r){ return !jaLa[semAcento(r.empresa) + '|' + r.mes]; });
-  if(!novas.length){ showAlert('Todas as empresas de ' + yearFilter + ' já estão em ' + destino + '.'); return; }
+  return rows.filter(function(v){
+    if((v.ano||2026) !== anoOrigem) return false;
+    if(!v.novoContrato) return false;
+    if(!v.cliente || !v.cliente.trim()) return false;
+    return !jaLa[semAcento(v.cliente) + '|' + v.mes];
+  });
+}
 
-  const total = novas.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0);
+function renovacoesParaCarteira(anoOrigem, anoDestino){
+  const jaLa = {};
+  renovacoes.forEach(function(r){
+    if(r.ano === anoDestino) jaLa[semAcento(r.empresa) + '|' + r.mes] = true;
+  });
+  return renovacoes.filter(function(r){
+    return r.ano === anoOrigem && r.empresa && r.empresa.trim()
+        && !jaLa[semAcento(r.empresa) + '|' + r.mes];
+  });
+}
+
+/* Quem cuida da renovação é a dupla da aba; o vendedor original só é
+   aproveitado se estiver nessa lista. Senão fica em branco, para ela
+   escolher — melhor um campo vazio do que um responsável errado. */
+function responsavelDeRenovacao(nome){
+  const pessoas = pessoasDeRenovacao();
+  return pessoas.some(function(v){ return name_matches_client(v, nome); }) ? nome : '';
+}
+
+function montarCarteira(anoOrigem, anoDestino){
+  if(!isAdmin) return;
+  const daCarteira = renovacoesParaCarteira(anoOrigem, anoDestino);
+  const dosNovos   = contratosNovosParaCarteira(anoOrigem, anoDestino);
+  if(!daCarteira.length && !dosNovos.length){
+    showAlert('A carteira de ' + anoDestino + ' já está completa: tudo de ' + anoOrigem + ' já foi trazido.');
+    return;
+  }
+  const total = daCarteira.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0)
+              + dosNovos.reduce(function(a,v){ return a + (Number(v.valor)||0); }, 0);
+  const partes = [];
+  if(daCarteira.length) partes.push('<b>' + daCarteira.length + '</b> ' + (daCarteira.length===1?'renovação':'renovações') + ' de ' + anoOrigem);
+  if(dosNovos.length)   partes.push('<b>' + dosNovos.length + '</b> ' + (dosNovos.length===1?'contrato novo':'contratos novos') + ' de ' + anoOrigem + ' (que vencem em ' + anoDestino + ')');
+
   showConfirm(
-    'Repetir ' + novas.length + (novas.length === 1 ? ' empresa' : ' empresas') + ' de ' + yearFilter + ' em ' + destino +
-    ' (' + fmtMoney(total) + '), no mesmo mês e com o mesmo responsável? Todas entram como "em aberto" — a situação e o lançamento no Sistema recomeçam do zero. ' +
-    (origem.length - novas.length ? (origem.length - novas.length) + ' já estão lá e serão puladas.' : ''),
+    'Montar a carteira de ' + anoDestino + ' com ' + partes.join(' e ').replace(/<\/?b>/g,'') +
+    ', somando ' + fmtMoney(total) + '? Todas entram no mesmo mês, como "em aberto" — a situação e o lançamento no Sistema recomeçam do zero.',
     function(){
-      novas.forEach(function(r){
+      daCarteira.forEach(function(r){
         renovacoes.push({
-          id: renovacoesNextId++, ano: destino, mes: r.mes,
+          id: renovacoesNextId++, ano: anoDestino, mes: r.mes,
           pessoa: r.pessoa || '', empresa: r.empresa,
           valor: (r.valor === null || r.valor === undefined) ? null : Number(r.valor),
           renovado: null, vendaId: null,
         });
       });
-      if(destino !== 2026 && extraYears.indexOf(destino) === -1){
-        extraYears.push(destino);
+      dosNovos.forEach(function(v){
+        renovacoes.push({
+          id: renovacoesNextId++, ano: anoDestino, mes: v.mes,
+          pessoa: responsavelDeRenovacao(v.vendedorResponsavel || ''), empresa: v.cliente.trim(),
+          valor: (v.valor === null || v.valor === undefined) ? null : Number(v.valor),
+          renovado: null, vendaId: null,
+        });
+      });
+      if(anoDestino !== 2026 && extraYears.indexOf(anoDestino) === -1){
+        extraYears.push(anoDestino);
         persistExtraYears();
       }
       persistRenovacoes();
       render();
-      showAlert(novas.length + (novas.length === 1 ? ' empresa copiada' : ' empresas copiadas') + ' para ' + destino + '. Use o filtro de ano, no topo da página, para abrir ' + destino + '.');
+      showAlert((daCarteira.length + dosNovos.length) + ' empresas na carteira de ' + anoDestino +
+                '. Use o filtro de ano, no topo da página, para abrir ' + anoDestino + '.');
     },
-    'Repetir em ' + destino
+    'Montar ' + anoDestino
   );
 }
+
+function repetirCarteiraNoProximoAno(){ montarCarteira(yearFilter, yearFilter + 1); }
+function trazerAnoAnterior(){ montarCarteira(yearFilter - 1, yearFilter); }
 
 function abrirLancarNoSistema(){
   if(!isAdmin) return;
@@ -8221,7 +8277,7 @@ function renderPainelRenovacoes(){
   `, {
     flush: true,
     meta: `<b>${todas.length}</b> empresa${todas.length===1?'':'s'} ${esc(rotuloRenovacao())}${recortado ? ` <span class="col-apoio">de ${doAno.length} no ano</span>` : ''}`,
-    actions: editavel ? `${prontas ? `<button class="eye-toggle" onclick="abrirLancarNoSistema()">📤 Lançar ${prontas} no Sistema</button>` : ''}${doAno.length ? `<button class="eye-toggle" onclick="repetirCarteiraNoProximoAno()">📅 Repetir em ${yearFilter+1}</button>` : ''}<button class="btn-add" onclick="abrirImportarRenovacoes()">📄 Importar planilha</button>` : '',
+    actions: editavel ? `${prontas ? `<button class="eye-toggle" onclick="abrirLancarNoSistema()">📤 Lançar ${prontas} no Sistema</button>` : ''}${(doAno.length || contratosNovosParaCarteira(yearFilter, yearFilter+1).length) ? `<button class="eye-toggle" title="Traz as renovações do ano e os contratos novos marcados com ✨, que vencem no ano seguinte" onclick="repetirCarteiraNoProximoAno()">📅 Montar carteira de ${yearFilter+1}</button>` : ''}<button class="btn-add" onclick="abrirImportarRenovacoes()">📄 Importar planilha</button>` : '',
   });
 
   const resumo = pessoas.length ? panel('painel-renov-pessoas', 'Por responsável', `
@@ -8241,11 +8297,27 @@ function renderPainelRenovacoes(){
     </div>
   `, { flush: true, meta: esc(rotuloRenovacao()) }) : '';
 
+  /* O lembrete que ela pediu: ao abrir um ano, o sistema mostra sozinho o
+     que ficou para trás — as renovações e os contratos novos do ano
+     anterior que ainda não entraram nesta carteira. Não depende de ninguém
+     lembrar de apertar botão em janeiro. */
+  const faltamRenov = editavel ? renovacoesParaCarteira(yearFilter - 1, yearFilter).length : 0;
+  const faltamNovos = editavel ? contratosNovosParaCarteira(yearFilter - 1, yearFilter).length : 0;
+  const lembrete = (faltamRenov + faltamNovos) ? `
+    <div class="storage-warning aviso-resp">
+      🔔 Faltam na carteira de <b>${yearFilter}</b>:
+      ${[faltamNovos ? `<b>${faltamNovos}</b> contrato${faltamNovos===1?'':'s'} novo${faltamNovos===1?'':'s'} de ${yearFilter-1}` : '',
+         faltamRenov ? `<b>${faltamRenov}</b> renovaç${faltamRenov===1?'ão':'ões'} de ${yearFilter-1}` : ''].filter(Boolean).join(' e ')}.
+      O que foi contrato novo num ano vence no seguinte — é renovação de ${yearFilter}.
+      <button class="modal-btn modal-btn-ghost" style="margin-left:10px;padding:6px 12px;" onclick="trazerAnoAnterior()">Trazer para ${yearFilter}</button>
+    </div>` : '';
+
   return `
     <div class="painel-topo-sub">
       ${editavel ? `<button class="eye-toggle" onclick="setRenovacaoEditandoPessoas(${renovacaoEditandoPessoas?'false':'true'})">${renovacaoEditandoPessoas?'✕ Fechar':'👤 Quem cuida das renovações'}</button>` : ''}
     </div>
     ${editor}
+    ${lembrete}
     ${cartoes}
     <div class="filters-row">
       <div class="months">${pillsMes}</div>

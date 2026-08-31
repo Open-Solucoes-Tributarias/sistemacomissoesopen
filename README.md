@@ -409,11 +409,24 @@ Acima da tabela, uma linha de filtros mostra a contagem no recorte que está na 
 
 Enquanto não são lançadas, as renovações não entram em lugar nenhum — a lista sozinha é acompanhamento de carteira. As renovações do mês também saem em seção própria do relatório em PDF.
 
-### Repetir a carteira no ano seguinte
+### Montar a carteira do ano seguinte
 
-A mesma carteira vence de novo doze meses depois. O botão **"📅 Repetir em 2027"** copia todas as empresas do ano aberto para o ano seguinte, mantendo **empresa, valor, mês e responsável** — e zerando o que é do ano anterior: a situação volta para **em aberto** e o vínculo com a venda é desfeito, senão o ano novo nasceria com renovações já dadas como resolvidas e lançadas.
+Aqui o ciclo se fecha: **o que é contrato novo num ano vence no seguinte e vira renovação**. O botão **"📅 Montar carteira de 2027"** monta o ano que vem a partir de duas fontes:
 
-Empresas que já existam no ano de destino (mesmo nome e mês) são puladas, então repetir duas vezes não duplica nada. Se o ano ainda não existir no sistema, ele é criado junto.
+1. as **renovações do ano**, que vencem de novo doze meses depois;
+2. as vendas marcadas com **✨ Contrato novo** no ano — a conta que entrou agora é a renovação do ano que vem.
+
+Nos dois casos a cópia mantém **empresa, valor e mês**, e zera o que é do ano anterior: a situação volta para **em aberto** e o vínculo com a venda é desfeito, senão o ano novo nasceria com renovações já dadas como resolvidas e lançadas. Empresas que já existam no ano de destino (mesmo nome e mês) são puladas, então clicar duas vezes não duplica nada, e o ano é criado no filtro se ainda não existir.
+
+> **O responsável do contrato novo nem sempre é aproveitado.** Quem cuida das renovações é a dupla da aba; se quem vendeu não estiver nessa lista, o campo fica em branco para você escolher. Melhor um campo vazio do que um responsável errado na folha.
+
+### O lembrete de virada de ano
+
+Depender de alguém lembrar disso em janeiro é depender de esquecer. Por isso, **ao abrir a aba num ano, o sistema mostra sozinho o que ficou para trás**:
+
+> 🔔 Faltam na carteira de **2027**: **12** contratos novos de 2026 e **187** renovações de 2026. O que foi contrato novo num ano vence no seguinte — é renovação de 2027. **[Trazer para 2027]**
+
+O aviso só aparece quando há algo faltando, e some assim que a carteira fica completa. Não é preciso lembrar de nada: basta abrir o ano.
 
 ### Importar a planilha de renovações
 
