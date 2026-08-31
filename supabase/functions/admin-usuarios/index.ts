@@ -84,6 +84,7 @@ Deno.serve(async (req) => {
       criadoEm: u.created_at,
       ultimoAcesso: u.last_sign_in_at,
       admin: !!porId[u.id]?.full_access,
+      financeiro: !!porId[u.id]?.financeiro,
       pessoa: porId[u.id]?.person_name || null,
       semAcesso: !porId[u.id],
     })).sort((a: any, b: any) => String(a.email).localeCompare(String(b.email), 'pt-BR'));
@@ -100,7 +101,8 @@ Deno.serve(async (req) => {
 
     if (!emailValido(email)) return erro('E-mail inválido.');
     if (senha.length < 8) return erro('A senha provisória precisa de pelo menos 8 caracteres.');
-    if (!ehAdmin && !pessoa) {
+    const ehFinanceiro = !ehAdmin && !!corpo.financeiro;
+    if (!ehAdmin && !ehFinanceiro && !pessoa) {
       return erro('Para conta restrita, informe o nome como aparece nos lançamentos.');
     }
 
@@ -118,7 +120,10 @@ Deno.serve(async (req) => {
     const { error: erroAcesso } = await admin.from('app_user_access').insert({
       auth_user_id: criado.user.id,
       full_access: ehAdmin,
-      person_name: ehAdmin ? null : pessoa,
+      financeiro: ehFinanceiro,
+      // conta financeira não é de ninguém em particular: vê as notas de
+      // todo mundo, então não leva nome de pessoa
+      person_name: (ehAdmin || ehFinanceiro) ? null : pessoa,
     });
     if (erroAcesso) {
       // não deixa conta órfã: se o acesso falhou, desfaz a conta
@@ -145,9 +150,10 @@ Deno.serve(async (req) => {
   if (acao === 'acesso') {
     const id = String(corpo.id || '');
     const ehAdmin = !!corpo.admin;
+    const ehFinanceiro = !ehAdmin && !!corpo.financeiro;
     const pessoa = String(corpo.pessoa || '').trim();
     if (!id) return erro('Usuário não informado.');
-    if (!ehAdmin && !pessoa) {
+    if (!ehAdmin && !ehFinanceiro && !pessoa) {
       return erro('Para conta restrita, informe o nome como aparece nos lançamentos.');
     }
 
@@ -168,7 +174,8 @@ Deno.serve(async (req) => {
     const { error } = await admin.from('app_user_access').upsert({
       auth_user_id: id,
       full_access: ehAdmin,
-      person_name: ehAdmin ? null : pessoa,
+      financeiro: ehFinanceiro,
+      person_name: (ehAdmin || ehFinanceiro) ? null : pessoa,
     }, { onConflict: 'auth_user_id' });
     if (error) return erro(error.message, 500);
     return responder({ ok: true });

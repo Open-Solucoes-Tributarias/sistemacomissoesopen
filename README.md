@@ -47,6 +47,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_vendas_safe_renovacao_migration.sql → migração 18: a view vendas_safe devolve a coluna renovacao
 ├── supabase_venda_novo_contrato_migration.sql → migração 19: tag de contrato novo na aba Sistema
 ├── supabase_venda_upgrade_migration.sql → migração 20: tag de upgrade na aba Sistema
+├── supabase_acesso_financeiro_migration.sql → migração 21: nível de acesso financeiro (vê o valor das notas, nenhuma comissão)
 └── .gitignore
 ```
 
@@ -56,8 +57,9 @@ O sistema exige login (e-mail e senha) antes de mostrar qualquer dado. Não exis
 
 - **URL do projeto Supabase**: `https://ogkrrlssdrtctdyyvkql.supabase.co`
 - **Chave pública (anon key)**: já está embutida no `index.html` (constante `SUPABASE_ANON_KEY`). Essa chave é **pública por padrão no Supabase** — sozinha, ela não abre porta nenhuma: quem decide o que pode ser lido/escrito são as políticas de RLS do banco.
-- **Modelo de acesso — duas categorias de conta**:
+- **Modelo de acesso — três categorias de conta**:
   - **Admin** (Soraya, Deborah, Open): vê e edita todos os dados do sistema, em todas as abas.
+  - **Financeiro**: vê o **valor de contrato de todas as notas** que entraram — Sistema, Renovações, Consultoria, Consultoria Órgãos Públicos e Cursos — e **nenhuma comissão de ninguém**: nem valor, nem percentual, nem bônus, nem meta, nem salário, nem a divisão dos cursos. Não leva nome de pessoa, porque a conta não é de ninguém em particular. Veja "Nível financeiro" abaixo.
   - **Restrita** (Gustavo, Rios, Luciana, Angela): só **visualiza**, em modo somente leitura, os lançamentos onde o nome da pessoa aparece como vendedor(a) ou colaborador(a) — nunca vê nem edita o que é dos colegas. Isso existe pra ninguém comparar comissão de ninguém.
 
   Um mesmo contrato pode ter até 3 vendedores + colaborador na mesma linha. Nesses contratos divididos, a pessoa vê o lançamento e a **própria** comissão, mas o nome e a porcentagem dos colegas vêm em branco — o corte é feito coluna a coluna, pelas views `_safe` do banco (veja `supabase_column_masking_migration.sql`).
@@ -84,7 +86,7 @@ As senhas não ficam aqui nem em lugar nenhum do código — só no Supabase, em
 Pelo próprio sistema: aba **Usuários e Acessos** (só aparece para admin).
 
 1. Preencha o **e-mail** e clique em **Gerar** para uma senha provisória forte — ela evita caracteres que se confundem ao ditar por telefone (0/O, 1/l/I).
-2. Marque **Administrador** se a pessoa deve ver e editar tudo. Se não marcar, informe o **nome como aparece nos lançamentos** (ex: `Rios`) — é por ele que o sistema decide o que ela enxerga.
+2. Escolha o **nível de acesso**: **Administrador** (vê e edita tudo), **Financeiro** (vê o valor das notas e nenhuma comissão) ou **Restrita**. Só a conta restrita pede o **nome como aparece nos lançamentos** (ex: `Rios`) — é por ele que o sistema decide o que ela enxerga.
 3. **Criar conta.** A senha aparece **uma única vez**, num quadro destacado: copie e repasse por um canal seguro. Depois disso nem o sistema consegue mostrá-la de novo, só definir outra.
 
 Na lista abaixo do formulário dá para **redefinir a senha** (🔑) e **mudar o nível de acesso** (✎) de qualquer conta, além de ver quem nunca entrou.
@@ -92,6 +94,31 @@ Na lista abaixo do formulário dá para **redefinir a senha** (🔑) e **mudar o
 > **Por que isso não roda no navegador.** Criar conta e trocar senha exigem a *chave de serviço* do Supabase, que passa por cima de todas as regras de acesso do banco. Se ela estivesse no `index.html`, qualquer pessoa abriria o código-fonte da página e a copiaria. Por isso essa parte vive numa **função no servidor** (`supabase/functions/admin-usuarios`): a chave fica só lá, o navegador manda apenas o token de quem está logado, e o servidor confere **de novo** se essa pessoa é admin antes de fazer qualquer coisa.
 
 Duas travas embutidas: se a conta for criada mas o registro de acesso falhar, a função **desfaz a conta** (nada de usuário órfão); e não deixa rebaixar a **última conta de administrador**, senão ninguém mais administraria o sistema.
+
+### Nível financeiro — vê o valor das notas, nenhuma comissão
+
+Existe quem precise conferir **faturamento** sem ter acesso a remuneração: alguém do financeiro que fecha as notas do mês e não pode saber quanto cada pessoa ganhou. É para isso que serve o nível **Financeiro** (migração 21).
+
+**O que essa conta vê:**
+
+- as abas **Resumo Geral**, **Sistema**, **Renovações**, **Consultoria**, **Consultoria Órgãos Públicos** e **Cursos**;
+- de cada lançamento: mês, cliente/empresa, produto ou contrato, **valor de contrato**, forma de pagamento, se está pago e o mês do pagamento;
+- o **nome de quem atendeu** a conta — saber de quem é a nota ajuda a resolvê-la, e nome não é remuneração;
+- no lugar do painel de parceiros, um **Resumo do financeiro**: faturamento por origem, faturamento mês a mês e a lista de todas as notas do ano.
+
+**O que essa conta não vê, em lugar nenhum:**
+
+- percentual de comissão, valor de comissão, comissão liberada;
+- bônus, metas, salário fixo, fechamento para a contabilidade;
+- divisão das vendas de cursos por vendedora;
+- as abas Bônus e Metas, Relatório de Desempenho, Equipe de Consultoria e Usuários e Acessos;
+- honorários de parceiros.
+
+**Por que dá para confiar nisso.** O corte não é feito na tela: é feito no banco. As views `_safe` devolvem `null` no lugar dos percentuais para essa conta, e as tabelas de comissão (`vendas_comissoes`, `bonus`, `metas`, `curso_vendas`) não têm nenhuma política de leitura que aceite o nível financeiro — a resposta vem vazia. Esconder só no navegador seria fingimento: o dado viajaria junto na resposta da API e bastaria abrir o console para lê-lo. Aqui ele não sai do banco.
+
+Isso foi conferido de verdade, simulando a sessão dessa conta direto no Postgres: 205 notas de Sistema, 175 lançamentos das outras abas e 419 renovações visíveis, com **zero** comissões, bônus, metas, percentuais e divisões de curso.
+
+**Como criar:** aba **Usuários e Acessos** → escolha **Financeiro** no nível de acesso. Essa conta não pede nome nos lançamentos, porque não é de ninguém em particular.
 
 ### Criando contas pelo painel do Supabase (alternativa)
 
@@ -104,6 +131,10 @@ Duas travas embutidas: se a conta for criada mas o registro de acesso falhar, a 
 -- Admin: vê e edita tudo
 insert into app_user_access (auth_user_id, full_access, person_name)
 select id, true, null from auth.users where email = 'admin@empresa.com.br';
+
+-- Financeiro: vê o valor de todas as notas e nenhuma comissão (sem nome)
+insert into app_user_access (auth_user_id, full_access, financeiro, person_name)
+select id, false, true, null from auth.users where email = 'financeiro@empresa.com.br';
 
 -- Restrita: só o que tiver o nome dela como vendedor/colaborador nos lançamentos
 insert into app_user_access (auth_user_id, full_access, person_name)
@@ -167,7 +198,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `entity_vendors` | Vendedores(as) por aba (Consultoria / Órgãos Públicos / Cursos), quem aparece no Relatório de Desempenho (`entidade='painel'`), quem é acompanhado por contratos/reuniões (`entidade='painel_contratos'`) e quem fica de fora do fechamento (`entidade='fechamento_fora'`) |
 | `closed_months` | Meses fechados para edição |
 | `extra_years` | Anos adicionados manualmente |
-| `app_user_access` | Nível de acesso de cada conta de login (admin ou restrita + nome pra filtrar) |
+| `app_user_access` | Nível de acesso de cada conta de login (admin, financeiro ou restrita + nome pra filtrar) |
 
 Se precisar recriar o banco do zero em outro projeto Supabase, o script de criação das tabelas está em `supabase_schema.sql` (gerado junto com este projeto).
 
@@ -598,6 +629,7 @@ Dentro do próprio sistema, o botão **"⬇ Exportar dados"** (no topo da tela) 
 ## Segurança — revisão feita neste projeto
 
 - **Login obrigatório**: o acesso deixou de ser "quem tem o link, edita" — agora é preciso login (Supabase Auth) e o banco só aceita requisições autenticadas. Veja "Login e segurança" acima.
+- **Nível financeiro**: um terceiro nível de conta, para quem confere faturamento e não pode ver remuneração — enxerga o valor de todas as notas e nenhuma comissão, bônus, meta ou salário. Feito no banco (RLS + views `_safe`), não na tela. Veja "Nível financeiro" acima.
 - **Acesso por pessoa**: além de exigir login, o banco distingue admins (acesso total) de contas restritas (somente leitura, só dos próprios lançamentos) — a comparação de nomes é feita inteiramente no Postgres, então mesmo alguém manipulando as chamadas à API diretamente (sem passar pela tela) não consegue ver ou editar dado de outra pessoa.
 - **Linha de comissão vazia não conta como participação**: o app grava uma linha em `vendas_comissoes` para cada vendedora em cada venda, quase sempre com valor nulo. Enquanto a regra checava só "existe linha", bastava alguém estar cadastrada como vendedora para enxergar todas as vendas da aba Sistema. Corrigido: agora exige valor preenchido.
 - **Funções auxiliares fechadas para quem não fez login**: elas eram chamáveis pelo papel `anon` via `/rest/v1/rpc/`, e uma delas aceitava um nome qualquer — dava para perguntar "fulano participa do lançamento X?" sem ter conta. Acesso revogado e a função passou a responder só sobre quem está logado.

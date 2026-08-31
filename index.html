@@ -1057,6 +1057,9 @@
   }
   .usuario-tipo input{width:16px;height:16px;accent-color:var(--primary);cursor:pointer;margin-top:1px;flex:none;}
   .usuario-tipo b{color:var(--ink);}
+  .usuario-tipo.sel{border-color:var(--primary);background:var(--primary-soft);}
+  .usuario-niveis{display:grid;gap:8px;margin-bottom:12px;}
+  .usuario-niveis .usuario-tipo{margin-bottom:0;}
   .usuario-dica{
     font-size:12px;color:var(--ink-faint);font-weight:600;line-height:1.5;margin:-4px 0 14px;
   }
@@ -1065,6 +1068,7 @@
     background:var(--border-soft);color:var(--ink-soft);padding:3px 9px;border-radius:999px;white-space:nowrap;
   }
   .usuario-tag.admin{background:var(--primary-soft);color:var(--primary);}
+  .usuario-tag.fin{background:#E8F3EC;color:#166534;}
   .usuario-tag.alerta{background:#FFF8E8;color:#B45309;}
   .usuario-nunca{color:var(--ink-faint);font-style:italic;}
   .senha-nova{
@@ -1308,6 +1312,12 @@ const TABS = [
 
 // Como as abas aparecem agrupadas na barra lateral. Cada chave precisa
 // existir em TABS; o rótulo mostrado continua vindo de lá.
+/* A conta financeira só precisa das notas: as quatro abas de lançamento,
+   as renovações e o Resumo Geral (que, para ela, mostra faturamento sem
+   comissão). Bônus, metas, pagamentos de comissão, desempenho e usuários
+   ficam de fora. */
+const ABAS_FINANCEIRO = ['parceiros','vendas','renovacoes','consultoria','publicos','cursos'];
+
 const NAV_GROUPS = [
   {label:"Visão geral",  keys:["parceiros","pagamentos"]},
   {label:"Lançamentos",  keys:["vendas","renovacoes","consultoria","publicos","cursos"]},
@@ -1335,6 +1345,7 @@ function sidebarNavHtml(){
       const t = TABS.find(x => x.key === k);
       if(!t) return '';
       if(t.adminOnly && !isAdmin) return '';
+      if(isFinanceiro && ABAS_FINANCEIRO.indexOf(t.key) === -1) return '';
       const active = t.key === activeTab ? ' active' : '';
       return `<button class="nav-item${active}" onclick="setTab('${t.key}')">${NAV_ICONS[t.key] || ''}<span>${esc(t.label)}</span></button>`;
     }).join('');
@@ -1480,16 +1491,23 @@ let authNewPwdDraft = '';
 let authRecoveryToken = null;
 let initialDataLoaded = false;
 let isAdmin = false;
+/* Terceiro nível de acesso: o financeiro confere o faturamento — vê o
+   valor de todas as notas, de todas as abas — e não vê comissão de
+   ninguém. O corte de verdade é no banco (RLS + views _safe); aqui a tela
+   só deixa de desenhar o que não vem. */
+let isFinanceiro = false;
 let currentPersonName = null;
 async function loadCurrentUserAccess(){
   try{
-    const rows = await sbSelect('app_user_access', 'select=full_access,person_name');
+    const rows = await sbSelect('app_user_access', 'select=full_access,person_name,financeiro');
     const row = rows && rows[0];
     isAdmin = !!(row && row.full_access);
+    isFinanceiro = !isAdmin && !!(row && row.financeiro);
     currentPersonName = row ? row.person_name : null;
   } catch(e){
     console.error('Falha ao carregar permissões do usuário', e);
     isAdmin = false;
+    isFinanceiro = false;
     currentPersonName = null;
   }
 }
@@ -2637,18 +2655,17 @@ function renderModal(){
         <div class="modal-box">
           <div class="modal-msg">Acesso de ${esc(m.email)}</div>
           ${m.error ? `<div class="modal-error">${esc(m.error)}</div>` : ''}
-          <label class="usuario-tipo">
-            <input type="checkbox" ${m.admin?'checked':''} onchange="onAcessoFormChange(this,'admin')" />
-            <span><b>Administrador</b> — vê e edita tudo, e gerencia usuários</span>
-          </label>
-          ${!m.admin ? `
+          ${seletorNivelHtml(m.nivel, "onAcessoFormChange(this,'nivel')", 'editar')}
+          ${m.nivel === 'restrita' ? `
             <label class="meta-field">
               <span>Nome nos lançamentos</span>
               <input type="text" autocomplete="off" placeholder="Ex: Rios"
                      value="${esc(m.pessoa||'')}" oninput="onAcessoFormChange(this,'pessoa')" />
             </label>
             <div class="usuario-dica">É por esse nome que o sistema decide o que a pessoa enxerga.</div>
-          ` : `<div class="usuario-dica">Administrador vê tudo, não precisa de nome.</div>`}
+          ` : m.nivel === 'admin'
+            ? `<div class="usuario-dica">Administrador vê tudo, não precisa de nome.</div>`
+            : `<div class="usuario-dica">O financeiro vê o valor das notas de todo mundo e nenhuma comissão. Não precisa de nome.</div>`}
           <div class="modal-actions">
             <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
             <button class="modal-btn modal-btn-primary" onclick="salvarAcessoUsuario()">Salvar acesso</button>
@@ -5066,6 +5083,7 @@ function setNaturezaFilter(v){ naturezaFilter = v; render(); }
 function setSellerFilter(key){ sellerFilter = key; render(); }
 function setVendasOrdem(el){ vendasOrdem = el.value; render(); }
 function getVisibleSellers(){
+  if(isFinanceiro) return [];   // conta financeira não vê comissão de ninguém
   let list = sellerFilter === "Todas" ? SELLERS : SELLERS.filter(s => s.key === sellerFilter);
   if(!isAdmin && currentPersonName){
     list = list.filter(s => name_matches_client(s.label, currentPersonName));
@@ -5175,6 +5193,120 @@ function updateSummaries(){
   if(countEl){
     countEl.innerHTML = `<b>${visible.length}</b> venda${visible.length===1?"":"s"} ${filter!=="Todos" ? "em <b>"+esc(filter)+"</b>" : ""}`;
   }
+}
+
+/* Resumo do financeiro: faturamento das notas, e só isso. Em vez de tentar
+   podar o Resumo Geral (que é feito de comissão do começo ao fim), a conta
+   financeira recebe um quadro próprio — o que ela precisa, sem nada que
+   ela não pode ver. */
+function faturamentoDoMesPorOrigem(mes){
+  const noMes = function(r){ return (r.ano||2026) === yearFilter && (!mes || mes === 'Todos' || r.mes === mes); };
+  return {
+    sistema:     rows.filter(noMes).reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0),
+    consultoria: state.consultoria.rows.filter(noMes).reduce(function(a,r){ return a + (Number(r.valorContrato)||0); }, 0),
+    publicos:    state.publicos.rows.filter(noMes).reduce(function(a,r){ return a + (Number(r.valorContrato)||0); }, 0),
+    cursos:      state.cursos.rows.filter(noMes).reduce(function(a,r){ return a + (Number(r.valorContrato)||0); }, 0),
+  };
+}
+
+function notasDoAno(){
+  const out = [];
+  const noAno = function(r){ return (r.ano||2026) === yearFilter; };
+  rows.filter(noAno).forEach(function(r){
+    out.push({mes:r.mes, origem:'Sistema', nome:r.cliente || r.venda || '—', valor:Number(r.valor)||0,
+              pago:r.pago, mesPagamento:r.mesPagamento, forma:r.formaPagamento||''});
+  });
+  ENTITY_KEYS.forEach(function(key){
+    const campo = ENTITIES[key].fields[0].key;
+    state[key].rows.filter(noAno).forEach(function(r){
+      out.push({mes:r.mes, origem:ENTITIES[key].tabLabel, nome:r[campo] || '—', valor:Number(r.valorContrato)||0,
+                pago:r.pago, mesPagamento:r.mesPagamento, forma:r.formaPagamento||''});
+    });
+  });
+  return out.sort(function(a,b){
+    const d = MONTHS.indexOf(a.mes) - MONTHS.indexOf(b.mes);
+    return d !== 0 ? d : String(a.nome).localeCompare(String(b.nome), 'pt-BR');
+  });
+}
+
+function renderFinanceiroResumo(){
+  const porMes = MONTHS.map(function(m){
+    const f = faturamentoDoMesPorOrigem(m);
+    return {mes:m, f:f, total:f.sistema+f.consultoria+f.publicos+f.cursos};
+  });
+  const ano = porMes.reduce(function(a,x){
+    return {sistema:a.sistema+x.f.sistema, consultoria:a.consultoria+x.f.consultoria,
+            publicos:a.publicos+x.f.publicos, cursos:a.cursos+x.f.cursos, total:a.total+x.total};
+  }, {sistema:0,consultoria:0,publicos:0,cursos:0,total:0});
+
+  const notas = notasDoAno().filter(function(n){
+    return partnerMonthFilter === 'Todos' || n.mes === partnerMonthFilter;
+  });
+  const totalNotas = notas.reduce(function(a,n){ return a + n.valor; }, 0);
+
+  const pillsHtml = ['Todos', ...MONTHS].map(function(m){
+    return `<button class="pill${m===partnerMonthFilter?' active':''}" onclick="setPartnerMonthFilter('${m}')">${m}</button>`;
+  }).join('');
+
+  return `
+    <div class="kpis">
+      <div class="kpi-card" style="--kc:#1C6FBF"><div class="kpi-label"><span class="kpi-dot"></span>Sistema</div><div class="kpi-value">${fmtMoney(ano.sistema)}</div></div>
+      <div class="kpi-card" style="--kc:#0D9488"><div class="kpi-label"><span class="kpi-dot"></span>Consultoria</div><div class="kpi-value">${fmtMoney(ano.consultoria)}</div></div>
+      <div class="kpi-card" style="--kc:#8B5CF6"><div class="kpi-label"><span class="kpi-dot"></span>Órgãos Públicos</div><div class="kpi-value">${fmtMoney(ano.publicos)}</div></div>
+      <div class="kpi-card" style="--kc:#F59E0B"><div class="kpi-label"><span class="kpi-dot"></span>Cursos</div><div class="kpi-value">${fmtMoney(ano.cursos)}</div></div>
+      <div class="kpi-card total"><div class="kpi-label">Total de ${yearFilter}</div><div class="kpi-value">${fmtMoney(ano.total)}</div></div>
+    </div>
+
+    ${panel('fin-meses', 'Faturamento por mês', `
+      <div class="table-scroll">
+        <table class="table-plain">
+          <thead><tr><th>Mês</th><th class="num">Sistema</th><th class="num">Consultoria</th><th class="num">Órgãos Públicos</th><th class="num">Cursos</th><th class="num">Total</th></tr></thead>
+          <tbody>${porMes.map(function(x){
+            return `<tr><td>${esc(x.mes)}</td>
+              <td class="num">${fmtMoney(x.f.sistema)}</td>
+              <td class="num">${fmtMoney(x.f.consultoria)}</td>
+              <td class="num">${fmtMoney(x.f.publicos)}</td>
+              <td class="num">${fmtMoney(x.f.cursos)}</td>
+              <td class="num" style="font-weight:800;">${fmtMoney(x.total)}</td></tr>`;
+          }).join('')}</tbody>
+          <tfoot><tr>
+            <td>Total do ano</td>
+            <td class="num">${fmtMoney(ano.sistema)}</td>
+            <td class="num">${fmtMoney(ano.consultoria)}</td>
+            <td class="num">${fmtMoney(ano.publicos)}</td>
+            <td class="num">${fmtMoney(ano.cursos)}</td>
+            <td class="num">${fmtMoney(ano.total)}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+    `, {flush:true, meta:`valor dos contratos de ${yearFilter}`})}
+
+    <div class="filters-row"><div class="months">${pillsHtml}</div></div>
+
+    ${panel('fin-notas', 'Notas lançadas', `
+      <div class="table-scroll">
+        <table class="table-plain">
+          <thead><tr><th class="col-mes">Mês</th><th>Origem</th><th class="col-nome">Cliente / Empresa / Órgão / Curso</th><th>Forma de pagamento</th><th>Pagamento</th><th class="num col-valor-larga">Valor</th></tr></thead>
+          <tbody>${notas.length ? notas.map(function(n){
+            return `<tr>
+              <td class="col-mes">${esc(monthShort(n.mes))}</td>
+              <td>${esc(n.origem)}</td>
+              <td class="col-nome">${esc(n.nome)}</td>
+              <td>${esc(n.forma || '—')}</td>
+              <td>${n.pago ? 'Pago' + (n.mesPagamento ? ' · ' + esc(monthShort(n.mesPagamento)) : '') : 'Pendente'}</td>
+              <td class="num col-valor-larga">${fmtMoney(n.valor)}</td>
+            </tr>`;
+          }).join('') : `<tr class="empty-row"><td colspan="6"><span class="empty-icon">◌</span>Nenhuma nota neste período.</td></tr>`}</tbody>
+          ${notas.length ? `<tfoot><tr><td>Total</td><td></td><td></td><td></td><td></td><td class="num">${fmtMoney(totalNotas)}</td></tr></tfoot>` : ''}
+        </table>
+      </div>
+    `, {flush:true, meta:`<b>${notas.length}</b> nota${notas.length===1?'':'s'} ${partnerMonthFilter==='Todos' ? 'no ano de '+yearFilter : 'em '+esc(partnerMonthFilter)}`})}
+
+    <div class="totais-nota">
+      Este acesso mostra o <b>valor das notas</b> de todas as abas, para conferência de faturamento.
+      Comissões, bônus e salários não aparecem aqui e não são enviados ao seu navegador — o corte é feito no banco de dados.
+    </div>
+  `;
 }
 
 function renderVendasSection(){
@@ -5906,7 +6038,7 @@ function renderEntitySection(key){
     : visible.map(row => {
         let cells = `<td class="col-mes"><select data-entity="${key}" data-id="${row.id}" onchange="onEntityMonthSelect(this)" title="${esc(row.mes)}">${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>${isEntityRowPending(row) ? '<span class="pending-badge" title="Lançamento incompleto: falta valor ou percentual">⚠️</span>' : ''}${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}${isEntityRowDuplicate(key,row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo nome neste mês — confira se não é duplicado">🔁 Duplicado</span>` : ''}</td>`;
         cfg.fields.forEach((f, fi) => {
-          if(fi === 1 && cfg.hasVendasPorVendedor){
+          if(fi === 1 && cfg.hasVendasPorVendedor && !isFinanceiro){
             const d = resumoDivisao(row);
             if(!isAdmin){
               // A vendedora vê só a própria participação — sem o botão de
@@ -5949,6 +6081,7 @@ function renderEntitySection(key){
             cells += `<td><select data-entity="${key}" data-id="${row.id}" data-field="${f.key}" onchange="onEntitySelectField(this)">${f.options.map(o => `<option value="${o}" ${row[f.key]===o?'selected':''}>${o}</option>`).join('')}</select></td>`;
           }
         });
+        if(!isFinanceiro){
         cells += `<td class="col-pct">
           <div class="pct-wrap"><input class="num" type="number" step="0.1" min="0" placeholder="0" value="${row.comissaoPercent===null||row.comissaoPercent===undefined?'':row.comissaoPercent}" data-entity="${key}" data-id="${row.id}" data-field="comissaoPercent" oninput="onEntityNumInput(this)" /><span class="pct-suffix">%</span></div>
           <div class="calc-value" id="calc1-${key}-${row.id}">${fmtMoney(entityRowCommission(row,1))}</div>
@@ -5982,6 +6115,7 @@ function renderEntitySection(key){
           } else {
             cells += `<td class="col-pct"><span class="pct-disabled">—</span></td><td><span class="pct-disabled">—</span></td>`;
           }
+        }
         }
         cells += `<td class="del-cell">
           <div class="row-actions">
@@ -6029,14 +6163,15 @@ function renderEntitySection(key){
           <thead>
             <tr>
               <th class="col-mes">Mês</th>
-              ${cfg.fields.map((f,fi) => `<th${f.key==='valorContrato'?' class="num col-valor" title="Valor do Contrato"':(f.key==='participacao'?' class="num col-pct"':(f.type==='number'?' class="num"':(fi===0?' class="col-nome"':'')))}>${f.key==='valorContrato'?'Valor':f.label}</th>${fi===0&&cfg.hasVendasPorVendedor?('<th style="width:150px">'+(isAdmin?'Vendas por vendedora':'Sua venda')+'</th>'):''}${f.key==='formaPagamento'&&cfg.hasPagamento?'<th style="width:110px">Pagamento</th>':''}`).join('')}
+              ${cfg.fields.map((f,fi) => `<th${f.key==='valorContrato'?' class="num col-valor" title="Valor do Contrato"':(f.key==='participacao'?' class="num col-pct"':(f.type==='number'?' class="num"':(fi===0?' class="col-nome"':'')))}>${f.key==='valorContrato'?'Valor':f.label}</th>${fi===0&&cfg.hasVendasPorVendedor&&!isFinanceiro?('<th style="width:150px">'+(isAdmin?'Vendas por vendedora':'Sua venda')+'</th>'):''}${f.key==='formaPagamento'&&cfg.hasPagamento?'<th style="width:110px">Pagamento</th>':''}`).join('')}
+              ${isFinanceiro ? '' : `
               <th class="num">% Comissão</th>
               <th>Vendedor</th>
               <th class="num">% Comissão V2</th>
               <th>Vendedor 2</th>
               <th class="num">% Comissão V3</th>
               <th>Vendedor 3</th>
-              ${Array.from({length:maxExtra}).map((_,i) => `<th class="num">% Comissão V${4+i}</th><th>Vendedor ${4+i}</th>`).join('')}
+              ${Array.from({length:maxExtra}).map((_,i) => `<th class="num">% Comissão V${4+i}</th><th>Vendedor ${4+i}</th>`).join('')}`}
               <th></th>
             </tr>
           </thead>
@@ -8601,8 +8736,30 @@ function renderPainelDashboard(vends){
 let usuariosLista = null;
 let usuariosCarregando = false;
 let usuariosErro = '';
-let usuarioForm = { email:'', senha:'', admin:false, pessoa:'' };
+let usuarioForm = { email:'', senha:'', nivel:'restrita', pessoa:'' };
 let usuarioCriado = null;   // {email, senha} — pra mostrar a senha uma vez
+
+/* Os três níveis de acesso, num lugar só — o cadastro e a janela de
+   "mudar acesso" desenham o mesmo seletor, então a explicação de cada
+   nível nunca fica diferente entre as duas telas.
+     admin      → vê e edita tudo, e gerencia contas;
+     financeiro → vê o valor das notas de todas as origens, e nenhuma
+                  comissão de ninguém (nem a própria);
+     restrita   → é uma vendedora: vê só os lançamentos dela. */
+const NIVEIS_ACESSO = [
+  { id:'admin',      titulo:'Administrador', texto:'vê e edita tudo, e pode gerenciar usuários' },
+  { id:'financeiro', titulo:'Financeiro',     texto:'vê o valor de contrato de todas as notas (sistema, renovações, consultoria, órgãos públicos e cursos) e <b>nenhuma comissão</b> — nem percentual, nem bônus, nem meta, de ninguém' },
+  { id:'restrita',   titulo:'Restrita',       texto:'é uma vendedora: vê apenas os lançamentos em que o nome dela aparece' },
+];
+function seletorNivelHtml(nivelAtual, onchangeJs, grupo){
+  return '<div class="usuario-niveis">' + NIVEIS_ACESSO.map(function(n){
+    return `<label class="usuario-tipo ${nivelAtual === n.id ? 'sel' : ''}">
+      <input type="radio" name="nivel-${grupo}" value="${n.id}"
+             ${nivelAtual === n.id ? 'checked' : ''} onchange="${onchangeJs}" />
+      <span><b>${n.titulo}</b> — ${n.texto}</span>
+    </label>`;
+  }).join('') + '</div>';
+}
 
 async function chamarAdminUsuarios(payload){
   const token = await ensureFreshToken();
@@ -8654,14 +8811,17 @@ function onGerarSenha(){
 }
 function onUsuarioFormInput(el, campo){
   usuarioForm[campo] = (el.type === 'checkbox') ? el.checked : el.value;
-  if(campo === 'admin') render();   // mostra/esconde o campo do nome
+}
+function onUsuarioNivel(el){
+  usuarioForm.nivel = el.value;
+  render();   // mostra/esconde o campo do nome
 }
 
 async function criarUsuario(){
   const f = usuarioForm;
   if(!f.email.trim()){ showAlert('Informe o e-mail.'); return; }
   if((f.senha||'').length < 8){ showAlert('A senha provisória precisa de pelo menos 8 caracteres. Use o botão "Gerar senha".'); return; }
-  if(!f.admin && !f.pessoa.trim()){
+  if(f.nivel === 'restrita' && !f.pessoa.trim()){
     showAlert('Para conta restrita, informe o nome exatamente como ele aparece nos lançamentos (ex: Rios).');
     return;
   }
@@ -8669,10 +8829,11 @@ async function criarUsuario(){
   try{
     await chamarAdminUsuarios({
       acao:'criar', email:f.email.trim(), senha:f.senha,
-      admin:!!f.admin, pessoa:f.pessoa.trim(),
+      admin: f.nivel === 'admin', financeiro: f.nivel === 'financeiro',
+      pessoa: f.pessoa.trim(),
     });
     usuarioCriado = { email: f.email.trim(), senha: f.senha };
-    usuarioForm = { email:'', senha:'', admin:false, pessoa:'' };
+    usuarioForm = { email:'', senha:'', nivel:'restrita', pessoa:'' };
     await carregarUsuarios();
   }catch(e){
     usuariosErro = e.message || String(e);
@@ -8702,22 +8863,26 @@ function redefinirSenhaUsuario(id, email){
 function abrirAcessoUsuario(id){
   const u = (usuariosLista||[]).find(x => x.id === id);
   if(!u) return;
-  modalState = { type:'acesso-usuario', id: id, email: u.email, admin: !!u.admin, pessoa: u.pessoa || '' };
+  modalState = { type:'acesso-usuario', id: id, email: u.email,
+                 nivel: u.admin ? 'admin' : (u.financeiro ? 'financeiro' : 'restrita'),
+                 pessoa: u.pessoa || '' };
   render();
 }
 function onAcessoFormChange(el, campo){
   if(!modalState) return;
   modalState[campo] = (el.type === 'checkbox') ? el.checked : el.value;
-  if(campo === 'admin') render();
+  if(campo === 'nivel') render();
 }
 async function salvarAcessoUsuario(){
   if(!modalState) return;
   const m = modalState;
-  if(!m.admin && !String(m.pessoa||'').trim()){
+  if(m.nivel === 'restrita' && !String(m.pessoa||'').trim()){
     modalState.error = 'Para conta restrita, informe o nome como aparece nos lançamentos.';
     render(); return;
   }
-  const dados = { acao:'acesso', id:m.id, admin:!!m.admin, pessoa:String(m.pessoa||'').trim() };
+  const dados = { acao:'acesso', id:m.id,
+                  admin: m.nivel === 'admin', financeiro: m.nivel === 'financeiro',
+                  pessoa: String(m.pessoa||'').trim() };
   closeModal();
   usuariosCarregando = true; usuariosErro = ''; render();
   try{
@@ -8763,12 +8928,10 @@ function renderUsuariosSection(){
       </label>
     </div>
 
-    <label class="usuario-tipo">
-      <input type="checkbox" ${usuarioForm.admin?'checked':''} onchange="onUsuarioFormInput(this,'admin')" />
-      <span><b>Administrador</b> — vê e edita tudo, e pode gerenciar usuários</span>
-    </label>
+    <div class="meta-field"><span>Nível de acesso</span></div>
+    ${seletorNivelHtml(usuarioForm.nivel, 'onUsuarioNivel(this)', 'novo')}
 
-    ${!usuarioForm.admin ? `
+    ${usuarioForm.nivel === 'restrita' ? `
       <label class="meta-field">
         <span>Nome nos lançamentos</span>
         <input type="text" autocomplete="off" placeholder="Ex: Rios"
@@ -8778,8 +8941,13 @@ function renderUsuariosSection(){
         Precisa ser <b>exatamente</b> o nome que aparece nos campos de vendedor dos lançamentos —
         é por ele que o sistema decide o que essa pessoa enxerga. "Rios" e "Ana Rios" são nomes
         diferentes para o sistema.
-      </div>` : `
-      <div class="usuario-dica">Conta de administrador não precisa de nome: ela vê tudo.</div>`}
+      </div>` : usuarioForm.nivel === 'admin' ? `
+      <div class="usuario-dica">Conta de administrador não precisa de nome: ela vê tudo.</div>` : `
+      <div class="usuario-dica">
+        A conta do financeiro não leva nome de pessoa: ela não é de ninguém em particular. Vê o
+        valor das notas de todo mundo justamente para conferir faturamento — e o sistema esconde
+        as comissões dela no navegador <b>e</b> no banco, então não há como espiar.
+      </div>`}
 
     <button class="painel-salvar" ${usuariosCarregando?'disabled':''} onclick="criarUsuario()">
       ${usuariosCarregando ? 'Criando...' : 'Criar conta'}
@@ -8795,6 +8963,7 @@ function renderUsuariosSection(){
       <td>${u.semAcesso
         ? '<span class="usuario-tag alerta">sem acesso</span>'
         : (u.admin ? '<span class="usuario-tag admin">Administrador</span>'
+          : u.financeiro ? '<span class="usuario-tag fin">Financeiro</span>'
                    : '<span class="usuario-tag">Restrita</span>')}</td>
       <td>${u.pessoa ? esc(u.pessoa) : '—'}</td>
       <td>${quando}</td>
@@ -8852,8 +9021,9 @@ function render(){
     return;
   }
   ensurePartnersIncludeCurrent();
+  if(isFinanceiro && ABAS_FINANCEIRO.indexOf(activeTab) === -1) activeTab = 'parceiros';
   const sectionHtml = activeTab === "vendas" ? renderVendasSection()
-    : activeTab === "parceiros" ? renderParceirosSection()
+    : activeTab === "parceiros" ? (isFinanceiro ? renderFinanceiroResumo() : renderParceirosSection())
     : activeTab === "bonus" ? renderBonusSection()
     : activeTab === "pagamentos" ? renderPagamentosSection()
     : activeTab === "painel" ? renderPainelSection()
