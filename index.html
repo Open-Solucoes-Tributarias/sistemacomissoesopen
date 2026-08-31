@@ -342,6 +342,7 @@
   .rel-campea-sub{display:block;font-size:9px;color:#666;}
   .rel-campea-lista{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;font-size:9px;color:#555;}
   .rel-nota{font-size:8.5px;color:#777;margin:0;}
+  .rel-de{font-size:8px;color:#888;font-weight:400;}
   .rel-graf{margin-bottom:10px;break-inside:avoid;}
   .rel-graf h3{font-size:10px;font-weight:800;margin:0 0 4px;color:#333;}
   .rel-legenda{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;font-size:9px;color:#555;}
@@ -1115,7 +1116,7 @@
      total. Ficam em cinza para o olho ir primeiro no número que importa. */
   table.table-plain td.col-apoio, thead th.col-apoio{color:var(--ink-faint);}
   .totais-nota{padding:12px 16px 16px;font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.55;}
-  .col-rent{min-width:206px;}
+  .col-rent{min-width:300px;}
   .col-resp{min-width:150px;}
   /* contrato de renovação é bem maior que os valores das outras abas */
   .col-valor-larga{width:130px;min-width:130px;}
@@ -1165,8 +1166,18 @@
   }
   .rent-btn:hover:not(:disabled){border-color:var(--ink-faint);color:var(--ink-soft);}
   .rent-btn.sim.on{background:#DCFCE7;border-color:#86EFAC;color:#15803D;}
+  .rent-btn.up.on{background:#FEF3C7;border-color:#FCD34D;color:#B45309;}
   .rent-btn.nao.on{background:var(--danger-soft);border-color:#FCA5A5;color:#B91C1C;}
   .rent-btn:disabled{cursor:default;}
+  /* o valor do plano novo fica colado no valor da carteira: dá para ler
+     de quanto para quanto a conta subiu sem abrir nada */
+  .upgrade-novo{
+    display:block;margin-top:3px;font-family:var(--font);font-size:10.5px;font-weight:800;
+    cursor:pointer;letter-spacing:.02em;padding:2px 7px;border-radius:999px;white-space:nowrap;
+    background:#FEF3C7;border:1px solid #FCD34D;color:#B45309;
+  }
+  .upgrade-novo:hover{background:#FDE68A;}
+  .divisao-conferencia.upgrade-alerta{color:#B91C1C;}
   .contrato-resumo{
     display:flex;flex-wrap:wrap;gap:8px;align-items:center;
     padding:12px 16px 0;font-size:12.5px;font-weight:700;color:var(--ink-soft);
@@ -2815,8 +2826,43 @@ function renderModal(){
       </div>
     `;
   }
+  if(m.type === 'upgrade-renovacao'){
+    const antigo = Number(m.valorAntigo) || 0;
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box">
+          <div class="modal-msg">Upgrade de plano${m.empresa ? ' — ' + esc(m.empresa) : ''}</div>
+          <div class="divisao-explica">
+            O cliente não sai: ele troca o plano atual por um maior. Como o valor muda, ele precisa ser
+            informado aqui — é por ele que a venda vai entrar na aba Sistema. O valor da carteira fica
+            guardado, para dar para ver de quanto para quanto a conta subiu.
+          </div>
+          ${m.erro ? `<div class="modal-error">${esc(m.erro)}</div>` : ''}
+          <label class="meta-field">
+            <span>Valor na carteira (plano atual)</span>
+            <input type="text" value="${antigo ? esc(fmtMoney(antigo)) : '—'}" disabled />
+          </label>
+          <label class="meta-field">
+            <span>Valor do plano novo</span>
+            <div class="currency-wrap"><span class="currency-prefix">R$</span>
+              <input class="num" id="upgrade-valor" type="number" step="0.01" placeholder="0,00"
+                     value="${esc(m.valorNovo)}" oninput="onUpgradeValor(this)" /></div>
+          </label>
+          <div class="divisao-conferencia" id="upgrade-dif"></div>
+          <div class="import-resumo">
+            Ao lançar no Sistema, esta linha vai com a etiqueta <b>⬆ Upgrade</b> — e, diferente de uma
+            renovação comum, <b>conta no ranking da equipe</b>: subir o plano de um cliente é venda.
+          </div>
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
+            <button class="modal-btn modal-btn-primary" onclick="confirmarUpgradeRenovacao()">Marcar como upgrade</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
   if(m.type === 'lancar-renovacoes'){
-    const total = m.lista.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0);
+    const total = m.lista.reduce(function(a,r){ return a + valorDeRenovacao(r); }, 0);
     const previa = m.lista.slice(0, 60);
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
@@ -2844,8 +2890,8 @@ function renderModal(){
               <thead><tr><th>Empresa</th><th class="num">Valor</th><th>Mês</th><th>Quem vendeu</th></tr></thead>
               <tbody>${previa.map(function(r){
                 return `<tr class="${r.pessoa ? '' : 'row-pending'}">
-                  <td>${esc(r.empresa)}</td>
-                  <td class="num">${(r.valor===null||r.valor===undefined) ? '—' : fmtMoney(r.valor)}</td>
+                  <td>${esc(r.empresa)}${r.upgrade ? ' <span class="selo-upgrade">⬆ Upgrade</span>' : ''}</td>
+                  <td class="num">${valorDeRenovacao(r) ? fmtMoney(valorDeRenovacao(r)) : '—'}</td>
                   <td>${esc(r.mes)}</td>
                   <td>${r.pessoa ? esc(r.pessoa) : '<span class="import-alerta">sem responsável</span>'}</td>
                 </tr>`;
@@ -2853,7 +2899,7 @@ function renderModal(){
             </table>
           </div>
           ${m.lista.length > previa.length ? `<div class="import-resumo">…e mais ${m.lista.length - previa.length}.</div>` : ''}
-          <div class="import-resumo">As vendas nascem com a observação <b>“Renovação”</b>, para você distinguir na aba Sistema.</div>
+          <div class="import-resumo">As vendas nascem com a observação <b>“Renovação”</b> (ou <b>“Upgrade de plano”</b>), para você distinguir na aba Sistema. Só o upgrade conta no ranking.</div>
           <div class="modal-actions">
             <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
             <button class="modal-btn modal-btn-primary" onclick="confirmarLancarNoSistema()">Lançar ${m.lista.length === 1 ? 'a renovação' : 'as ' + m.lista.length}</button>
@@ -6320,6 +6366,8 @@ async function tryLoadRenovacoesAsync(){
           valor: (d.valor === null || d.valor === undefined) ? null : Number(d.valor),
           vendaId: d.venda_id || null,
           renovado: (d.renovado === null || d.renovado === undefined) ? null : !!d.renovado,
+          upgrade: !!d.upgrade,
+          valorUpgrade: (d.valor_upgrade === null || d.valor_upgrade === undefined) ? null : Number(d.valor_upgrade),
         };
       });
       renovacoesNextId = renovacoes.length
@@ -6341,6 +6389,8 @@ function persistRenovacoes(){
             valor: numOrNull(r.valor),
             venda_id: r.vendaId || null,
             renovado: (r.renovado === null || r.renovado === undefined) ? null : !!r.renovado,
+            upgrade: !!r.upgrade,
+            valor_upgrade: numOrNull(r.valorUpgrade),
           };
         });
         await sbUpsert('renovacoes', dbRows, 'id');
@@ -6354,6 +6404,19 @@ function persistRenovacoes(){
       finally{ saving = false; updateSaveStatus(); }
     })();
   }, 450);
+}
+
+/* Quanto essa linha vale HOJE: numa renovação comum é o valor da carteira;
+   num upgrade é o valor do plano novo, que é o que será faturado. O valor
+   antigo continua guardado em r.valor — é dele que sai o "subiu X". */
+function valorDeRenovacao(r){
+  if(!r) return 0;
+  if(r.upgrade && r.valorUpgrade !== null && r.valorUpgrade !== undefined) return Number(r.valorUpgrade) || 0;
+  return Number(r.valor) || 0;
+}
+function ganhoDeUpgrade(r){
+  if(!r || !r.upgrade) return 0;
+  return valorDeRenovacao(r) - (Number(r.valor) || 0);
 }
 
 function renovacoesDoAno(){
@@ -6374,6 +6437,7 @@ function addRenovacao(){
        : ((painelPeriodo && painelPeriodo !== 'Ano') ? painelPeriodo : MONTHS[new Date().getMonth()]),
     pessoa: pessoas.length === 1 ? pessoas[0] : '',
     empresa: '', valor: null, renovado: null, vendaId: null,
+    upgrade: false, valorUpgrade: null,
   };
   renovacoes.push(nova);
   persistRenovacoes();
@@ -6404,21 +6468,28 @@ function setRenovacaoCampo(el, id, campo){
   persistRenovacoes();
   render();
 }
-/* Renovado / Não renovado, com um terceiro estado: em aberto. A empresa
-   entra na lista quando a renovação começa a ser tratada, e só depois se
-   sabe o desfecho — clicar de novo no botão aceso volta para em aberto. */
+/* Renovado / Upgrade / Não renovado, com um quarto estado: em aberto. A
+   empresa entra na lista quando a renovação começa a ser tratada, e só
+   depois se sabe o desfecho — clicar de novo no botão aceso volta para em
+   aberto.
+
+   "Upgrade" é o caso do cliente que não renova o plano em que estava: ele
+   migra para um plano maior. Não é perda (ele ficou, e a taxa de renovação
+   não pode contar isso como churn) e também não é renovação comum (o valor
+   mudou, e crescer a conta é venda de verdade — conta no ranking). Por
+   isso ele é um estado próprio, que por dentro também vale como renovado. */
 function setRenovacaoStatus(id, valor){
   if(!isAdmin) return;
   const r = renovacoes.find(function(x){ return x.id === id; });
   if(!r) return;
-  const novo = (r.renovado === valor) ? null : valor;
+  const novo = (r.renovado === valor && !r.upgrade) ? null : valor;
   // Deixar de ser "Renovado" depois de virar venda mexeria em comissão já
   // lançada, então o sistema avisa e não apaga nada sozinho.
   if(r.vendaId && r.renovado === true && novo !== true){
     showConfirm(
       'Esta renovação já foi lançada como venda na aba Sistema. Mudar a situação aqui NÃO apaga a venda de lá — se ela não valer mais, exclua também na aba Sistema. Continuar?',
       function(){
-        r.renovado = novo;
+        r.renovado = novo; r.upgrade = false;
         persistRenovacoes();
         render();
       },
@@ -6427,6 +6498,75 @@ function setRenovacaoStatus(id, valor){
     return;
   }
   r.renovado = novo;
+  r.upgrade = false;
+  persistRenovacoes();
+  render();
+}
+
+/* O upgrade pede uma pergunta a mais: o plano novo custa outro valor, e é
+   justamente esse o motivo do upgrade existir. Lançar no Sistema pelo
+   valor antigo seria lançar errado, então o valor novo é perguntado na
+   hora — e o valor da carteira fica guardado, para dar para ver de quanto
+   para quanto a conta subiu. */
+function abrirUpgradeRenovacao(id){
+  if(!isAdmin) return;
+  const r = renovacoes.find(function(x){ return x.id === id; });
+  if(!r) return;
+  if(r.upgrade){    // clicar de novo no botão aceso desfaz o upgrade
+    if(r.vendaId){
+      showAlert('Este upgrade já foi lançado como venda na aba Sistema. Para desfazer, exclua a venda por lá primeiro.');
+      return;
+    }
+    r.upgrade = false; r.valorUpgrade = null; r.renovado = null;
+    persistRenovacoes(); render();
+    return;
+  }
+  if(r.vendaId){
+    showAlert('Esta renovação já foi lançada como venda na aba Sistema pelo valor antigo. Para transformá-la em upgrade, exclua a venda por lá primeiro.');
+    return;
+  }
+  modalState = {
+    type: 'upgrade-renovacao', id: id,
+    empresa: r.empresa || '', valorAntigo: (r.valor === null || r.valor === undefined) ? null : Number(r.valor),
+    valorNovo: (r.valorUpgrade === null || r.valorUpgrade === undefined) ? '' : String(r.valorUpgrade),
+    erro: '',
+  };
+  render();
+  setTimeout(function(){
+    const el = document.getElementById('upgrade-valor');
+    if(el){ el.focus(); el.select(); }
+  }, 60);
+}
+function onUpgradeValor(el){
+  if(!modalState) return;
+  modalState.valorNovo = el.value;
+  const novo = parseFloat(el.value);
+  const antigo = Number(modalState.valorAntigo) || 0;
+  const aviso = document.getElementById('upgrade-dif');
+  if(!aviso) return;
+  if(!isFinite(novo)){ aviso.textContent = ''; return; }
+  const dif = novo - antigo;
+  aviso.textContent = dif > 0
+    ? 'A conta sobe ' + fmtMoney(dif) + ' — de ' + fmtMoney(antigo) + ' para ' + fmtMoney(novo) + '.'
+    : dif < 0
+      ? 'Atenção: o valor novo é MENOR que o da carteira (' + fmtMoney(antigo) + '). Se o plano diminuiu, isso não é upgrade.'
+      : 'O valor novo é igual ao da carteira — se o plano não mudou de preço, marque como Renovado.';
+  aviso.className = 'divisao-conferencia' + (dif < 0 ? ' upgrade-alerta' : '');
+}
+function confirmarUpgradeRenovacao(){
+  const m = modalState;
+  if(!m) return;
+  const r = renovacoes.find(function(x){ return x.id === m.id; });
+  if(!r){ closeModal(); return; }
+  const novo = parseFloat(String(m.valorNovo).replace(',', '.'));
+  if(!isFinite(novo) || novo <= 0){
+    modalState.erro = 'Informe o valor do plano novo.';
+    render(); return;
+  }
+  r.upgrade = true;
+  r.renovado = true;           // o cliente ficou: upgrade nunca é perda
+  r.valorUpgrade = novo;
+  closeModal();
   persistRenovacoes();
   render();
 }
@@ -6746,6 +6886,7 @@ function confirmarImportacaoRenovacoes(){
     renovacoes.push({
       id: renovacoesNextId++, ano: i.ano, mes: i.mes,
       pessoa: m.pessoa || '', empresa: i.empresa, valor: i.valor, renovado: null, vendaId: null,
+      upgrade: false, valorUpgrade: null,
     });
     anos[i.ano] = true;
   });
@@ -6839,7 +6980,7 @@ function montarCarteira(anoOrigem, anoDestino){
     showAlert('A carteira de ' + anoDestino + ' já está completa: tudo de ' + anoOrigem + ' já foi trazido.');
     return;
   }
-  const total = daCarteira.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0)
+  const total = daCarteira.reduce(function(a,r){ return a + valorDeRenovacao(r); }, 0)
               + dosNovos.reduce(function(a,v){ return a + (Number(v.valor)||0); }, 0);
   const partes = [];
   if(daCarteira.length) partes.push('<b>' + daCarteira.length + '</b> ' + (daCarteira.length===1?'renovação':'renovações') + ' de ' + anoOrigem);
@@ -6853,8 +6994,9 @@ function montarCarteira(anoOrigem, anoDestino){
         renovacoes.push({
           id: renovacoesNextId++, ano: anoDestino, mes: r.mes,
           pessoa: r.pessoa || '', empresa: r.empresa,
-          valor: (r.valor === null || r.valor === undefined) ? null : Number(r.valor),
-          renovado: null, vendaId: null,
+          // quem fez upgrade renova no ano que vem pelo valor NOVO
+          valor: valorDeRenovacao(r) || null,
+          renovado: null, vendaId: null, upgrade: false, valorUpgrade: null,
         });
       });
       dosNovos.forEach(function(v){
@@ -6862,7 +7004,7 @@ function montarCarteira(anoOrigem, anoDestino){
           id: renovacoesNextId++, ano: anoDestino, mes: v.mes,
           pessoa: responsavelDeRenovacao(v.vendedorResponsavel || ''), empresa: v.cliente.trim(),
           valor: (v.valor === null || v.valor === undefined) ? null : Number(v.valor),
-          renovado: null, vendaId: null,
+          renovado: null, vendaId: null, upgrade: false, valorUpgrade: null,
         });
       });
       if(anoDestino !== 2026 && extraYears.indexOf(anoDestino) === -1){
@@ -6907,13 +7049,15 @@ function confirmarLancarNoSistema(){
     const venda = {
       id: nextId++, ano: r.ano, mes: r.mes,
       cliente: r.empresa, venda: m.produto || '',
-      valor: (r.valor === null || r.valor === undefined) ? null : Number(r.valor),
+      valor: valorDeRenovacao(r) || null,
       parceiro: '', participacao: null, formaPagamento: '', colaborador: '',
       vendedor2: '', vendedor3: '', vendedorResponsavel: r.pessoa || '',
       pago: false, mesPagamento: null,
-      observacoes: 'Renovação',
-      renovacao: true,          // fora do ranking: renovar não é venda nova
-      novoContrato: false, upgrade: false,
+      // Renovar não é venda nova e fica fora do ranking. Subir o plano de um
+      // cliente é: vai com a etiqueta de upgrade e conta no desempenho.
+      observacoes: r.upgrade ? 'Upgrade de plano' : 'Renovação',
+      renovacao: !r.upgrade,
+      novoContrato: false, upgrade: !!r.upgrade,
       comissaoPercents: {},
     };
     SELLERS.forEach(function(sv){ venda[sv.key] = null; });
@@ -6972,7 +7116,7 @@ function atualizarResumoRenovacoes(){
     if(busca && semAcento(r.empresa).indexOf(busca) === -1) return false;
     return true;
   });
-  const soma = function(l){ return l.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0); };
+  const soma = function(l){ return l.reduce(function(a,r){ return a + valorDeRenovacao(r); }, 0); };
   const grupos = {
     'renov-kpi-sim':    todas.filter(function(r){ return r.renovado === true; }),
     'renov-kpi-nao':    todas.filter(function(r){ return r.renovado === false; }),
@@ -7638,11 +7782,17 @@ function montarRelatorioMes(mes){
   const renovTaxa = (renovOk + renovNao)
     ? (Math.round(1000*renovOk/(renovOk+renovNao))/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1}) + '% renovaram'
     : 'nenhuma decidida ainda';
-  const renovValor = renovMes.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0);
+  const renovValor = renovMes.reduce(function(a,r){ return a + valorDeRenovacao(r); }, 0);
   const linhasRenov = renovMes.map(function(r){
-    const sit = r.renovado === true ? 'Renovado' : (r.renovado === false ? 'Não renovado' : 'Em aberto');
+    const sit = r.upgrade ? 'Upgrade de plano'
+      : r.renovado === true ? 'Renovado' : (r.renovado === false ? 'Não renovado' : 'Em aberto');
+    // no upgrade o relatório mostra o valor novo e, entre parênteses, de
+    // quanto ele veio — é a leitura que interessa numa reunião
+    const val = valorDeRenovacao(r)
+      ? fmtMoney(valorDeRenovacao(r)) + (r.upgrade && Number(r.valor) ? ' <span class="rel-de">(era ' + fmtMoney(Number(r.valor)) + ')</span>' : '')
+      : '—';
     return `<tr><td>${esc(r.empresa || '—')}</td>
-      <td class="num">${(r.valor === null || r.valor === undefined) ? '—' : fmtMoney(r.valor)}</td>
+      <td class="num">${val}</td>
       <td>${esc(r.pessoa || '—')}</td><td>${sit}</td></tr>`;
   });
 
@@ -8268,15 +8418,21 @@ function renderPainelRenovacoes(){
   const recortado = renovacaoMes !== 'Todos' || !!busca;
   const prontas = renovacoesProntasParaSistema(renovacaoMes).length;
 
+  /* Upgrade também é cliente que ficou: entra em "renovadas" para a taxa
+     de renovação não registrar como perda uma conta que na verdade cresceu.
+     O cartão separado mostra quanto ela cresceu. */
   const renovadas   = todas.filter(function(r){ return r.renovado === true; });
+  const upgrades    = todas.filter(function(r){ return !!r.upgrade; });
   const perdidas    = todas.filter(function(r){ return r.renovado === false; });
   const emAberto    = todas.filter(function(r){ return r.renovado === null || r.renovado === undefined; });
   const decididas   = renovadas.length + perdidas.length;
   const taxa        = decididas ? Math.round(1000 * renovadas.length / decididas) / 10 : null;
-  const somaValor   = function(l){ return l.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0); };
+  const somaValor   = function(l){ return l.reduce(function(a,r){ return a + valorDeRenovacao(r); }, 0); };
+  const ganhoUp     = upgrades.reduce(function(a,r){ return a + ganhoDeUpgrade(r); }, 0);
 
   const lista = todas.filter(function(r){
-    if(renovacaoFiltro === 'Renovado') return r.renovado === true;
+    if(renovacaoFiltro === 'Renovado') return r.renovado === true && !r.upgrade;
+    if(renovacaoFiltro === 'Upgrade')  return !!r.upgrade;
     if(renovacaoFiltro === 'Nao')      return r.renovado === false;
     if(renovacaoFiltro === 'Aberto')   return r.renovado === null || r.renovado === undefined;
     return true;
@@ -8321,14 +8477,17 @@ function renderPainelRenovacoes(){
       <td class="col-valor col-valor-larga">${editavel
         ? `<div class="currency-wrap"><span class="currency-prefix">R$</span><input class="num contrato-linha-input" type="number" step="0.01" placeholder="—"
                   value="${r.valor===null||r.valor===undefined?'':r.valor}" oninput="onRenovacaoValor(this,${r.id})" /></div>`
-        : (r.valor === null || r.valor === undefined ? '—' : fmtMoney(r.valor))}</td>
+        : (r.valor === null || r.valor === undefined ? '—' : fmtMoney(r.valor))}${
+          r.upgrade ? `<button class="upgrade-novo" title="Valor do plano novo — clique para corrigir" onclick="abrirUpgradeRenovacao(${r.id})">⬆ ${esc(fmtMoney(valorDeRenovacao(r)))}</button>` : ''}</td>
       <td class="col-resp">${editavel
         ? `<select class="contrato-linha-select" onchange="setRenovacaoCampo(this,${r.id},'pessoa')">${opcoesPessoa(r.pessoa)}</select>`
         : esc(r.pessoa || '—')}</td>
       <td class="col-rent">
         <div class="rent-toggle">
-          <button type="button" class="rent-btn sim${r.renovado===true?' on':''}" ${editavel?'':'disabled'}
-                  title="A empresa renovou" onclick="setRenovacaoStatus(${r.id},true)">Renovado</button>
+          <button type="button" class="rent-btn sim${(r.renovado===true && !r.upgrade)?' on':''}" ${editavel?'':'disabled'}
+                  title="A empresa renovou o mesmo plano" onclick="setRenovacaoStatus(${r.id},true)">Renovado</button>
+          <button type="button" class="rent-btn up${r.upgrade?' on':''}" ${editavel?'':'disabled'}
+                  title="O cliente ficou e migrou para um plano maior — pede o valor novo" onclick="abrirUpgradeRenovacao(${r.id})">Upgrade</button>
           <button type="button" class="rent-btn nao${r.renovado===false?' on':''}" ${editavel?'':'disabled'}
                   title="A empresa não renovou" onclick="setRenovacaoStatus(${r.id},false)">Não renovado</button>
         </div>
@@ -8346,7 +8505,8 @@ function renderPainelRenovacoes(){
 
   const filtros = [
     {k:'Todos',    rot:'Todas',        n: todas.length},
-    {k:'Renovado', rot:'Renovadas',    n: renovadas.length},
+    {k:'Renovado', rot:'Renovadas',    n: renovadas.length - upgrades.length},
+    {k:'Upgrade',  rot:'Upgrades',     n: upgrades.length},
     {k:'Nao',      rot:'Não renovadas',n: perdidas.length},
     {k:'Aberto',   rot:'Em aberto',    n: emAberto.length},
   ].map(function(f){
@@ -8358,8 +8518,14 @@ function renderPainelRenovacoes(){
       <div class="kpi-card" style="--kc:#15803D">
         <div class="kpi-label"><span class="kpi-dot"></span>Renovadas</div>
         <div class="kpi-value">${renovadas.length}</div>
-        <div class="kpi-sub" id="renov-kpi-sim">${fmtMoney(somaValor(renovadas))}</div>
+        <div class="kpi-sub" id="renov-kpi-sim" data-sufixo="${upgrades.length ? ' · ' + upgrades.length + ' com upgrade' : ''}">${fmtMoney(somaValor(renovadas))}${upgrades.length ? ' · ' + upgrades.length + ' com upgrade' : ''}</div>
       </div>
+      ${upgrades.length ? `
+      <div class="kpi-card" style="--kc:#B45309">
+        <div class="kpi-label"><span class="kpi-dot"></span>Upgrades</div>
+        <div class="kpi-value">${upgrades.length}</div>
+        <div class="kpi-sub">${ganhoUp >= 0 ? '+' : ''}${fmtMoney(ganhoUp)} de aumento</div>
+      </div>` : ''}
       <div class="kpi-card" style="--kc:var(--danger)">
         <div class="kpi-label"><span class="kpi-dot"></span>Não renovadas</div>
         <div class="kpi-value">${perdidas.length}</div>
@@ -8380,13 +8546,14 @@ function renderPainelRenovacoes(){
   const porPessoa = pessoas.map(function(v){
     const minhas = todas.filter(function(r){ return name_matches_client(r.pessoa, v); });
     const ok  = minhas.filter(function(r){ return r.renovado === true; }).length;
+    const up  = minhas.filter(function(r){ return !!r.upgrade; }).length;
     const nao = minhas.filter(function(r){ return r.renovado === false; }).length;
     const ab  = minhas.length - ok - nao;
     return `<tr>
       <td><span class="th-dot" style="background:${esc(corDoVendedor(v))}"></span>${esc(v)}</td>
       <td class="num">${minhas.length}</td>
-      <td class="num">${fmtMoney(minhas.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0))}</td>
-      <td class="num">${ok}</td>
+      <td class="num">${fmtMoney(minhas.reduce(function(a,r){ return a + valorDeRenovacao(r); }, 0))}</td>
+      <td class="num">${ok}${up ? ` <span class="col-apoio">(${up} up)</span>` : ''}</td>
       <td class="num">${nao}</td>
       <td class="num col-apoio">${ab}</td>
       <td class="num">${(ok+nao) ? (Math.round(1000*ok/(ok+nao))/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%' : '—'}</td>
@@ -8413,7 +8580,10 @@ function renderPainelRenovacoes(){
        }</div>`}
     <div class="totais-nota">
       Cada linha é uma empresa que está renovando o sistema. A situação começa <b>em aberto</b> e recebe
-      <b>Renovado</b> ou <b>Não renovado</b> quando se sabe o desfecho — clicar de novo no botão aceso volta para em aberto.
+      <b>Renovado</b>, <b>Upgrade</b> ou <b>Não renovado</b> quando se sabe o desfecho — clicar de novo no botão aceso volta para em aberto.
+      <b>Upgrade</b> é o cliente que ficou mas migrou para um plano maior: ele pede o <b>valor do plano novo</b>,
+      conta como renovação na taxa (o cliente não saiu) e, ao ir para o Sistema, é o único que <b>entra no ranking</b> —
+      subir o plano de um cliente é venda, renovar o mesmo plano não é.
       A <b>taxa de renovação</b> só conta as decididas, então as em aberto não puxam o número para baixo.
       Esta lista sozinha <b>não entra</b> no ranking nem nos totais de venda. Quando você usa
       <b>“Lançar no Sistema”</b>, as renovadas viram venda do mês na aba Sistema, no nome de quem renovou —

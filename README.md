@@ -48,6 +48,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_venda_novo_contrato_migration.sql → migração 19: tag de contrato novo na aba Sistema
 ├── supabase_venda_upgrade_migration.sql → migração 20: tag de upgrade na aba Sistema
 ├── supabase_acesso_financeiro_migration.sql → migração 21: nível de acesso financeiro (vê o valor das notas, nenhuma comissão)
+├── supabase_renovacao_upgrade_migration.sql → migração 22: upgrade de plano na aba Renovações
 └── .gitignore
 ```
 
@@ -394,31 +395,46 @@ O cadastro é o mínimo que responde à pergunta do mês:
 | Empresa | só o nome mesmo |
 | Valor | o valor do contrato |
 | Responsável | quem cuidou (só quem está na lista de renovações aparece aqui) |
-| Situação | **Renovado** ou **Não renovado** — um clique escolhe, clicar de novo volta para *em aberto* |
+| Situação | **Renovado**, **Upgrade** ou **Não renovado** — um clique escolhe, clicar de novo volta para *em aberto* |
 
 A carteira fica grande depressa — são quase 200 empresas por ano —, então a aba tem **filtro por mês** (com a contagem em cada pílula), **filtro por situação** e uma **busca por nome**, que ignora acentos e maiúsculas. Os três se combinam, e os cartões do topo acompanham o recorte: filtrando Março, os números são os de Março, e o cabeçalho do quadro diz *"17 empresas em Março de 2026 de 199 no ano"*.
 
-A situação começa **em aberto** de propósito: a empresa entra na lista quando a renovação começa a ser tratada, e o desfecho vem depois. Os cartões do topo contam renovadas, não renovadas, em aberto e a **taxa de renovação** — que só considera as decididas, então as em aberto não puxam o número para baixo —, cada um com a soma dos valores: quanto foi renovado, quanto se perdeu e quanto ainda está em jogo. As pílulas abaixo filtram a lista por situação, e o quadro **"Por responsável"** fecha o ano de cada uma, com a taxa individual.
+A situação começa **em aberto** de propósito: a empresa entra na lista quando a renovação começa a ser tratada, e o desfecho vem depois. Os cartões do topo contam renovadas, upgrades, não renovadas, em aberto e a **taxa de renovação** — que só considera as decididas, então as em aberto não puxam o número para baixo —, cada um com a soma dos valores: quanto foi renovado, quanto se perdeu e quanto ainda está em jogo. As pílulas abaixo filtram a lista por situação, e o quadro **"Por responsável"** fecha o ano de cada uma, com a taxa individual.
+
+### Upgrade de plano
+
+Nem toda conta da carteira renova pelo mesmo valor. Às vezes o cliente **não renova o plano em que estava: ele migra para um plano bem maior**. Marcar isso como "Não renovado" seria mentir — o cliente ficou, e a taxa de renovação registraria como perda uma conta que na verdade cresceu. Marcar como "Renovado" também: o valor mudou, e subir o plano de um cliente é venda de verdade, não repetição de contrato.
+
+Por isso a situação tem um terceiro botão, **Upgrade**, que se comporta diferente dos outros dois:
+
+1. Ao clicar, o sistema **pergunta o valor do plano novo** — mostra o valor da carteira ao lado e calcula na hora quanto a conta subiu (*"a conta sobe R$ 39.564,00 — de R$ 8.388,00 para R$ 47.952,00"*). Se o valor digitado for **menor** que o da carteira, ele avisa: plano que diminuiu não é upgrade.
+2. O valor da carteira **não é apagado**. A linha guarda os dois — o antigo em `valor`, o novo em `valor_upgrade` —, e a tabela mostra o novo logo abaixo do antigo, na etiqueta âmbar **⬆ R$ 47.952,00** (clicar nela corrige o valor).
+3. Na **taxa de renovação**, upgrade conta como renovação: o cliente ficou.
+4. Um cartão **"Upgrades"** aparece no topo com **quanto a carteira cresceu no total** — a soma de todas as diferenças. É o número para levar para a diretoria.
+5. Ao ir para a aba Sistema, a venda nasce com a etiqueta **⬆️ Upgrade** (não ♻️ Renovação), pelo **valor novo**, com a observação *"Upgrade de plano"* — e, por isso, é a única linha vinda das renovações que **conta no ranking da equipe**.
+6. Na **carteira do ano seguinte**, a empresa é copiada já com o **valor novo**: é por ele que ela vai renovar no ano que vem.
+
+Enquanto a linha ainda não foi lançada no Sistema, clicar de novo em **Upgrade** desfaz tudo e volta para *em aberto*. Depois de lançada, o sistema pede que a venda seja excluída na aba Sistema primeiro — comissão já lançada não some sozinha.
 
 ### Da renovação para a aba Sistema
 
 A renovação que se confirma é faturamento do mês e precisa entrar na lista de comissões como qualquer outra venda. O botão **"📤 Lançar N no Sistema"** faz essa ponte:
 
-1. Marque as empresas como **Renovado**;
+1. Marque as empresas como **Renovado** (ou **Upgrade**);
 2. Clique em *Lançar no Sistema* — abre uma conferência com o que vai ser lançado, quantas são e quanto somam;
 3. Opcionalmente escolha o **produto** que essas vendas terão na aba Sistema;
 4. Confirme. Cada renovação vira uma **venda do mês**, com o nome da empresa como cliente, o valor do contrato, o mês da renovação e **"Quem vendeu" = quem cuidou da renovação**.
 
-As vendas nascem com a observação **"Renovação"**, para se distinguirem na aba Sistema, e **sem percentual de comissão** — esse você preenche por lá, como em qualquer venda.
+As vendas nascem com a observação **"Renovação"** — ou **"Upgrade de plano"**, no caso dos upgrades —, para se distinguirem na aba Sistema, e **sem percentual de comissão** — esse você preenche por lá, como em qualquer venda.
 
 - **Nunca lança duas vezes.** A renovação guarda o id da venda que gerou, então some da fila e ganha a etiqueta **"no Sistema"**, que ao ser clicada leva direto à venda correspondente. Isso vale mesmo depois de recarregar a página.
-- **Só entram as marcadas como Renovado** que ainda não foram lançadas, respeitando o filtro de mês.
+- **Só entram as marcadas como Renovado ou Upgrade** que ainda não foram lançadas, respeitando o filtro de mês.
 - **Mês fechado é pulado**, e o sistema avisa quais ficaram de fora.
 - **Desmarcar depois não apaga a venda.** O sistema avisa: mexer na situação aqui não desfaz nada na aba Sistema; se a venda não valer mais, exclua também por lá. Comissão já lançada não some sozinha.
 
 ### Renovação não conta no ranking
 
-A venda que nasce de uma renovação vale **comissão como qualquer outra** e entra no Resumo Geral, no faturamento do mês e no fechamento para a contabilidade. O que ela **não** faz é contar no **ranking de desempenho**: renovar um contrato que já era da casa não é a mesma coisa que trazer cliente novo, e a carteira de renovação é grande o bastante para decidir sozinha quem é campeã do ano.
+Isto vale para a **renovação comum**; o upgrade é a exceção descrita acima, e conta. A venda que nasce de uma renovação vale **comissão como qualquer outra** e entra no Resumo Geral, no faturamento do mês e no fechamento para a contabilidade. O que ela **não** faz é contar no **ranking de desempenho**: renovar um contrato que já era da casa não é a mesma coisa que trazer cliente novo, e a carteira de renovação é grande o bastante para decidir sozinha quem é campeã do ano.
 
 Na aba Sistema, essas vendas aparecem com o selo verde **"♻️ Renovação"** ao lado do cliente, e o botão **♻️** nas ações da linha marca ou desmarca qualquer venda — inclusive uma que você tenha digitado à mão e queira tirar do ranking.
 
