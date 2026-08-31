@@ -544,6 +544,17 @@ O botão **"📊 Baixar CSV"** gera o arquivo do período, uma linha por pessoa 
 
 > O sistema guarda **quem fica de fora**, não quem fica dentro. É de propósito: assim uma pessoa cadastrada depois aparece na folha sozinha, em vez de sumir calada. Esquecer alguém num relatório de pagamento é bem pior do que ter uma linha a mais para tirar. A lista fica no banco (`entity_vendors` com `entidade='fechamento_fora'`), então vale para todo mundo, e só admin edita.
 
+## Leitura em páginas (limite de 1.000 linhas)
+
+O PostgREST devolve no máximo **1.000 linhas por chamada** — é o "Max rows" do projeto no Supabase. Passar disso **não dá erro**: ele simplesmente corta o resultado e devolve o que coube.
+
+Foi o que aconteceu quando `vendas_comissoes` passou de 1.200 linhas (174 vendas × 7 vendedoras). O sistema recebia parte das comissões, os totais na tela ficavam **menores que a realidade**, e — pior — a gravação seguinte devolvia ao banco como vazio aquilo que não tinha sido lido.
+
+Por isso **toda coleção que cresce é lida em páginas**, por `sbSelectTudo()`, até vir uma página incompleta. Duas regras ao mexer nisso:
+
+- a consulta **precisa ter `order`**, senão o `offset` embaralha as páginas e linhas se repetem ou somem;
+- ao criar uma coleção nova que possa passar de mil linhas, use `sbSelectTudo` (ou `sbSelectOpcional`, que já pagina), nunca `sbSelect` direto.
+
 ## Backup manual
 
 Dentro do próprio sistema, o botão **"⬇ Exportar dados"** (no topo da tela) gera um backup completo em texto — útil pra guardar uma cópia de segurança de vez em quando, independente do banco de dados.

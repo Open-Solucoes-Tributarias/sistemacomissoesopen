@@ -1748,6 +1748,27 @@ function sbSelect(table, query){
   const source = READ_VIEWS[table] || table;
   return sb('/rest/v1/' + source + (query ? '?' + query : ''), { method: 'GET' });
 }
+/* O PostgREST devolve no máximo 1000 linhas por chamada (o limite "Max
+   rows" do projeto). Passar disso NÃO dá erro: ele simplesmente corta o
+   resultado. Foi o que aconteceu com vendas_comissoes ao passar de 1.200
+   linhas — o sistema recebia parte das comissões, somava menos do que a
+   realidade e, pior, gravava de volta o que faltava como vazio.
+
+   Por isso toda coleção que cresce é lida em páginas, até vir uma página
+   incompleta. A consulta precisa ter ORDER, senão o offset embaralha. */
+const PAGINA_LEITURA = 1000;
+async function sbSelectTudo(table, query){
+  const tudo = [];
+  for(let offset = 0; offset < 500000; offset += PAGINA_LEITURA){
+    const q = (query ? query + '&' : '') + 'limit=' + PAGINA_LEITURA + '&offset=' + offset;
+    const parte = await sbSelect(table, q);
+    if(!parte || !parte.length) break;
+    for(let i = 0; i < parte.length; i++) tudo.push(parte[i]);
+    if(parte.length < PAGINA_LEITURA) break;
+  }
+  return tudo;
+}
+
 function sbUpsert(table, rows, onConflict){
   if(!rows || rows.length === 0) return Promise.resolve();
   return sb('/rest/v1/' + table + '?on_conflict=' + (onConflict||'id'), {
@@ -1793,7 +1814,7 @@ function persist(){
         });
         await sbUpsert('vendas', dbRows, 'id');
 
-        const existing = carregouDoBanco.vendas ? ((await sbSelect('vendas','select=id')) || []) : [];
+        const existing = carregouDoBanco.vendas ? ((await sbSelectTudo('vendas','select=id&order=id.asc')) || []) : [];
         const localIds = rows.map(function(r){ return r.id; });
         const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
         if(toDelete.length) await sbDeleteIn('vendas','id', toDelete);
@@ -1823,9 +1844,9 @@ function persist(){
 
 async function tryLoadFromStorageAsync(){
   try{
-    const dbRows = await sbSelect('vendas', 'select=*&order=id.asc');
+    const dbRows = await sbSelectTudo('vendas', 'select=*&order=id.asc');
     falhaAoCarregar.vendas = false;
-    const comissoes = await sbSelectOpcional('vendas_comissoes', 'select=*', []);
+    const comissoes = await sbSelectOpcional('vendas_comissoes', 'select=*&order=id.asc', []);
     carregouDoBanco.vendas = true;
     if(dbRows && dbRows.length){
       const bySellerByVenda = {};
@@ -1902,7 +1923,7 @@ function persistEntityRows(key){
         });
         await sbUpsert('lancamentos', dbRows, 'id');
 
-        const existing = carregouDoBanco['lanc-'+key] ? ((await sbSelect('lancamentos','select=id&entidade=eq.'+key)) || []) : [];
+        const existing = carregouDoBanco['lanc-'+key] ? ((await sbSelectTudo('lancamentos','select=id&order=id.asc&entidade=eq.'+key)) || []) : [];
         const localIds = state[key].rows.map(function(r){ return r.id; });
         const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
         if(toDelete.length) await sbDeleteIn('lancamentos','id', toDelete);
@@ -1966,7 +1987,7 @@ function persistEntityVendors(key){
    os lançamentos da aba, que ficava vazia e sem nenhum aviso. */
 async function sbSelectOpcional(table, query, padrao){
   try{
-    const r = await sbSelect(table, query);
+    const r = await sbSelectTudo(table, query);
     return r || padrao;
   }catch(e){
     console.error('Consulta opcional falhou: ' + table, e);
@@ -1977,9 +1998,9 @@ async function sbSelectOpcional(table, query, padrao){
 async function tryLoadEntityFromStorageAsync(key){
   try{
     const cfg = ENTITIES[key];
-    const dbRows = await sbSelect('lancamentos', 'select=*&entidade=eq.'+key+'&order=id.asc');
+    const dbRows = await sbSelectTudo('lancamentos', 'select=*&entidade=eq.'+key+'&order=id.asc');
     falhaAoCarregar['lanc-'+key] = false;
-    const extras = await sbSelectOpcional('lancamentos_extra_vendedores', 'select=*', []);
+    const extras = await sbSelectOpcional('lancamentos_extra_vendedores', 'select=*&order=id.asc', []);
     // Sempre pede: quem é admin recebe a divisão inteira, e cada vendedora
     // recebe a própria linha (o banco corta o resto). Não dá pra condicionar
     // a isAdmin aqui — isso carrega em paralelo e ainda pode não ter chegado.
@@ -2046,7 +2067,7 @@ function persistBonus(){
       try{
         const dbRows = bonusRows.map(function(r){ return { id:r.id, ano:r.ano||2026, mes:r.mes, vendedor:r.vendedor||'', descricao:r.descricao||'', valor:numOrNull(r.valor), tipo: r.tipo || null, meta_id: r.metaId || null }; });
         await sbUpsert('bonus', dbRows, 'id');
-        const existing = carregouDoBanco.bonus ? ((await sbSelect('bonus','select=id')) || []) : [];
+        const existing = carregouDoBanco.bonus ? ((await sbSelectTudo('bonus','select=id&order=id.asc')) || []) : [];
         const localIds = bonusRows.map(function(r){ return r.id; });
         const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
         if(toDelete.length) await sbDeleteIn('bonus','id',toDelete);
@@ -2058,7 +2079,7 @@ function persistBonus(){
 }
 async function tryLoadBonusFromStorageAsync(){
   try{
-    const dbRows = await sbSelect('bonus','select=*&order=id.asc');
+    const dbRows = await sbSelectTudo('bonus','select=*&order=id.asc');
     carregouDoBanco.bonus = true;
     if(dbRows && dbRows.length){
       bonusRows = dbRows.map(function(d){ return { id:d.id, ano:d.ano, mes:d.mes, vendedor:d.vendedor||'', descricao:d.descricao||'', valor:d.valor, tipo: d.tipo || '', metaId: d.meta_id || null }; });
@@ -2175,7 +2196,7 @@ function persistClosedMonths(){
 }
 async function tryLoadClosedMonthsFromStorageAsync(){
   try{
-    const dbRows = await sbSelect('closed_months','select=*');
+    const dbRows = await sbSelectTudo('closed_months','select=*&order=id.asc');
     carregouDoBanco.closed_months = true;
     if(dbRows){ closedMonths = dbRows.map(function(d){ return d.ano+'-'+d.mes; }); render(); }
   } catch(e){ console.error(e); }
@@ -2196,7 +2217,7 @@ function persistMetas(){
           };
         });
         await sbUpsert('metas', dbRows, 'id');
-        const existing = carregouDoBanco.metas ? ((await sbSelect('metas','select=id')) || []) : [];
+        const existing = carregouDoBanco.metas ? ((await sbSelectTudo('metas','select=id&order=id.asc')) || []) : [];
         const localIds = metas.map(function(m){ return m.id; });
         const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
         if(toDelete.length) await sbDeleteIn('metas','id', toDelete);
@@ -2208,7 +2229,7 @@ function persistMetas(){
 }
 async function tryLoadMetasFromStorageAsync(){
   try{
-    const dbRows = await sbSelect('metas','select=*&order=id.asc');
+    const dbRows = await sbSelectTudo('metas','select=*&order=id.asc');
     carregouDoBanco.metas = true;
     if(dbRows){
       metas = dbRows.map(function(d){
@@ -2239,7 +2260,7 @@ function persistRelatorios(){
           return row;
         });
         await sbUpsert('relatorios_equipe', dbRows, 'id');
-        const existing = carregouDoBanco.relatorios ? ((await sbSelect('relatorios_equipe','select=id')) || []) : [];
+        const existing = carregouDoBanco.relatorios ? ((await sbSelectTudo('relatorios_equipe','select=id&order=id.asc')) || []) : [];
         const localIds = relatorios.map(function(r){ return r.id; });
         const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
         if(toDelete.length) await sbDeleteIn('relatorios_equipe','id', toDelete);
@@ -2269,7 +2290,7 @@ function agendarRefreshPainel(){
 
 async function tryLoadPainelTotaisAsync(){
   try{
-    const dbRows = await sbSelect('painel_equipe_totais','select=*');
+    const dbRows = await sbSelectTudo('painel_equipe_totais','select=*&order=vendedor.asc,ano.asc,mes.asc');
     if(dbRows){
       painelTotais = dbRows.map(function(d){
         const r = { ano: d.ano, mes: d.mes, vendedor: d.vendedor || '' };
@@ -2327,7 +2348,7 @@ function restaurarPesosPadrao(){
 
 async function tryLoadRelatoriosFromStorageAsync(){
   try{
-    const dbRows = await sbSelect('relatorios_equipe','select=*&order=id.asc');
+    const dbRows = await sbSelectTudo('relatorios_equipe','select=*&order=id.asc');
     carregouDoBanco.relatorios = true;
     if(dbRows){
       relatorios = dbRows.map(function(d){
@@ -6099,7 +6120,7 @@ function togglePessoaRenovacao(nome){
 
 async function tryLoadRenovacoesAsync(){
   try{
-    const db = await sbSelect('renovacoes', 'select=*&order=id.asc');
+    const db = await sbSelectTudo('renovacoes', 'select=*&order=id.asc');
     carregouDoBanco['renovacoes'] = true;
     if(db){
       renovacoes = db.map(function(d){
@@ -6132,7 +6153,7 @@ function persistRenovacoes(){
           };
         });
         await sbUpsert('renovacoes', dbRows, 'id');
-        const existing = carregouDoBanco['renovacoes'] ? ((await sbSelect('renovacoes','select=id')) || []) : [];
+        const existing = carregouDoBanco['renovacoes'] ? ((await sbSelectTudo('renovacoes','select=id&order=id.asc')) || []) : [];
         const localIds = renovacoes.map(function(r){ return r.id; });
         const toDelete = existing.map(function(x){ return x.id; })
           .filter(function(id){ return localIds.indexOf(id) === -1; });
@@ -6756,7 +6777,7 @@ let contratosNovosTimer = null;
 
 async function tryLoadContratosNovosAsync(){
   try{
-    const dbRows = await sbSelect('contratos_consultoria', 'select=*&order=id.asc');
+    const dbRows = await sbSelectTudo('contratos_consultoria', 'select=*&order=id.asc');
     carregouDoBanco['contratos-novos'] = true;
     if(dbRows){
       contratosNovos = dbRows.map(function(d){
@@ -6789,7 +6810,7 @@ function persistContratosNovos(){
         await sbUpsert('contratos_consultoria', dbRows, 'id');
         // só apaga o que sumiu daqui se a lista do banco já tiver sido lida
         const existing = carregouDoBanco['contratos-novos']
-          ? ((await sbSelect('contratos_consultoria','select=id')) || []) : [];
+          ? ((await sbSelectTudo('contratos_consultoria','select=id&order=id.asc')) || []) : [];
         const localIds = contratosNovos.map(function(r){ return r.id; });
         const toDelete = existing.map(function(x){ return x.id; })
           .filter(function(id){ return localIds.indexOf(id) === -1; });
