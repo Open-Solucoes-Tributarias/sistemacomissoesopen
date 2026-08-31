@@ -49,6 +49,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_venda_upgrade_migration.sql → migração 20: tag de upgrade na aba Sistema
 ├── supabase_acesso_financeiro_migration.sql → migração 21: nível de acesso financeiro (vê o valor das notas, nenhuma comissão)
 ├── supabase_renovacao_upgrade_migration.sql → migração 22: upgrade de plano na aba Renovações
+├── supabase_nota_emitida_migration.sql → migração 23: o visto de "nota emitida" e a função que o grava
 └── .gitignore
 ```
 
@@ -60,7 +61,7 @@ O sistema exige login (e-mail e senha) antes de mostrar qualquer dado. Não exis
 - **Chave pública (anon key)**: já está embutida no `index.html` (constante `SUPABASE_ANON_KEY`). Essa chave é **pública por padrão no Supabase** — sozinha, ela não abre porta nenhuma: quem decide o que pode ser lido/escrito são as políticas de RLS do banco.
 - **Modelo de acesso — três categorias de conta**:
   - **Admin** (Soraya, Deborah, Open): vê e edita todos os dados do sistema, em todas as abas.
-  - **Financeiro**: vê o **valor de contrato de todas as notas** que entraram — Sistema, Renovações, Consultoria, Consultoria Órgãos Públicos e Cursos — e **nenhuma comissão de ninguém**: nem valor, nem percentual, nem bônus, nem meta, nem salário, nem a divisão dos cursos. Não leva nome de pessoa, porque a conta não é de ninguém em particular. Veja "Nível financeiro" abaixo.
+  - **Financeiro**: vê o **valor de contrato de todas as notas** que entraram — Sistema, Renovações, Consultoria, Consultoria Órgãos Públicos e Cursos — e **nenhuma comissão de ninguém**: nem valor, nem percentual, nem bônus, nem meta, nem salário, nem a divisão dos cursos. Marca cada nota como **emitida** conforme emite a nota fiscal, e isso é a **única coisa** que essa conta escreve. Não leva nome de pessoa, porque a conta não é de ninguém em particular. Veja "Nível financeiro" abaixo.
   - **Restrita** (Gustavo, Rios, Luciana, Angela): só **visualiza**, em modo somente leitura, os lançamentos onde o nome da pessoa aparece como vendedor(a) ou colaborador(a) — nunca vê nem edita o que é dos colegas. Isso existe pra ninguém comparar comissão de ninguém.
 
   Um mesmo contrato pode ter até 3 vendedores + colaborador na mesma linha. Nesses contratos divididos, a pessoa vê o lançamento e a **própria** comissão, mas o nome e a porcentagem dos colegas vêm em branco — o corte é feito coluna a coluna, pelas views `_safe` do banco (veja `supabase_column_masking_migration.sql`).
@@ -105,7 +106,8 @@ Existe quem precise conferir **faturamento** sem ter acesso a remuneração: alg
 - as abas **Resumo Geral**, **Sistema**, **Renovações**, **Consultoria**, **Consultoria Órgãos Públicos** e **Cursos**;
 - de cada lançamento: mês, cliente/empresa, produto ou contrato, **valor de contrato**, forma de pagamento, se está pago e o mês do pagamento;
 - o **nome de quem atendeu** a conta — saber de quem é a nota ajuda a resolvê-la, e nome não é remuneração;
-- no lugar do painel de parceiros, um **Resumo do financeiro**: faturamento por origem, faturamento mês a mês e a lista de todas as notas do ano.
+- no lugar do painel de parceiros, um **Resumo do financeiro**: faturamento por origem, faturamento mês a mês e a lista de todas as notas do ano;
+- o botão **"Emitir" / "✓ Emitida"** em cada nota — veja "O visto de nota emitida" logo abaixo.
 
 **O que essa conta não vê, em lugar nenhum:**
 
@@ -120,6 +122,16 @@ Existe quem precise conferir **faturamento** sem ter acesso a remuneração: alg
 Isso foi conferido de verdade, simulando a sessão dessa conta direto no Postgres: 205 notas de Sistema, 175 lançamentos das outras abas e 419 renovações visíveis, com **zero** comissões, bônus, metas, percentuais e divisões de curso.
 
 **Como criar:** aba **Usuários e Acessos** → escolha **Financeiro** no nível de acesso. Essa conta não pede nome nos lançamentos, porque não é de ninguém em particular.
+
+### O visto de "nota emitida"
+
+Ver o valor das notas não bastava: quem emite precisa saber **quais já saíram**. Cada linha do quadro **"Notas lançadas"** tem um botão que alterna entre **"Emitir"** e **"✓ Emitida"**, com a data em que o visto foi dado. Acima do quadro, três pílulas — *Todas · A emitir · ✓ Emitidas* — e uma linha em âmbar dizendo quantas faltam e quanto somam; quando não falta nenhuma, ela vira verde: *"✓ Todas as notas de Agosto estão emitidas."*
+
+**É o mesmo quadro para os dois lados.** Ele aparece no Resumo do financeiro e também no **Resumo Geral de quem administra** — o visto que o financeiro dá aparece na hora para a administração, sem ninguém precisar perguntar. Quem administra também pode marcar e desmarcar.
+
+**Por que isso não abriu uma brecha.** A conta financeira é de leitura: ela não tem permissão de escrita em `vendas` nem em `lancamentos`, e não podia ganhar. RLS filtra **linha**, não **coluna** — uma política de update na tabela deixaria essa conta alterar *qualquer* campo pela API, inclusive o valor do contrato. Por isso o visto não vai pelo caminho normal de gravação: ele passa por uma função do banco (`marcar_nota_emitida`, migração 23) que confere quem está chamando e mexe em **exatamente uma coluna**. Conferido: a conta do financeiro grava o visto e **não** consegue alterar o valor de uma venda; uma conta restrita recebe *"Sem permissão para marcar nota emitida."*
+
+Na tela, o visto muda na hora e **se desfaz se a gravação falhar**, com um aviso. Um visto que aparece marcado sem ter sido gravado seria pior do que visto nenhum — a pessoa passaria para a próxima nota achando que aquela estava resolvida.
 
 ### Criando contas pelo painel do Supabase (alternativa)
 
@@ -200,6 +212,8 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `closed_months` | Meses fechados para edição |
 | `extra_years` | Anos adicionados manualmente |
 | `app_user_access` | Nível de acesso de cada conta de login (admin, financeiro ou restrita + nome pra filtrar) |
+
+As colunas `nota_emitida` e `nota_emitida_em` de `vendas` e `lancamentos` guardam o visto do financeiro (migração 23); só a função `marcar_nota_emitida` escreve nelas.
 
 Se precisar recriar o banco do zero em outro projeto Supabase, o script de criação das tabelas está em `supabase_schema.sql` (gerado junto com este projeto).
 
@@ -646,6 +660,7 @@ Dentro do próprio sistema, o botão **"⬇ Exportar dados"** (no topo da tela) 
 
 - **Login obrigatório**: o acesso deixou de ser "quem tem o link, edita" — agora é preciso login (Supabase Auth) e o banco só aceita requisições autenticadas. Veja "Login e segurança" acima.
 - **Nível financeiro**: um terceiro nível de conta, para quem confere faturamento e não pode ver remuneração — enxerga o valor de todas as notas e nenhuma comissão, bônus, meta ou salário. Feito no banco (RLS + views `_safe`), não na tela. Veja "Nível financeiro" acima.
+- **Escrita por porta estreita**: essa conta precisa marcar as notas emitidas, mas dar-lhe update em `vendas`/`lancamentos` abriria a tabela inteira — RLS filtra linha, não coluna. O visto passa por uma função `security definer` que confere o nível de acesso e altera uma única coluna; a conta continua sem nenhuma permissão de escrita direta.
 - **Acesso por pessoa**: além de exigir login, o banco distingue admins (acesso total) de contas restritas (somente leitura, só dos próprios lançamentos) — a comparação de nomes é feita inteiramente no Postgres, então mesmo alguém manipulando as chamadas à API diretamente (sem passar pela tela) não consegue ver ou editar dado de outra pessoa.
 - **Linha de comissão vazia não conta como participação**: o app grava uma linha em `vendas_comissoes` para cada vendedora em cada venda, quase sempre com valor nulo. Enquanto a regra checava só "existe linha", bastava alguém estar cadastrada como vendedora para enxergar todas as vendas da aba Sistema. Corrigido: agora exige valor preenchido.
 - **Funções auxiliares fechadas para quem não fez login**: elas eram chamáveis pelo papel `anon` via `/rest/v1/rpc/`, e uma delas aceitava um nome qualquer — dava para perguntar "fulano participa do lançamento X?" sem ter conta. Acesso revogado e a função passou a responder só sobre quem está logado.
