@@ -46,6 +46,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_venda_renovacao_migration.sql → migração 17: venda de renovação fica fora do ranking
 ├── supabase_vendas_safe_renovacao_migration.sql → migração 18: a view vendas_safe devolve a coluna renovacao
 ├── supabase_venda_novo_contrato_migration.sql → migração 19: tag de contrato novo na aba Sistema
+├── supabase_venda_upgrade_migration.sql → migração 20: tag de upgrade na aba Sistema
 └── .gitignore
 ```
 
@@ -139,6 +140,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 18. Rode `supabase_venda_renovacao_migration.sql` — tira as vendas de renovação do ranking de desempenho.
 19. Rode `supabase_vendas_safe_renovacao_migration.sql` — faz a view `vendas_safe` devolver a coluna `renovacao` (sem isso o selo some ao recarregar).
 20. Rode `supabase_venda_novo_contrato_migration.sql` — cria a tag de contrato novo.
+21. Rode `supabase_venda_upgrade_migration.sql` — cria a tag de upgrade.
 11. Cadastre cada pessoa em `app_user_access` (passo 4 acima). **Faça isso antes do próximo passo**, ou a equipe toda fica sem ver dado nenhum.
 12. Só depois publique esta versão atualizada do `index.html`.
 
@@ -389,19 +391,24 @@ A venda que nasce de uma renovação vale **comissão como qualquer outra** e en
 
 Na aba Sistema, essas vendas aparecem com o selo verde **"♻️ Renovação"** ao lado do cliente, e o botão **♻️** nas ações da linha marca ou desmarca qualquer venda — inclusive uma que você tenha digitado à mão e queira tirar do ranking.
 
-#### Contrato novo x renovação
+#### A natureza da venda: contrato novo, upgrade e renovação
 
-A aba Sistema tem duas marcas, uma o oposto da outra:
+A aba Sistema tem três marcas, e cada venda pode ter no máximo uma:
 
 | Marca | O que significa | Conta no ranking? |
 |---|---|---|
-| **✨ Contrato novo** | conta nova que entrou no mês | **sim**, como qualquer venda |
-| **♻️ Renovação** | contrato que já era da casa e foi renovado | **não** |
-| *(sem marca)* | o resto — o contrato mensal que se repete, por exemplo | sim |
+| **✨ Contrato novo** | conta nova que entrou no mês | **sim** |
+| **⬆️ Upgrade** | cliente que já era da casa e subiu de plano | **sim** |
+| **♻️ Renovação** | contrato que já era da casa, renovado igual | **não** |
+| *(sem marca)* | o resto — o contrato mensal que só se repete | sim |
 
-Os botões **✨** e **♻️** nas ações da linha marcam e desmarcam. **Uma exclui a outra**: marcar como contrato novo desmarca a renovação, e vice-versa — nenhuma venda pode ser as duas coisas.
+Só a **renovação** sai do ranking: é o único caso em que o dinheiro entra sem ninguém ter conquistado nada de novo. Contrato novo e upgrade são receita conquistada e contam no desempenho como qualquer venda.
 
-Acima da tabela, uma linha de filtros mostra a contagem no recorte que está na tela — *"Todas · 9 · ✨ Contratos novos · 4 · ♻️ Renovações · 3 · Sem marcação · 2"* — e clicar em qualquer uma filtra a lista. Combina com o filtro de mês e o de vendedora, então dá para responder na hora quantas contas novas cada pessoa trouxe num mês.
+Os botões **✨**, **⬆️** e **♻️** nas ações da linha marcam e desmarcam. **As três se excluem**: ligar uma desliga as outras, porque nenhuma venda é duas coisas ao mesmo tempo. Clicar na marca que já está ligada desliga e volta a venda para "sem marcação".
+
+Acima da tabela, uma linha de filtros mostra a contagem no recorte que está na tela — *"Todas · 9 · ✨ Contratos novos · 4 · ⬆️ Upgrades · 1 · ♻️ Renovações · 3 · Sem marcação · 1"* — e clicar em qualquer uma filtra a lista. Combina com o filtro de mês e o de vendedora, então dá para responder na hora quantas contas novas cada pessoa trouxe num mês.
+
+> **Upgrade não entra na carteira do ano seguinte.** Só o contrato novo entra, porque o cliente que fez upgrade provavelmente já está na carteira pelo contrato original — o que muda na renovação é o valor, não a existência da linha. Ajuste o valor na carteira quando fizer a virada de ano.
 
 > **Atenção para quem for mexer no banco:** o aplicativo não lê a tabela `vendas`, e sim a view `vendas_safe`, que faz o mascaramento por coluna. Toda coluna nova precisa entrar também na view — senão ela é gravada e nunca mais lida. Foi o que aconteceu com `renovacao` na primeira versão: o selo aparecia e sumia no recarregamento (corrigido na migração 18).
 

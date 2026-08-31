@@ -1131,6 +1131,11 @@
     padding:2px 7px;border-radius:999px;background:var(--primary-soft);border:1px solid var(--ring);color:var(--primary);
   }
   .action-btn.ativo-novo{background:var(--primary-soft);color:var(--primary);}
+  .selo-upgrade{
+    margin-left:6px;font-size:10px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
+    padding:2px 7px;border-radius:999px;background:#FEF3C7;border:1px solid #FCD34D;color:#B45309;
+  }
+  .action-btn.ativo-upgrade{background:#FEF3C7;color:#B45309;}
   .kpi-sub{font-size:11.5px;font-weight:700;color:var(--ink-faint);margin-top:2px;font-variant-numeric:tabular-nums;}
   .import-arquivo{display:block;margin:4px 0 10px;}
   .import-arquivo input{display:none;}
@@ -1799,7 +1804,7 @@ function checkStorageAvailability(){
 }
 
 /* ---------- Sistema (vendas + vendas_comissoes) ---------- */
-const VENDA_NON_SELLER_FIELDS = new Set(['id','ano','mes','cliente','venda','valor','parceiro','participacao','formaPagamento','colaborador','observacoes','vendedor2','vendedor3','vendedorResponsavel','pago','mesPagamento','parcelaLabel','comissaoPercents','renovacao','novoContrato']);
+const VENDA_NON_SELLER_FIELDS = new Set(['id','ano','mes','cliente','venda','valor','parceiro','participacao','formaPagamento','colaborador','observacoes','vendedor2','vendedor3','vendedorResponsavel','pago','mesPagamento','parcelaLabel','comissaoPercents','renovacao','novoContrato','upgrade']);
 
 function persist(){
   saving = true; updateSaveStatus();
@@ -1812,7 +1817,7 @@ function persist(){
             id: r.id, ano: r.ano||2026, mes: r.mes, cliente: r.cliente||'', venda: r.venda||'',
             valor: numOrNull(r.valor), parceiro: r.parceiro||'', participacao: numOrNull(r.participacao),
             forma_pagamento: r.formaPagamento||'', colaborador: r.colaborador||'', observacoes: r.observacoes||'',
-            renovacao: !!r.renovacao, novo_contrato: !!r.novoContrato,
+            renovacao: !!r.renovacao, novo_contrato: !!r.novoContrato, upgrade: !!r.upgrade,
             vendedor2: r.vendedor2||'', vendedor3: r.vendedor3||'', pago: !!r.pago, mes_pagamento: r.mesPagamento||null,
             parcela_label: r.parcelaLabel || null,
             vendedor_responsavel: r.vendedorResponsavel || '',
@@ -1870,7 +1875,7 @@ async function tryLoadFromStorageAsync(){
           id: d.id, ano: d.ano, mes: d.mes, cliente: d.cliente||'', venda: d.venda||'',
           valor: d.valor, parceiro: d.parceiro||'', participacao: d.participacao,
           formaPagamento: d.forma_pagamento||'', colaborador: d.colaborador||'', observacoes: d.observacoes||'',
-          renovacao: !!d.renovacao, novoContrato: !!d.novo_contrato,
+          renovacao: !!d.renovacao, novoContrato: !!d.novo_contrato, upgrade: !!d.upgrade,
           vendedor2: d.vendedor2||'', vendedor3: d.vendedor3||'', pago: d.pago, mesPagamento: d.mes_pagamento,
           parcelaLabel: d.parcela_label,
           vendedorResponsavel: d.vendedor_responsavel || '',
@@ -4929,7 +4934,7 @@ function addRow(){
     showAlert("Este mês está fechado para novos lançamentos. Reabra em Resumo Geral para poder editar.");
     return;
   }
-  const newRow = {id: nextId++, mes, ano: yearFilter, cliente:"", venda:"", valor:null, renovacao:false, novoContrato:false,
+  const newRow = {id: nextId++, mes, ano: yearFilter, cliente:"", venda:"", valor:null, renovacao:false, novoContrato:false, upgrade:false,
                    parceiro:"", participacao:null, formaPagamento:"", colaborador:"", vendedor2:"", vendedor3:"",
                    vendedorResponsavel: sellerFilter !== "Todas" ? ((SELLERS.find(x => x.key === sellerFilter)||{}).label || "") : "",
                    pago:false, mesPagamento:null, observacoes:"",
@@ -4946,6 +4951,9 @@ function addRow(){
 /* Renovação vale comissão como qualquer venda, mas não é venda nova: fica
    fora do ranking de desempenho (o corte é feito na view painel_equipe_totais). */
 function toggleVendaRenovacao(id){ marcarNaturezaVenda(id, 'renovacao'); }
+/* Upgrade: cliente que já era da casa e subiu de plano. Como contrato
+   novo, é receita nova e conta no ranking — só renovação fica de fora. */
+function toggleVendaUpgrade(id){ marcarNaturezaVenda(id, 'upgrade'); }
 /* Contrato novo é o oposto de renovação: conta no ranking e nas comissões
    como qualquer venda, e serve para ver quantas contas novas entraram no
    mês. Uma venda é uma coisa OU outra — marcar uma desmarca a outra. */
@@ -4961,6 +4969,7 @@ function marcarNaturezaVenda(id, campo){
   const ligar = !r[campo];
   r.renovacao = false;
   r.novoContrato = false;
+  r.upgrade = false;
   r[campo] = ligar;
   persist();
   render();
@@ -5082,7 +5091,8 @@ function getVisible(){
   list = filter === "Todos" ? list : list.filter(r => r.mes === filter);
   if(naturezaFilter === 'novo')       list = list.filter(r => r.novoContrato);
   else if(naturezaFilter === 'renov') list = list.filter(r => r.renovacao);
-  else if(naturezaFilter === 'sem')   list = list.filter(r => !r.novoContrato && !r.renovacao);
+  else if(naturezaFilter === 'upg')   list = list.filter(r => r.upgrade);
+  else if(naturezaFilter === 'sem')   list = list.filter(r => !r.novoContrato && !r.renovacao && !r.upgrade);
   if(sellerFilter !== "Todas"){
     list = list.filter(r => r[sellerFilter] !== null && r[sellerFilter] !== undefined && r[sellerFilter] !== "");
   }
@@ -5197,11 +5207,13 @@ function renderVendasSection(){
   });
   const qtdNovos = noRecorte.filter(function(r){ return r.novoContrato; }).length;
   const qtdRenov = noRecorte.filter(function(r){ return r.renovacao; }).length;
+  const qtdUpg   = noRecorte.filter(function(r){ return r.upgrade; }).length;
   const naturezaPillsHtml = [
     {k:'Todas', rot:'Todas',               n:noRecorte.length},
     {k:'novo',  rot:'✨ Contratos novos',  n:qtdNovos},
+    {k:'upg',   rot:'⬆️ Upgrades',          n:qtdUpg},
     {k:'renov', rot:'♻️ Renovações',        n:qtdRenov},
-    {k:'sem',   rot:'Sem marcação',        n:noRecorte.length - qtdNovos - qtdRenov},
+    {k:'sem',   rot:'Sem marcação',        n:noRecorte.length - qtdNovos - qtdRenov - qtdUpg},
   ].map(function(f){
     return `<button class="pill seller-pill${naturezaFilter===f.k?' active':''}" onclick="setNaturezaFilter('${f.k}')">${f.rot} · ${f.n}</button>`;
   }).join('');
@@ -5239,7 +5251,7 @@ function renderVendasSection(){
           ${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}
           ${isVendasRowDuplicate(row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo cliente neste mês — confira se não é duplicado">🔁 Duplicado</span>` : ''}
         </td>
-        <td class="cliente"><input type="text" data-id="${row.id}" data-field="cliente" value="${esc(row.cliente)}" placeholder="Cliente" oninput="onTextInput(this)" />${row.renovacao ? '<span class="selo-renovacao" title="Renovação: vale comissão, mas não conta no ranking de desempenho">♻️ Renovação</span>' : (row.novoContrato ? '<span class="selo-novo" title="Contrato novo: conta no ranking e nas comissões como qualquer venda">✨ Contrato novo</span>' : '')}</td>
+        <td class="cliente"><input type="text" data-id="${row.id}" data-field="cliente" value="${esc(row.cliente)}" placeholder="Cliente" oninput="onTextInput(this)" />${row.renovacao ? '<span class="selo-renovacao" title="Renovação: vale comissão, mas não conta no ranking de desempenho">♻️ Renovação</span>' : (row.novoContrato ? '<span class="selo-novo" title="Contrato novo: conta no ranking e nas comissões como qualquer venda">✨ Contrato novo</span>' : (row.upgrade ? '<span class="selo-upgrade" title="Upgrade: cliente que subiu de plano. É receita nova e conta no ranking">⬆️ Upgrade</span>' : ''))}</td>
         <td class="venda">
           <select data-id="${row.id}" onchange="onVendaSelect(this)">
             <option value="">—</option>
@@ -5280,6 +5292,7 @@ function renderVendasSection(){
         <td class="del-cell">
           <div class="row-actions">
             <button class="action-btn${row.novoContrato ? ' ativo-novo' : ''}" title="${row.novoContrato ? 'Marcada como contrato novo — clique para desmarcar' : 'Marcar como contrato novo (conta normalmente no ranking)'}" onclick="toggleVendaNova(${row.id})">✨</button>
+            <button class="action-btn${row.upgrade ? ' ativo-upgrade' : ''}" title="${row.upgrade ? 'Marcada como upgrade — clique para desmarcar' : 'Marcar como upgrade (cliente que subiu de plano; conta normalmente no ranking)'}" onclick="toggleVendaUpgrade(${row.id})">⬆️</button>
             <button class="action-btn${row.renovacao ? ' ativo' : ''}" title="${row.renovacao ? 'É uma renovação — clique para voltar a contar como venda nova' : 'Marcar como renovação (vale comissão, mas não conta no ranking)'}" onclick="toggleVendaRenovacao(${row.id})">♻️</button>
             <button class="action-btn" title="Duplicar" onclick="duplicateRow(${row.id})">⎘</button>
             <button class="action-btn" title="Parcelar em vários meses" onclick="parcelarRow(${row.id})">🧩</button>
@@ -6765,7 +6778,7 @@ function confirmarLancarNoSistema(){
       pago: false, mesPagamento: null,
       observacoes: 'Renovação',
       renovacao: true,          // fora do ranking: renovar não é venda nova
-      novoContrato: false,
+      novoContrato: false, upgrade: false,
       comissaoPercents: {},
     };
     SELLERS.forEach(function(sv){ venda[sv.key] = null; });
