@@ -342,7 +342,6 @@
   .rel-campea-sub{display:block;font-size:9px;color:#666;}
   .rel-campea-lista{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;font-size:9px;color:#555;}
   .rel-nota{font-size:8.5px;color:#777;margin:0;}
-  .rel-de{font-size:8px;color:#888;font-weight:400;}
   .rel-graf{margin-bottom:10px;break-inside:avoid;}
   .rel-graf h3{font-size:10px;font-weight:800;margin:0 0 4px;color:#333;}
   .rel-legenda{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;font-size:9px;color:#555;}
@@ -7899,28 +7898,6 @@ function montarRelatorioMes(mes){
       <td class="num">${(valorMetrica(v, mes, 'reunioes')||0).toLocaleString('pt-BR')}</td></tr>`;
   });
 
-  // Renovações do sistema no mês: quem cuidou e o desfecho.
-  const renovMes = renovacoes.filter(function(r){ return r.ano === ano && r.mes === mes; })
-    .sort(function(a,b){ return String(a.pessoa||'').localeCompare(String(b.pessoa||''),'pt-BR') || ((a.id||0)-(b.id||0)); });
-  const renovOk  = renovMes.filter(function(r){ return r.renovado === true; }).length;
-  const renovNao = renovMes.filter(function(r){ return r.renovado === false; }).length;
-  const renovTaxa = (renovOk + renovNao)
-    ? (Math.round(1000*renovOk/(renovOk+renovNao))/10).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1}) + '% renovaram'
-    : 'nenhuma decidida ainda';
-  const renovValor = renovMes.reduce(function(a,r){ return a + valorDeRenovacao(r); }, 0);
-  const linhasRenov = renovMes.map(function(r){
-    const sit = r.upgrade ? 'Upgrade de plano'
-      : r.renovado === true ? 'Renovado' : (r.renovado === false ? 'Não renovado' : 'Em aberto');
-    // no upgrade o relatório mostra o valor novo e, entre parênteses, de
-    // quanto ele veio — é a leitura que interessa numa reunião
-    const val = valorDeRenovacao(r)
-      ? fmtMoney(valorDeRenovacao(r)) + (r.upgrade && Number(r.valor) ? ' <span class="rel-de">(era ' + fmtMoney(Number(r.valor)) + ')</span>' : '')
-      : '—';
-    return `<tr><td>${esc(r.empresa || '—')}</td>
-      <td class="num">${val}</td>
-      <td>${esc(r.pessoa || '—')}</td><td>${sit}</td></tr>`;
-  });
-
   // Empresas que assinaram contrato no mês, com a avaliação do gestor.
   const linhasEmpresasNovas = contratosNovos
     .filter(function(c){ return c.ano === ano && c.mes === mes; })
@@ -8064,12 +8041,6 @@ function montarRelatorioMes(mes){
         ${relTabela([{label:'Pessoa'},{label:'Contratos assinados',num:true},{label:'Reuniões realizadas',num:true}],
           linhasConsult, 'Ninguém na equipe de consultoria ainda.')}
       </section>
-
-      ${linhasRenov.length ? `<section class="rel-sec">
-        <h2>Renovações do sistema <span class="rel-sub">${renovOk} de ${renovMes.length} · ${renovTaxa} · ${fmtMoney(renovValor)} em contratos</span></h2>
-        ${relTabela([{label:'Empresa'},{label:'Valor',num:true},{label:'Responsável'},{label:'Situação'}], linhasRenov, '')}
-        <p class="rel-nota">Esta lista é o acompanhamento da carteira. As renovadas só entram nas comissões e no desempenho depois de lançadas na aba Sistema.</p>
-      </section>` : ''}
 
       <section class="rel-sec">
         <h2>Empresas que assinaram contrato <span class="rel-sub">novas contas trazidas pela equipe de consultoria</span></h2>
