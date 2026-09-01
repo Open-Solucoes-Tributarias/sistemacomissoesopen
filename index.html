@@ -2508,8 +2508,8 @@ function renderMarketingSection(){
   }) : [];
 
   const grafico = indicadoresNumericos.length ? panel('marketing-linha', `Evolução mensal — ${esc(metricaFocoLabel)}`,
-    graficoLinhaMarketing(serieChart)
-    + `<div class="painel-nota">Este quadro mostra sempre os 12 meses de ${yearFilter} — a linha quebra nos meses sem lançamento, em vez de cair pra zero.</div>`
+    graficoBarrasMarketing(serieChart)
+    + `<div class="painel-nota">Este quadro mostra sempre os 12 meses de ${yearFilter} — mês sem lançamento simplesmente não tem barra.</div>`
     + `<div class="painel-legenda">${MARKETING_CONTAS.map(function(c){ return `<span><i style="background:${esc(c.cor)}"></i>${esc(c.label)}</span>`; }).join('')}</div>`,
     { actions: seletorMetrica }) : '';
 
@@ -8737,53 +8737,41 @@ function graficoLinhaPainel(vends, opts){
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">${grade}${rotulos}${linhas}</svg>`;
 }
 
-/* Gráfico de evolução do Marketing: uma linha por conta (Open / Foco
-   Tributário), 12 meses do ano do filtro. Diferente do painel de
-   equipe, aqui um mês sem lançamento é buraco de verdade — não é zero,
-   é "não temos o dado" — então a linha quebra em vez de descer ao chão. */
-function graficoLinhaMarketing(series, opts){
+/* Gráfico de evolução do Marketing: barras agrupadas por mês (Open e
+   Foco Tributário lado a lado), 12 meses do ano do filtro. Era um
+   gráfico de linha, mas com só 1 ou 2 meses lançados a linha virava um
+   traço fino sem contexto nenhum. Barra lê mais fácil quando o ano
+   ainda tem poucos meses preenchidos — cada mês é a própria barra, sem
+   precisar de dois pontos pra "formar linha". Mês sem lançamento
+   simplesmente não tem barra ali (não é barra de altura zero — é
+   ausência mesmo). */
+function graficoBarrasMarketing(series, opts){
   const w = 760, h = (opts && opts.h) || 260, padBottom = 28, padTop = 12, padLeft = 44;
   const plotH = h - padBottom - padTop;
   const plotW = w - padLeft - 12;
   const todos = series.flatMap(function(s){ return s.valores.filter(function(v){ return v !== null && v !== undefined; }); });
   const max = Math.max(1, ...todos);
-  const px = i => padLeft + (plotW/11)*i;
-  const py = val => padTop + plotH - (val/max)*plotH;
+  const grupoW = plotW / 12;
+  const barW = Math.min(20, (grupoW - 8) / Math.max(series.length,1));
   const grade = [0, 0.25, 0.5, 0.75, 1].map(f => {
     const y = padTop + plotH - f*plotH;
     return `<line x1="${padLeft}" y1="${y}" x2="${w-12}" y2="${y}" stroke="#F1F5F9" stroke-width="1"/>
             <text x="${padLeft-8}" y="${y+4}" text-anchor="end" font-size="10" fill="#94A3B8">${Math.round(max*f).toLocaleString('pt-BR')}</text>`;
   }).join('');
   const rotulos = MONTHS.map((m,i) =>
-    `<text x="${px(i)}" y="${h-8}" text-anchor="middle" font-size="10" fill="#94A3B8">${monthNumber(m)}</text>`).join('');
-  if(!todos.length){
-    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">${grade}${rotulos}</svg>`;
-  }
-  const linhas = series.map(function(s){
-    const cor = esc(s.cor);
-    // quebra a linha em trechos contínuos — sem interpolar por cima de mês sem dado
-    const trechos = [];
-    let atual = [];
-    s.valores.forEach(function(val, i){
-      if(val === null || val === undefined){
-        if(atual.length) trechos.push(atual);
-        atual = [];
-      } else {
-        atual.push([i, val]);
-      }
-    });
-    if(atual.length) trechos.push(atual);
-    const polys = trechos.map(function(t){
-      const pontos = t.map(function(p){ return `${px(p[0])},${py(p[1])}`; }).join(' ');
-      return `<polyline points="${pontos}" fill="none" stroke="${cor}" stroke-width="2" stroke-linejoin="round"/>`;
-    }).join('');
-    const bolinhas = s.valores.map(function(val, i){
+    `<text x="${padLeft + grupoW*i + grupoW/2}" y="${h-8}" text-anchor="middle" font-size="10" fill="#94A3B8">${monthNumber(m)}</text>`).join('');
+  const barras = MONTHS.map(function(m, i){
+    const gx = padLeft + grupoW*i + (grupoW - barW*series.length)/2;
+    return series.map(function(s, si){
+      const val = s.valores[i];
       if(val === null || val === undefined) return '';
-      return `<circle cx="${px(i)}" cy="${py(val)}" r="2.5" fill="${cor}"><title>${esc(s.label)} · ${MONTHS[i]}: ${val.toLocaleString('pt-BR')}</title></circle>`;
+      const bh = max > 0 ? Math.max((val/max)*plotH, 1) : 1;
+      const x = gx + si*barW;
+      const y = padTop + plotH - bh;
+      return `<rect x="${x}" y="${y}" width="${Math.max(barW-3,1)}" height="${bh}" rx="3" fill="${esc(s.cor)}"><title>${esc(s.label)} · ${m}: ${val.toLocaleString('pt-BR')}</title></rect>`;
     }).join('');
-    return polys + bolinhas;
   }).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">${grade}${rotulos}${linhas}</svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">${grade}${rotulos}${barras}</svg>`;
 }
 
 /* ---------------- Painel da Equipe: telas ---------------- */

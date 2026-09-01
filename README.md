@@ -679,7 +679,7 @@ De fábrica, cada rede já vem com um conjunto pensado para o que a diretoria qu
 
 Cada indicador numérico vira um **cartão por conta**, com o valor do mês e a variação contra o mês anterior **que tiver lançamento** (não precisa ser o mês imediatamente anterior — se pular Junho, Julho compara com Maio), em número absoluto e em %.
 
-**Gráfico de evolução mensal** — abaixo dos cartões, mostra a linha do ano inteiro (sempre os 12 meses de `yearFilter`, não muda com o filtro de mês) de um indicador escolhido no seletor "Indicador", uma linha por conta (Open e Foco Tributário, cada uma numa cor). Mês sem lançamento é buraco de verdade: a linha quebra ali, em vez de descer ao chão como se tivesse caído a zero.
+**Gráfico de evolução mensal** — abaixo dos cartões, mostra o ano inteiro em barras (sempre os 12 meses de `yearFilter`, não muda com o filtro de mês) de um indicador escolhido no seletor "Indicador", uma barra por conta lado a lado em cada mês (Open e Foco Tributário, cada uma numa cor). Era gráfico de linha, mas com só 1 ou 2 meses lançados a linha virava um traço fino sem contexto — barra lê melhor um ano ainda incompleto. Mês sem lançamento simplesmente não tem barra ali, não é barra de altura zero.
 
 Um filtro de mês (Todos + os 12 meses) recorta a tabela de lançamentos e os cartões ao mesmo tempo, igual ao resto do sistema. A tabela também segue os indicadores da rede: as colunas mudam sozinhas quando um indicador é incluído ou retirado.
 
