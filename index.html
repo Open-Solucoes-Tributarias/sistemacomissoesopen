@@ -1355,6 +1355,7 @@ const TABS = [
   {key:"cursos", label:"Cursos"},
   {key:"bonus", label:"Bônus e Metas"},
   {key:"marketing", label:"Marketing"},
+  {key:"equipeConsultoria", label:"Equipe de consultoria", adminOnly:true},
   {key:"parceiros", label:"Resumo Geral"},
   {key:"pagamentos", label:"Pagamentos Realizados"},
   {key:"painel", label:"Relatório de Desempenho"},
@@ -1372,7 +1373,7 @@ const ABAS_FINANCEIRO = ['parceiros','vendas','renovacoes','consultoria','public
 const NAV_GROUPS = [
   {label:"Visão geral",  keys:["parceiros","pagamentos"]},
   {label:"Lançamentos",  keys:["vendas","renovacoes","consultoria","publicos","cursos"]},
-  {label:"Equipe",       keys:["painel","bonus","marketing"]},
+  {label:"Equipe",       keys:["painel","bonus","marketing","equipeConsultoria"]},
   {label:"Administração", keys:["usuarios"]},
 ];
 
@@ -1386,6 +1387,7 @@ const NAV_ICONS = {
   cursos:      SVG_OPEN + '<path d="M12 4 2.5 8.5 12 13l9.5-4.5L12 4Z"/><path d="M6.5 11v5c0 1.4 2.5 2.6 5.5 2.6s5.5-1.2 5.5-2.6v-5"/></svg>',
   bonus:       SVG_OPEN + '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg>',
   marketing:   SVG_OPEN + '<path d="M3 10.5v3a1.5 1.5 0 0 0 1.5 1.5h2l5 4V5l-5 4h-2A1.5 1.5 0 0 0 3 10.5Z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19.3 6a8.5 8.5 0 0 1 0 12"/></svg>',
+  equipeConsultoria: SVG_OPEN + '<path d="M8.5 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M2.5 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1"/><path d="M17 8.5v3.5M15.2 10.25h3.6"/></svg>',
   renovacoes:  SVG_OPEN + '<path d="M20.5 12a8.5 8.5 0 0 1-14.6 5.9"/><path d="M3.5 12a8.5 8.5 0 0 1 14.6-5.9"/><path d="M18.1 2.6v3.5h-3.5"/><path d="M5.9 21.4v-3.5h3.5"/></svg>',
   painel:      SVG_OPEN + '<path d="M16.5 20.5v-2a4 4 0 0 0-4-4h-6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="3.5"/><path d="M22 20.5v-2a4 4 0 0 0-3-3.87"/><path d="M16.5 3.6a4 4 0 0 1 0 7.75"/></svg>',
   usuarios:    SVG_OPEN + '<path d="M12 2.5 4 6v5.5c0 5 3.4 9.3 8 10.5 4.6-1.2 8-5.5 8-10.5V6l-8-3.5Z"/><circle cx="12" cy="11" r="2.6"/><path d="M8.2 17.3a4.2 4.2 0 0 1 7.6 0"/></svg>',
@@ -1508,7 +1510,7 @@ const METRICAS_TODAS = METRICAS.concat([METRICA_CONTRATOS]);
 let relatorios = [];            // lançamentos manuais {id, ano, mes, vendedor, ...}
 let painelTotais = [];          // totais consolidados vindos da view (inclui os calculados)
 let relatoriosNextId = 1;
-let painelAba = 'lancamento';   // 'lancamento' | 'dashboard'
+let painelAba = 'dashboard';   // 'lancamento' | 'dashboard'
 let painelVendedor = '';        // quem está sendo lançado
 let painelMes = MONTHS[0];
 let painelForm = {};            // rascunho do formulário
@@ -8578,16 +8580,15 @@ function renderPainelSection(){
   // Conta restrita não lança nem compara: só acompanha os próprios números.
   const abas = isAdmin ? `
     <div class="painel-abas">
-      <button class="painel-aba${painelAba==='lancamento'?' active':''}" onclick="setPainelAba('lancamento')">Lançamento</button>
       <button class="painel-aba${painelAba==='dashboard'?' active':''}" onclick="setPainelAba('dashboard')">Dashboard</button>
-      <button class="painel-aba${painelAba==='contratos'?' active':''}" onclick="setPainelAba('contratos')">Equipe de consultoria</button>
+      <button class="painel-aba${painelAba==='lancamento'?' active':''}" onclick="setPainelAba('lancamento')">Lançamento</button>
     </div>` : '';
-  const btnEquipe = (isAdmin && painelAba !== 'contratos') ? `
+  const btnEquipe = isAdmin ? `
     <button class="eye-toggle" onclick="setPainelEditandoEquipe(${painelEditandoEquipe ? 'false' : 'true'})"
             title="Escolhe quem aparece neste painel — não mexe nas outras abas">
       ${painelEditandoEquipe ? '✕ Fechar' : '👥 Quem aparece'}
     </button>` : '';
-  const editorEquipe = (isAdmin && painelEditandoEquipe && painelAba !== 'contratos') ? panel('painel-equipe', 'Quem aparece neste painel', `
+  const editorEquipe = (isAdmin && painelEditandoEquipe) ? panel('painel-equipe', 'Quem aparece neste painel', `
     <div class="painel-equipe-nota">Marque as pessoas que este painel acompanha. Desmarcar alguém só tira do painel — os lançamentos, as comissões e as outras abas continuam iguais.</div>
     <div class="painel-equipe-lista">
       ${pessoasConhecidas().map(function(n){
@@ -8599,12 +8600,14 @@ function renderPainelSection(){
       }).join('')}
     </div>
   `) : '';
+  // "contratos" e "renovacoes" viraram abas próprias no menu; estado
+  // antigo (de quem tinha a página aberta antes da mudança) cai pro
+  // Dashboard, que é a aba padrão de agora em diante.
+  if(painelAba === 'renovacoes' || painelAba === 'contratos') painelAba = 'dashboard';
   const conteudo = !isAdmin ? renderPainelDashboard(vends)
     : painelAba === 'lancamento' ? renderPainelLancamento(vends)
-    : painelAba === 'contratos'  ? renderPainelContratos()
     : renderPainelDashboard(vends);
-  if(painelAba === 'renovacoes') painelAba = 'lancamento';   // virou aba própria no menu
-  const olhaVendas   = isAdmin && painelAba !== 'contratos';
+  const olhaVendas   = isAdmin;
   const faltaSistema = olhaVendas ? vendasSemResponsavel().length : 0;
   const faltaCursos  = olhaVendas ? entityRowsSemDivisao('cursos').length : 0;
   const partes = [];
@@ -8635,6 +8638,15 @@ function renderPainelSection(){
 
 /* Aba "Equipe de consultoria": lista própria de pessoas, dois indicadores.
    Não entra no ranking de vendas — quem é medido assim não vende. */
+/* Equipe de consultoria virou aba própria no menu (Equipe → abaixo de
+   Marketing), separada do Relatório de Desempenho — antes era uma
+   terceira aba escondida dentro dele. Continua admin-only, do jeito que
+   sempre foi: a pill que dava acesso só aparecia pra quem administra. */
+function renderEquipeConsultoriaSection(){
+  if(!isAdmin) return `<div class="meta-empty" style="padding:24px;">Esta área é só de administrador.</div>`;
+  return sectionsToolbarHtml() + renderPainelContratos();
+}
+
 function renderPainelContratos(){
   const pessoas = pessoasDeContratos();
   if(painelContratoPessoa && pessoas.indexOf(painelContratoPessoa) === -1) painelContratoPessoa = null;
@@ -9634,6 +9646,7 @@ function render(){
     : activeTab === "parceiros" ? (isFinanceiro ? renderFinanceiroResumo() : renderParceirosSection())
     : activeTab === "bonus" ? renderBonusSection()
     : activeTab === "marketing" ? renderMarketingSection()
+    : activeTab === "equipeConsultoria" ? renderEquipeConsultoriaSection()
     : activeTab === "pagamentos" ? renderPagamentosSection()
     : activeTab === "painel" ? renderPainelSection()
     : activeTab === "renovacoes" ? renderPainelRenovacoes()
