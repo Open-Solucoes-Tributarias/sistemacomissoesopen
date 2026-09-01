@@ -51,6 +51,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_renovacao_upgrade_migration.sql → migração 22: upgrade de plano na aba Renovações
 ├── supabase_nota_emitida_migration.sql → migração 23: o visto de "nota emitida" e a função que o grava
 ├── supabase_marketing_metricas_migration.sql → migração 24: crescimento das redes sociais (aba Marketing)
+├── supabase_curso_in_company_migration.sql → migração 25: curso In Company como indicador próprio do ranking
 └── .gitignore
 ```
 
@@ -217,6 +218,8 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 
 As colunas `nota_emitida` e `nota_emitida_em` de `vendas` e `lancamentos` guardam o visto do financeiro (migração 23); só a função `marcar_nota_emitida` escreve nelas.
 
+A coluna `in_company` de `lancamentos` marca o curso ministrado dentro da empresa cliente (migração 25) — só tem sentido para `entidade='cursos'`, e alimenta o indicador "Vendas de curso In Company" do ranking.
+
 Se precisar recriar o banco do zero em outro projeto Supabase, o script de criação das tabelas está em `supabase_schema.sql` (gerado junto com este projeto).
 
 ## Rodando localmente
@@ -364,9 +367,11 @@ Pesos definidos pela diretoria comercial:
 
 | Peso | Indicadores | Por quê |
 |---|---|---|
-| **5** | Reuniões realizadas, Vendas de cursos, Vendas de sistemas, Qtd. sistemas vendidos | é o que vira contrato |
+| **5** | Reuniões realizadas, Vendas de cursos, Vendas de curso In Company, Vendas de sistemas, Qtd. sistemas vendidos | é o que vira contrato |
 | **2** | Propostas, Prospecção, Prospecção zero, Negócios abertos | é caminho para o contrato, não o contrato |
 | **1** | Interação | volume de contato, o mais fácil de inflar |
+
+**Vendas de curso In Company** (migração 25) é um indicador à parte de "Vendas de cursos" — não substitui, soma junto. Curso in company é ministrado dentro da empresa cliente, sob medida, e a diretoria quis reconhecer isso separado de um curso aberto qualquer. A marca é por lançamento: na aba **Cursos**, o botão **🏢** nas ações da linha marca ou desmarca, e o curso marcado ganha um selo **"🏢 In Company"** ao lado do nome. Os cursos que já seguiam a convenção de digitar "IN COMPANY" no nome vieram marcados automaticamente na migração — não precisou re-lançar nada.
 
 - **Não é só quem lidera.** Quem faz metade do que a líder fez leva metade dos pontos daquele indicador — a margem conta.
 - **Indicador em que a equipe inteira está zerada sai da conta**, em vez de dar zero a todas.

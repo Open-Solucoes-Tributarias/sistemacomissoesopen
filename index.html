@@ -1142,6 +1142,11 @@
     padding:2px 7px;border-radius:999px;background:#FEF3C7;border:1px solid #FCD34D;color:#B45309;
   }
   .action-btn.ativo-upgrade{background:#FEF3C7;color:#B45309;}
+  .selo-incompany{
+    margin-left:6px;font-size:10px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
+    padding:2px 7px;border-radius:999px;background:#E0E7FF;border:1px solid #C7D2FE;color:#4338CA;
+  }
+  .action-btn.ativo-incompany{background:#E0E7FF;color:#4338CA;}
   .kpi-sub{font-size:11.5px;font-weight:700;color:var(--ink-faint);margin-top:2px;font-variant-numeric:tabular-nums;}
   .import-arquivo{display:block;margin:4px 0 10px;}
   .import-arquivo input{display:none;}
@@ -1450,6 +1455,7 @@ const METRICAS = [
   {key:'negociosAbertos', col:'negocios_abertos', label:'Negócios abertos'},
   {key:'reunioes',        col:'reunioes',         label:'Reuniões realizadas'},
   {key:'vendasCursos',    col:'vendas_cursos',    label:'Vendas de cursos',        auto:true, moeda:true},
+  {key:'vendasCursosInCompany', col:'vendas_cursos_incompany', label:'Vendas de curso In Company', auto:true, moeda:true},
   {key:'vendasSistemas',  col:'vendas_sistemas',  label:'Vendas de sistemas',      auto:true, moeda:true},
   {key:'qtdSistemas',     col:'qtd_sistemas',     label:'Qtd. sistemas vendidos',  auto:true},
 ];
@@ -1468,7 +1474,7 @@ const METRICAS_MANUAIS = METRICAS.filter(m => !m.auto);
    do painel. */
 const PESOS_PADRAO = {
   // o que a empresa mais valoriza: o que vira contrato
-  reunioes: 5, vendasCursos: 5, vendasSistemas: 5, qtdSistemas: 5,
+  reunioes: 5, vendasCursos: 5, vendasCursosInCompany: 5, vendasSistemas: 5, qtdSistemas: 5,
   // importam, mas são caminho e não resultado
   propostas: 2, prospeccaoZero: 2, prospeccao: 2, negociosAbertos: 2,
   // volume de contato, o mais fácil de inflar
@@ -2001,6 +2007,7 @@ function persistEntityRows(key){
             forma_pagamento:'', colaborador:'', observacoes:'',
             pago:false, mes_pagamento:null,
             nota_emitida: !!r.notaEmitida, nota_emitida_em: r.notaEmitidaEm || null,
+            in_company: !!r.inCompany,
           };
           cfg.fields.forEach(function(f){
             if(f.key === 'valorContrato') row.valor_contrato = numOrNull(r.valorContrato);
@@ -2123,6 +2130,7 @@ async function tryLoadEntityFromStorageAsync(key){
           extraVendedores: extrasByLanc[d.id] || [],
           parcelaLabel: d.parcela_label,
           notaEmitida: !!d.nota_emitida, notaEmitidaEm: d.nota_emitida_em || null,
+          inCompany: !!d.in_company,
         };
         if(cfg.hasVendasPorVendedor) r.vendasVendedoras = divisaoByLanc[d.id] || [];
         if(cfg.hasPagamento){ r.pago = d.pago; r.mesPagamento = d.mes_pagamento; }
@@ -2654,7 +2662,7 @@ function setPesoMetrica(el, key){
 }
 function setPainelEditandoPesos(v){ painelEditandoPesos = !!v; render(); }
 function restaurarPesosPadrao(){
-  showConfirm('Voltar todos os pesos para o padrão? Reuniões, vendas de cursos, vendas de sistemas e quantidade de vendas voltam a valer 5; interação volta a valer 1.', function(){
+  showConfirm('Voltar todos os pesos para o padrão? Reuniões, vendas de cursos, vendas de curso In Company, vendas de sistemas e quantidade de vendas voltam a valer 5; interação volta a valer 1.', function(){
     painelPesos = Object.assign({}, PESOS_PADRAO);
     persistPainelPesos();
     render();
@@ -6038,6 +6046,22 @@ function updateExtraVendedorField(key, rowId, slotId, field, value){
   render();
 }
 
+/* Curso in company é ministrado dentro da empresa cliente, sob medida —
+   um tipo de venda diferente de um curso aberto, e entra no ranking
+   como indicador próprio (vendasCursosInCompany), separado da métrica
+   geral de vendas de cursos. Só existe na aba Cursos. */
+function toggleCursoInCompany(id){
+  const r = state.cursos.rows.find(function(r){ return r.id === id; });
+  if(!r) return;
+  if(isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    return;
+  }
+  r.inCompany = !r.inCompany;
+  persistEntityRows('cursos');
+  render();
+}
+
 function deleteEntityRow(key, id){
   const r = state[key].rows.find(r => r.id === id);
   if(r && isMonthClosed(r.ano||2026, r.mes)){
@@ -6527,7 +6551,8 @@ function renderEntitySection(key){
               ${row.parceiro ? `<div class="calc-value" id="calcParceiro-${key}-${row.id}">${fmtMoney((Number(row.valorContrato)||0) * (parsePercent(row.participacao)/100))}</div>` : ''}
             </td>`;
           } else if(f.type === "text"){
-            cells += `<td${fi===0?' class="col-nome"':''}><input type="text" data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" /></td>`;
+            const seloInCompany = (key === 'cursos' && fi === 0 && row.inCompany) ? '<span class="selo-incompany">🏢 In Company</span>' : '';
+            cells += `<td${fi===0?' class="col-nome"':''}><input type="text" data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}</td>`;
             if(f.key === "formaPagamento" && cfg.hasPagamento){
               cells += `<td class="pagamento-cell">
                 <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" onchange="onPagamentoToggle(this,'${key}')" /><span>${row.pago?'Pago':'Pendente'}</span></label>
@@ -6579,6 +6604,7 @@ function renderEntitySection(key){
         }
         cells += `<td class="del-cell">
           <div class="row-actions">
+            ${key === 'cursos' ? `<button class="action-btn${row.inCompany?' ativo-incompany':''}" title="${row.inCompany?'Curso In Company — clique para desmarcar':'Marcar como curso In Company (entra no ranking)'}" onclick="toggleCursoInCompany(${row.id})">🏢</button>` : ''}
             <button class="action-btn" title="Adicionar mais um vendedor" onclick="addExtraVendedorSlot('${key}',${row.id})">➕</button>
             <button class="action-btn" title="Duplicar" onclick="duplicateEntityRow('${key}',${row.id})">⎘</button>
             <button class="action-btn" title="Parcelar em vários meses" onclick="parcelarEntityRow('${key}',${row.id})">🧩</button>
