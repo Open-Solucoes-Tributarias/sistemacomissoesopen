@@ -569,6 +569,7 @@ O que entra:
 | Evolução do ano | gráficos de linha das vendas de sistemas e de cursos ao longo dos 12 meses |
 | Totais do ano por vendedora | volume vendido no ano (não comissão) |
 | Equipe de consultoria | contratos assinados e reuniões realizadas |
+| Marketing | uma linha por rede com lançamento no ano, com o mesmo resumo automático da aba Marketing — melhor crescimento e maior recuo do mês, comparado ao mês anterior que tiver lançamento |
 
 Os gráficos são os mesmos do painel, desenhados em SVG dentro da própria página — saem no papel com as cores certas, sem depender de imagem nem de biblioteca.
 
@@ -657,7 +658,7 @@ O botão **"📊 Baixar CSV"** gera o arquivo do período, uma linha por pessoa 
 
 Marketing também é equipe — fica ao lado de **Relatório de Desempenho** e **Bônus e Metas**, no grupo "Equipe" do menu. Acompanha o crescimento das redes que a empresa mantém, para apresentar ao dono da empresa: **Instagram, YouTube, LinkedIn, TikTok, PodTributar e RD Station**, em **duas contas** — **Open** e **Foco Tributário**.
 
-Um seletor de rede no topo da aba escolhe qual delas está em foco. **Nem toda rede tem as duas contas** — o YouTube só existe na Foco Tributário (a Open não tem canal), então nele os cartões, o gráfico e a tabela só mostram essa conta. É configurado em `MARKETING_REDES` (campo `contas`); de fábrica só o YouTube tem essa restrição, mas o mesmo campo serve pra qualquer rede que amanhã só exista numa das duas contas.
+Um seletor de rede no topo da aba escolhe qual delas está em foco. **Nem toda rede tem as duas contas** — o YouTube só existe na Foco Tributário (a Open não tem canal) e o RD Station só existe na Open (a Foco Tributário não usa), então em cada uma os cartões, o gráfico e a tabela só mostram a conta certa. É configurado em `MARKETING_REDES` (campo `contas`); de fábrica só essas duas redes têm a restrição, mas o mesmo campo serve pra qualquer rede que só exista numa das duas contas.
 
 **Os indicadores são configuráveis, por rede** (migração 26). Cada plataforma tem seu próprio conjunto de números — o YouTube tem "Receita estimada", o RD Station nem se parece com rede social — e quem administra **inclui e retira indicador pela própria tela**, sem precisar de migração de banco:
 
@@ -678,6 +679,8 @@ De fábrica, cada rede já vem com um conjunto pensado para o que a diretoria qu
 | RD Station | Busca orgânica, YouTube, Sites (Foco/Open), Conversões, Visitas |
 
 Cada indicador numérico vira um **cartão por conta**, com o valor do mês e a variação contra o mês anterior **que tiver lançamento** (não precisa ser o mês imediatamente anterior — se pular Junho, Julho compara com Maio), em número absoluto e em %.
+
+**Resumo do mês** — logo abaixo dos cartões, um quadro em texto aponta o que mais vale a pena olhar naquela rede, sem precisar ler cartão por cartão: o indicador que **mais cresceu** e o que **mais caiu** no período, cada um com a conta, o valor e o %. Se algum indicador ainda não tem mês anterior pra comparar, o quadro avisa quantos estão nessa situação. Não é IA — é a mesma conta de crescimento dos cartões, só que a tela já escolhe os dois extremos em vez de a pessoa comparar todos. Sem um segundo mês lançado na rede, o quadro avisa que ainda não dá pra comparar.
 
 **Gráfico de evolução mensal** — abaixo dos cartões, mostra o ano inteiro em barras (sempre os 12 meses de `yearFilter`, não muda com o filtro de mês) de um indicador escolhido no seletor "Indicador", uma barra por conta lado a lado em cada mês (Open e Foco Tributário, cada uma numa cor). Era gráfico de linha, mas com só 1 ou 2 meses lançados a linha virava um traço fino sem contexto — barra lê melhor um ano ainda incompleto. Mês sem lançamento simplesmente não tem barra ali, não é barra de altura zero.
 

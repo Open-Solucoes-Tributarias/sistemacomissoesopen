@@ -1343,7 +1343,7 @@ const MARKETING_REDES = [
   {key:"linkedin",    label:"LinkedIn"},
   {key:"tiktok",      label:"TikTok"},
   {key:"podtributar", label:"PodTributar"},
-  {key:"rdstation",   label:"RD Station"},
+  {key:"rdstation",   label:"RD Station", contas:["open"]},   // a Foco Tributário não usa RD Station
 ];
 function marketingRedeInfo(key){ return MARKETING_REDES.find(function(r){ return r.key === key; }) || MARKETING_REDES[0]; }
 function marketingContaInfo(key){ return MARKETING_CONTAS.find(function(c){ return c.key === key; }) || MARKETING_CONTAS[0]; }
@@ -2395,6 +2395,54 @@ function marketingKpis(conta, rede, mesFiltro){
   return { atual, anterior, porIndicador };
 }
 
+/* Resumo automático: em vez da diretoria ter que ler cartão por cartão,
+   a tela já aponta o que mais valeu a pena olhar — o indicador que mais
+   cresceu, o que mais caiu, e quantos ainda não têm mês anterior pra
+   comparar. Não é IA, é regra simples em cima do que marketingKpis já
+   calcula pra cada cartão. */
+function marketingResumo(rede, mesFiltro){
+  let melhor = null, pior = null, semComparar = 0, comparados = 0;
+  marketingContasPara(rede).forEach(function(conta){
+    const k = marketingKpis(conta.key, rede, mesFiltro);
+    k.porIndicador.forEach(function(p){
+      if(p.ind.tipo === 'texto') return;
+      if(p.delta === null) { semComparar++; return; }
+      if(p.pct === null) return;   // deu pra calcular delta mas não % (mês anterior zerado)
+      comparados++;
+      const item = { conta: conta, ind: p.ind, delta: p.delta, pct: p.pct };
+      if(!melhor || item.pct > melhor.pct) melhor = item;
+      if(!pior || item.pct < pior.pct) pior = item;
+    });
+  });
+  return { melhor, pior, semComparar, comparados };
+}
+function marketingResumoHtml(rede, mesFiltro){
+  const r = marketingResumo(rede, mesFiltro);
+  if(!r.comparados){
+    return `<div class="meta-empty" style="padding:16px;">Ainda não dá pra comparar — falta um segundo mês lançado nesta rede.</div>`;
+  }
+  const pct1 = function(v){ return v.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}); };
+  const fmtDelta = function(item){
+    const sinal = item.delta >= 0 ? '+' : '';
+    const valTxt = item.ind.moeda ? fmtMoney(item.delta) : fmtNum(item.delta);
+    return `${sinal}${valTxt} (${item.pct>=0?'+':''}${pct1(item.pct)}%)`;
+  };
+  const partes = [];
+  if(r.melhor && r.melhor.pct > 0){
+    partes.push(`O melhor crescimento foi <b>${esc(r.melhor.ind.rotulo)}</b> na conta <b>${esc(r.melhor.conta.label)}</b>: ${fmtDelta(r.melhor)}.`);
+  }
+  if(r.pior && r.pior.pct < 0 && r.pior !== r.melhor){
+    partes.push(`O maior recuo foi <b>${esc(r.pior.ind.rotulo)}</b> na conta <b>${esc(r.pior.conta.label)}</b>: ${fmtDelta(r.pior)}.`);
+  }
+  if(!partes.length){
+    partes.push('Nenhum indicador subiu ou caiu — os números ficaram estáveis no período.');
+  }
+  if(r.semComparar > 0){
+    partes.push(`${r.semComparar} indicador${r.semComparar===1?'':'es'} ainda sem mês anterior pra comparar.`);
+  }
+  return `<p style="margin:0;font-size:13.5px;line-height:1.6;">${partes.join(' ')}</p>`;
+}
+
 function addMarketingRow(){
   const mes = marketingFilter === 'Todos' ? MONTHS[new Date().getMonth()] : marketingFilter;
   // sugere a conta que ainda não tem lançamento nesse mês+rede, pra não
@@ -2508,6 +2556,9 @@ function renderMarketingSection(){
     actions: editavel ? `<button class="eye-toggle" onclick="setMarketingEditandoIndicadores(${marketingEditandoIndicadores?'false':'true'})">${marketingEditandoIndicadores?'✕ Fechar':'⚙️ Editar indicadores'}</button>` : '',
   });
 
+  const tituloResumo = 'Resumo de ' + (marketingFilter === 'Todos' ? 'este mês' : marketingFilter.toLowerCase());
+  const resumo = panel('marketing-resumo', tituloResumo, marketingResumoHtml(marketingRede, marketingFilter), {});
+
   const seletorMetrica = indicadoresNumericos.length ? `<label class="ordem-wrap"><span>Indicador</span>
     <select onchange="setMarketingMetricaFoco(this)">
       ${indicadoresNumericos.map(function(i){ return `<option value="${i.chave}" ${marketingMetricaFoco===i.chave?'selected':''}>${esc(i.rotulo)}</option>`; }).join('')}
@@ -2577,6 +2628,7 @@ function renderMarketingSection(){
   return `
     <div class="filters-row"><div class="months">${redesPillsHtml}</div></div>
     ${painelIndicadores}
+    ${resumo}
     ${grafico}
     <div class="filters-row" style="padding-top:0;"><div class="months">${mesesPillsHtml}</div></div>
     ${tabela}
@@ -8403,6 +8455,16 @@ function montarRelatorioMes(mes){
   const somaRenovM = function(l){ return l.reduce(function(a,r){ return a + valorDeRenovacao(r); }, 0); };
   const ganhoUpgradeM = upgradesM.reduce(function(a,r){ return a + ganhoDeUpgrade(r); }, 0);
 
+  // Marketing: só entram as redes que já têm algum lançamento no ano —
+  // uma rede nunca lançada não aparece no relatório, pra não virar
+  // linha vazia sem propósito nenhum.
+  const redesComDados = MARKETING_REDES.filter(function(r){
+    return marketingRows.some(function(row){ return row.rede === r.key && (row.ano||2026) === ano; });
+  });
+  const linhasMarketing = redesComDados.map(function(r){
+    return `<tr><td>${esc(r.label)}</td><td>${marketingResumoHtml(r.key, mes)}</td></tr>`;
+  });
+
   // Empresas que assinaram contrato no mês, com a avaliação do gestor.
   const linhasEmpresasNovas = contratosNovos
     .filter(function(c){ return c.ano === ano && c.mes === mes; })
@@ -8558,6 +8620,12 @@ function montarRelatorioMes(mes){
         </div>
         <p class="rel-nota">A taxa considera só as decididas (renovadas + não renovadas); as em aberto não puxam o número para baixo. Só o upgrade entra no ranking — a renovação comum fica de fora.</p>
       </section>` : ''}
+
+      <section class="rel-sec">
+        <h2>Marketing <span class="rel-sub">crescimento das redes em ${esc(mes)}</span></h2>
+        ${relTabela([{label:'Rede'},{label:'Resumo do mês'}], linhasMarketing, 'Nenhuma rede com lançamento em ' + ano + '.')}
+        <p class="rel-nota">Compara o mês com o mês anterior que tiver lançamento em cada rede — não precisam ser seguidos. Só entra no resumo o indicador que de fato subiu ou caiu; sem um segundo mês lançado, a rede aparece como "sem mês anterior pra comparar".</p>
+      </section>
 
       <section class="rel-sec">
         <h2>Empresas que assinaram contrato <span class="rel-sub">novas contas trazidas pela equipe de consultoria</span></h2>
