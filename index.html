@@ -8584,6 +8584,11 @@ function montarRelatorioMes(mes){
   ];
   const faturTotal = fatur.reduce(function(a,x){ return a + x.valor; }, 0);
 
+  // Faturamento total da empresa, todos os produtos somados, mês a mês
+  // no ano — a mesma soma de `fatur` acima, só que repetida pros 12
+  // meses em vez de só o mês do relatório.
+  const faturMensalTotal = MONTHS.map(function(m){ return faturamentoDaOrigem('todas', ano, m); });
+
   const sellerBreak = getSellerBreakdown();
   const nomesVend = Object.keys(sellerBreak).filter(function(n){
     const b = sellerBreak[n];
@@ -8893,6 +8898,10 @@ function montarRelatorioMes(mes){
           <div class="rel-card"><span>Honorários de parceiros</span><b>${fmtMoney(totHonorarios)}</b></div>
           <div class="rel-card"><span>Bônus lançados</span><b>${fmtMoney(totBonus)}</b></div>
           <div class="rel-card"><span>Comissões liberadas</span><b>${fmtMoney(totLiberado)}</b></div>
+        </div>
+        <div class="rel-graf">
+          <h3>Faturamento total da empresa <span class="rel-sub">todos os produtos, evolução em ${ano}</span></h3>
+          ${graficoBarrasMarketing([{label:'Faturamento', cor:'#1C6FBF', valores: faturMensalTotal}], {h:170})}
         </div>
       </section>
 

@@ -559,7 +559,7 @@ O que entra:
 
 | Seção | Conteúdo |
 |---|---|
-| Faturamento do mês | total por origem (Sistema, Consultoria, Órgãos Públicos, Cursos) e o total geral, mais comissões, honorários, bônus e comissões liberadas |
+| Faturamento do mês | total por origem (Sistema, Consultoria, Órgãos Públicos, Cursos) e o total geral, mais comissões, honorários, bônus e comissões liberadas — e logo abaixo, um gráfico com o faturamento total da empresa (todos os produtos somados) mês a mês, os 12 meses do ano |
 | Ganhos por vendedora | quanto cada uma ganhou em cada origem, mais bônus e total |
 | Comissões liberadas | o que já pode ser pago, por vendedora (cliente já pagou a nota) |
 | Sistema, Consultoria, Órgãos Públicos, Cursos | os lançamentos do mês, com valor, quem vendeu, situação do pagamento e as comissões de cada linha |
