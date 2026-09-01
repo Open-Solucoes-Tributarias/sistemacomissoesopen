@@ -570,8 +570,8 @@ O que entra:
 | Comparativo do mês | gráficos de barras de vendas de sistemas, vendas de cursos e reuniões |
 | Evolução do ano | gráficos de linha das vendas de sistemas e de cursos ao longo dos 12 meses |
 | Totais do ano por vendedora | volume vendido no ano (não comissão) |
-| Equipe de consultoria | contratos assinados e reuniões realizadas |
-| Marketing | uma linha por rede com lançamento no ano, com o mesmo resumo automático da aba Marketing — melhor crescimento e maior recuo do mês, comparado ao mês anterior que tiver lançamento |
+| Equipe de consultoria | cartão com o total de contratos assinados e de reuniões realizadas no mês (soma da equipe toda), e a tabela pessoa a pessoa |
+| Marketing | uma linha por rede com lançamento no ano, com o mesmo resumo automático da aba Marketing — melhor crescimento e maior recuo do mês, comparado ao mês anterior que tiver lançamento —, seguida de um gráfico de evolução por rede (indicador numérico principal dela, 12 meses) e do gráfico de campanhas do Tráfego pago no mês |
 
 Os gráficos são os mesmos do painel, desenhados em SVG dentro da própria página — saem no papel com as cores certas, sem depender de imagem nem de biblioteca.
 

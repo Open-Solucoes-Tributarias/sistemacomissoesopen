@@ -8786,6 +8786,8 @@ function montarRelatorioMes(mes){
       <td class="num">${(valorMetrica(v, mes, 'contratos')||0).toLocaleString('pt-BR')}</td>
       <td class="num">${(valorMetrica(v, mes, 'reunioes')||0).toLocaleString('pt-BR')}</td></tr>`;
   });
+  const totalContratosConsult = consultoria.reduce(function(a,v){ return a + (valorMetrica(v, mes, 'contratos')||0); }, 0);
+  const totalReunioesConsult = consultoria.reduce(function(a,v){ return a + (valorMetrica(v, mes, 'reunioes')||0); }, 0);
 
   // Renovações do mês: só o placar (quantas, quanto, taxa) — a lista
   // empresa a empresa não vai mais pro PDF, só o resumo.
@@ -8810,6 +8812,35 @@ function montarRelatorioMes(mes){
   const linhasMarketing = redesComDados.map(function(r){
     return `<tr><td>${esc(r.label)}</td><td>${marketingResumoHtml(r.key, mes)}</td></tr>`;
   });
+
+  // Um gráfico de evolução por rede — o indicador numérico principal
+  // dela (o primeiro da lista), 12 meses do ano, mesma barra por conta
+  // que já aparece na aba. Rede sem nenhum valor lançado (só linha
+  // criada, sem número) não gera gráfico vazio.
+  const graficosMarketing = redesComDados.map(function(r){
+    const indicadoresNumericos = marketingIndicadoresPara(r.key).filter(function(i){ return i.tipo !== 'texto'; });
+    if(!indicadoresNumericos.length) return '';
+    const indicador = indicadoresNumericos[0];
+    const contasDaRede = marketingContasPara(r.key);
+    const serie = contasDaRede.map(function(conta){
+      return { label: conta.label, cor: conta.cor, valores: marketingSerieValores(conta.key, r.key, indicador.chave) };
+    });
+    const temDado = serie.some(function(s){ return s.valores.some(function(v){ return v !== null; }); });
+    if(!temDado) return '';
+    return `<div class="rel-graf">
+      <h3>${esc(r.label)} — ${esc(indicador.rotulo)} <span class="rel-sub">evolução em ${ano}</span></h3>
+      ${graficoBarrasMarketing(serie, {h:170})}
+    </div>`;
+  }).join('');
+
+  // Tráfego pago não tem "rede"/conta fixa — é campanha do mês. Uma
+  // barra por campanha, no valor investido, só se tiver lançamento
+  // naquele mês específico do relatório.
+  const trafegoDoMes = trafegoRows.filter(function(r){ return (r.ano||2026) === ano && r.mes === mes; });
+  const graficoTrafegoMes = trafegoDoMes.length ? `<div class="rel-graf">
+    <h3>Tráfego pago — Valor investido por campanha <span class="rel-sub">${esc(mes)}</span></h3>
+    ${graficoBarrasCampanhas(trafegoDoMes.map(function(r){ return { label: r.campanha || '(sem nome)', valor: Number(r.gasto)||0 }; }), {h:170})}
+  </div>` : '';
 
   // Empresas que assinaram contrato no mês, com a avaliação do gestor.
   const linhasEmpresasNovas = contratosNovos
@@ -8950,7 +8981,11 @@ function montarRelatorioMes(mes){
       </section>
 
       <section class="rel-sec">
-        <h2>Equipe de consultoria</h2>
+        <h2>Equipe de consultoria <span class="rel-sub">${esc(mes)}</span></h2>
+        <div class="rel-cards">
+          <div class="rel-card rel-card-total"><span>Contratos assinados</span><b>${totalContratosConsult.toLocaleString('pt-BR')}</b></div>
+          <div class="rel-card rel-card-total"><span>Reuniões realizadas</span><b>${totalReunioesConsult.toLocaleString('pt-BR')}</b></div>
+        </div>
         ${relTabela([{label:'Pessoa'},{label:'Contratos assinados',num:true},{label:'Reuniões realizadas',num:true}],
           linhasConsult, 'Ninguém na equipe de consultoria ainda.')}
       </section>
@@ -8971,6 +9006,8 @@ function montarRelatorioMes(mes){
         <h2>Marketing <span class="rel-sub">crescimento das redes em ${esc(mes)}</span></h2>
         ${relTabela([{label:'Rede'},{label:'Resumo do mês'}], linhasMarketing, 'Nenhuma rede com lançamento em ' + ano + '.')}
         <p class="rel-nota">Compara o mês com o mês anterior que tiver lançamento em cada rede — não precisam ser seguidos. Só entra no resumo o indicador que de fato subiu ou caiu; sem um segundo mês lançado, a rede aparece como "sem mês anterior pra comparar".</p>
+        ${graficosMarketing}
+        ${graficoTrafegoMes}
       </section>
 
       <section class="rel-sec">
