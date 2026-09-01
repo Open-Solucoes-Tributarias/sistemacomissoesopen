@@ -57,6 +57,15 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 └── .gitignore
 ```
 
+## Resumo Geral
+
+É a aba que abre **assim que o sistema carrega** — de propósito: os totais aparecem direto, sem precisar navegar até achá-los. Dois gráficos no topo, os 12 meses do `yearFilter`:
+
+- **Faturamento total da empresa** — todos os produtos somados (Sistema, Consultoria, Órgãos Públicos, Cursos), o valor do contrato, não a comissão. É o mesmo gráfico que sai na primeira página do Relatório do mês.
+- **Evolução mensal das comissões** — o que a equipe ganha (comissões de todas as origens, mais bônus), não o faturamento dos contratos. Salário fixo fica de fora.
+
+Os dois respeitam o botão **"Mostrar valores" / "Ocultar valores"**: por padrão os números ficam escondidos (a barra aparece, o valor não), e só mostram ao clicar — o mesmo cuidado que o resto do Resumo Geral já tinha.
+
 ## Login e segurança
 
 O sistema exige login (e-mail e senha) antes de mostrar qualquer dado. Não existe cadastro público pela tela — as contas da equipe são criadas manualmente por um administrador no painel do Supabase (veja "Criando contas da equipe" abaixo). Depois de logada, a pessoa continua com sessão salva no navegador até clicar em "Sair".

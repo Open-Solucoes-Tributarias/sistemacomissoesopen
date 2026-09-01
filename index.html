@@ -1471,7 +1471,7 @@ function sidebarNavHtml(){
   }).join('');
 }
 
-let activeTab = "vendas";
+let activeTab = "parceiros";   // abre no Resumo Geral — os totais aparecem direto, sem precisar navegar
 let rows = null;
 let filter = "Todos";
 let sellerFilter = "Todas";
@@ -5483,6 +5483,31 @@ function renderMonthlyChart(){
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="overflow:visible;display:block;">${bars}</svg>`;
 }
 
+/* Faturamento total da empresa — todos os produtos somados (Sistema,
+   Consultoria, Órgãos Públicos, Cursos), mês a mês. Diferente do
+   gráfico de comissões acima: é o valor do contrato, não o que a
+   equipe ganha. Mesmo padrão de "valor oculto" pra quem não revelou
+   os números, e é o mesmo gráfico que sai no Relatório do mês. */
+function renderFaturamentoMensalChart(){
+  const values = MONTHS.map(function(m){ return faturamentoDaOrigem('todas', yearFilter, m); });
+  const max = Math.max(...values, 1);
+  const w = 760, h = 180, padBottom = 24, padTop = 10, barGap = 6;
+  const barW = (w / 12) - barGap;
+  const bars = MONTHS.map(function(m, i){
+    const val = values[i];
+    const barH = Math.max((val/max) * (h-padTop-padBottom), val>0?2:0);
+    const x = i * (w/12) + barGap/2;
+    const y = h - padBottom - barH;
+    const fill = m === partnerMonthFilter ? 'var(--primary)' : '#8FD4C1';
+    const tooltipVal = partnersValuesRevealed ? fmtMoney(val) : 'valor oculto';
+    return `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="3" fill="${fill}">
+      <title>${m}: ${tooltipVal}</title>
+    </rect>
+    <text x="${x+barW/2}" y="${h-6}" text-anchor="middle" font-size="10" fill="var(--ink-faint)">${monthNumber(m)}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="overflow:visible;display:block;">${bars}</svg>`;
+}
+
 /* Painel de metas: só admin (depende do faturamento geral da empresa). */
 function renderMetasPanel(){
   if(!isAdmin) return '';
@@ -5663,6 +5688,8 @@ function renderParceirosSection(){
     ${isMonthClosedNow ? `<div class="storage-warning">🔒 ${esc(partnerMonthFilter)}/${yearFilter} está FECHADO — nenhuma edição é permitida em nenhuma aba para esse mês até reabrir aqui.</div>` : ''}
 
     ${sectionsToolbarHtml()}
+
+    ${panel('resumo-faturamento-mensal', `Faturamento total da empresa — ${yearFilter}`, renderFaturamentoMensalChart() + `<div class="painel-nota">Todos os produtos somados — Sistema, Consultoria, Órgãos Públicos e Cursos —, o valor do contrato, não a comissão. É o mesmo gráfico que sai no Relatório do mês.</div>`, {meta: 'faturamento, todos os produtos'})}
 
     ${panel('resumo-grafico', `Evolução mensal das comissões — ${yearFilter}`, renderMonthlyChart() + `<div class="painel-nota">São as <b>comissões</b> de todas as origens somadas — Sistema, Consultoria, Órgãos Públicos, Cursos e bônus —, não o faturamento dos contratos. Salário fixo fica de fora.</div>`, {meta: 'comissões, todas as origens'})}
 
