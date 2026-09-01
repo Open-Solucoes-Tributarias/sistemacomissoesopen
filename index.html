@@ -7937,6 +7937,20 @@ function montarRelatorioMes(mes){
       <td class="num">${(valorMetrica(v, mes, 'reunioes')||0).toLocaleString('pt-BR')}</td></tr>`;
   });
 
+  // Renovações do mês: só o placar (quantas, quanto, taxa) — a lista
+  // empresa a empresa não vai mais pro PDF, só o resumo.
+  const renovMesTodas = renovacoesDoAno().filter(function(r){ return r.mes === mes; });
+  const renovadas = renovMesTodas.filter(function(r){ return r.renovado === true; });
+  const upgradesM = renovMesTodas.filter(function(r){ return !!r.upgrade; });
+  const perdidasM = renovMesTodas.filter(function(r){ return r.renovado === false; });
+  const abertoM   = renovMesTodas.filter(function(r){ return r.renovado === null || r.renovado === undefined; });
+  const decididasM = renovadas.length + perdidasM.length;
+  const taxaRenovM = decididasM
+    ? (Math.round(1000 * renovadas.length / decididasM) / 10).toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) + '%'
+    : '—';
+  const somaRenovM = function(l){ return l.reduce(function(a,r){ return a + valorDeRenovacao(r); }, 0); };
+  const ganhoUpgradeM = upgradesM.reduce(function(a,r){ return a + ganhoDeUpgrade(r); }, 0);
+
   // Empresas que assinaram contrato no mês, com a avaliação do gestor.
   const linhasEmpresasNovas = contratosNovos
     .filter(function(c){ return c.ano === ano && c.mes === mes; })
@@ -8080,6 +8094,18 @@ function montarRelatorioMes(mes){
         ${relTabela([{label:'Pessoa'},{label:'Contratos assinados',num:true},{label:'Reuniões realizadas',num:true}],
           linhasConsult, 'Ninguém na equipe de consultoria ainda.')}
       </section>
+
+      ${renovMesTodas.length ? `<section class="rel-sec">
+        <h2>Renovações do sistema <span class="rel-sub">${renovMesTodas.length} ${renovMesTodas.length===1?'empresa':'empresas'} em ${esc(mes)}</span></h2>
+        <div class="rel-cards">
+          <div class="rel-card"><span>Renovadas</span><b>${renovadas.length}</b><span>${fmtMoney(somaRenovM(renovadas))}${upgradesM.length ? ' · ' + upgradesM.length + ' com upgrade' : ''}</span></div>
+          <div class="rel-card"><span>Upgrades</span><b>${upgradesM.length}</b><span>${ganhoUpgradeM>=0?'+':''}${fmtMoney(ganhoUpgradeM)} de aumento</span></div>
+          <div class="rel-card"><span>Não renovadas</span><b>${perdidasM.length}</b><span>${fmtMoney(somaRenovM(perdidasM))} perdidos</span></div>
+          <div class="rel-card"><span>Em aberto</span><b>${abertoM.length}</b><span>${fmtMoney(somaRenovM(abertoM))} em jogo</span></div>
+          <div class="rel-card rel-card-total"><span>Taxa de renovação</span><b>${taxaRenovM}</b><span>${fmtMoney(somaRenovM(renovMesTodas))} em ${esc(mes)}</span></div>
+        </div>
+        <p class="rel-nota">A taxa considera só as decididas (renovadas + não renovadas); as em aberto não puxam o número para baixo. Só o upgrade entra no ranking — a renovação comum fica de fora.</p>
+      </section>` : ''}
 
       <section class="rel-sec">
         <h2>Empresas que assinaram contrato <span class="rel-sub">novas contas trazidas pela equipe de consultoria</span></h2>
