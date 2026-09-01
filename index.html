@@ -1505,6 +1505,7 @@ let marketingMetricaFoco = null;     // indicador em foco no gráfico de evoluç
 let trafegoRows = [];
 let trafegoNextId = 1;
 let trafegoFilter = "Todos";
+let trafegoMetricaFoco = 'gasto';
 let closedMonths = [];
 let metas = [];      // regras de meta: gatilho da empresa que premia uma pessoa
 let metasNextId = 1;
@@ -2542,6 +2543,27 @@ function onTrafegoNumInput(el){
   atualizarLinhaTrafego(r);
 }
 
+/* Indicadores que o gráfico de campanhas pode comparar — os brutos e os
+   calculados, num só seletor. `calc:true` busca o valor em trafegoCalc()
+   em vez de direto na linha; `pct:true` é fração (0–1) que o gráfico
+   escala para 0–100 e mostra com "%". */
+const TRAFEGO_METRICAS = [
+  {chave:'gasto', rotulo:'Valor investido', moeda:true},
+  {chave:'alcance', rotulo:'Alcance'},
+  {chave:'impressoes', rotulo:'Impressões'},
+  {chave:'cliquesLink', rotulo:'Cliques no link'},
+  {chave:'visitasLp', rotulo:'Visitas na LP'},
+  {chave:'leads', rotulo:'Leads'},
+  {chave:'mql', rotulo:'MQL'},
+  {chave:'cpc', rotulo:'CPC', moeda:true, calc:true},
+  {chave:'cpl', rotulo:'CPL', moeda:true, calc:true},
+  {chave:'ctr', rotulo:'CTR', pct:true, calc:true},
+  {chave:'cpm', rotulo:'CPM', moeda:true, calc:true},
+  {chave:'connect', rotulo:'Connect rate', pct:true, calc:true},
+  {chave:'custoMql', rotulo:'Custo/MQL', moeda:true, calc:true},
+];
+function setTrafegoMetricaFoco(el){ trafegoMetricaFoco = el.value; render(); }
+
 /* As seis colunas calculadas — nunca digitadas, sempre em cima do que
    já foi lançado. Denominador zero ou vazio dá "—", não erro nem zero
    enganoso. */
@@ -2584,6 +2606,40 @@ function atualizarResumoTrafego(){
   const leadsTotal = linhas.reduce(function(a,r){ return a + (Number(r.leads)||0); }, 0);
   el.textContent = fmtMoney(gastoTotal) + ' investidos · ' + fmtNum(leadsTotal) + ' leads';
 }
+/* Uma barra por campanha, no indicador escolhido no seletor. Diferente
+   dos gráficos do painel de equipe, aqui não tem "vendedora" pra tirar
+   a cor de — cada barra pega uma cor de uma paleta fixa, na ordem, e o
+   nome (que pode ser bem comprido, tipo "17.03.26 [LEADS] [CONSULTORIA]")
+   aparece truncado embaixo, inclinado, com o nome inteiro no title. */
+function graficoBarrasCampanhas(dados, opts){
+  opts = opts || {};
+  const w = 760, h = opts.h || 280, padBottom = 56, padTop = 12, padLeft = 54, gap = 14;
+  const plotH = h - padBottom - padTop;
+  const plotW = w - padLeft - 12;
+  const max = Math.max(1, ...dados.map(function(d){ return d.valor || 0; }));
+  const barW = Math.min(64, (plotW / Math.max(dados.length,1)) - gap);
+  const CORES = ['#1C6FBF','#0D9488','#B45309','#7C3AED','#DB2777','#059669','#DC2626','#4338CA'];
+  const casas = opts.decimais || 0;
+  const fmt = function(v){ return v.toLocaleString('pt-BR', {minimumFractionDigits:casas, maximumFractionDigits:casas}) + (opts.sufixo||''); };
+  const truncar = function(s){ s = String(s||'(sem nome)'); return s.length > 18 ? s.slice(0,17) + '…' : s; };
+  const grade = [0, 0.25, 0.5, 0.75, 1].map(function(f){
+    const y = padTop + plotH - f*plotH;
+    return `<line x1="${padLeft}" y1="${y}" x2="${w-12}" y2="${y}" stroke="#F1F5F9" stroke-width="1"/>
+            <text x="${padLeft-8}" y="${y+4}" text-anchor="end" font-size="10" fill="#94A3B8">${fmt(max*f)}</text>`;
+  }).join('');
+  const barras = dados.map(function(d, i){
+    const bh = max > 0 ? (d.valor/max)*plotH : 0;
+    const x = padLeft + (plotW/dados.length)*i + (plotW/dados.length - barW)/2;
+    const y = padTop + plotH - bh;
+    const cor = CORES[i % CORES.length];
+    const cx = x + barW/2;
+    return `<rect x="${x}" y="${y}" width="${barW}" height="${Math.max(bh,1)}" rx="5" fill="${cor}"><title>${esc(d.label)}: ${fmt(d.valor)}</title></rect>
+            <text x="${cx}" y="${y-6}" text-anchor="middle" font-size="11" font-weight="700" fill="#475569">${d.valor ? fmt(d.valor) : ''}</text>
+            <text x="${cx}" y="${h-38}" text-anchor="end" font-size="10" fill="#64748B" transform="rotate(-30 ${cx} ${h-38})">${esc(truncar(d.label))}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">${grade}${barras}</svg>`;
+}
+
 function campoTrafego(r, field, moeda){
   const v = r[field];
   if(!isAdmin){
@@ -2662,9 +2718,25 @@ function renderTrafegoPagoSection(){
     actions: editavel ? `<button class="btn-add" onclick="addTrafegoRow()">+ Nova campanha</button>` : '',
   });
 
+  const metricaTrafego = TRAFEGO_METRICAS.find(function(m){ return m.chave === trafegoMetricaFoco; }) || TRAFEGO_METRICAS[0];
+  const dadosGrafico = linhas.map(function(r){
+    const bruto = metricaTrafego.calc ? trafegoCalc(r)[metricaTrafego.chave] : r[metricaTrafego.chave];
+    const valor = (bruto === null || bruto === undefined) ? 0 : Number(bruto) * (metricaTrafego.pct ? 100 : 1);
+    return { label: r.campanha || '(sem nome)', valor: valor };
+  });
+  const seletorMetricaTrafego = `<label class="ordem-wrap"><span>Indicador</span>
+    <select onchange="setTrafegoMetricaFoco(this)">
+      ${TRAFEGO_METRICAS.map(function(m){ return `<option value="${m.chave}" ${trafegoMetricaFoco===m.chave?'selected':''}>${esc(m.rotulo)}</option>`; }).join('')}
+    </select></label>`;
+  const grafico = linhas.length ? panel('trafego-grafico', `Campanhas por ${esc(metricaTrafego.rotulo)}`,
+    graficoBarrasCampanhas(dadosGrafico, {sufixo: metricaTrafego.pct ? '%' : '', decimais: metricaTrafego.pct ? 1 : 0})
+    + `<div class="painel-nota">Uma barra por campanha ${trafegoFilter==='Todos' ? 'lançada em '+yearFilter : 'de '+esc(trafegoFilter)}. Passe o mouse numa barra pra ver o nome inteiro da campanha.</div>`,
+    { actions: seletorMetricaTrafego }) : '';
+
   return `
     <div class="filters-row" style="padding-top:0;"><div class="months">${mesesPillsHtml}</div></div>
     ${tabela}
+    ${grafico}
     <div class="totais-nota">
       <b>Custo/MQL, CPC, CPL, CTR, CPM e Connect rate</b> são calculados sozinhos a partir dos números
       digitados — não precisa preencher, e recalculam na hora se o gasto, os cliques ou os leads mudarem.

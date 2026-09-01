@@ -715,6 +715,8 @@ E seis colunas **calculadas na hora**, nunca digitadas — mudam sozinhas se o g
 
 Denominador zero ou vazio dá **"—"**, nunca um erro ou um zero enganoso. Um filtro de mês recorta a tabela; o cabeçalho do quadro soma o total investido e o total de leads do que estiver visível. Lançar é só de admin, a leitura é aberta a qualquer conta logada — mesma regra do resto da aba Marketing.
 
+**Gráfico de campanhas** — abaixo da tabela, uma barra por campanha do período filtrado, no indicador escolhido no seletor "Indicador" (qualquer um dos números brutos ou calculados — Valor investido, Leads, CPL, CTR...). Cada barra pega uma cor de uma paleta fixa, na ordem; o nome da campanha aparece truncado e inclinado embaixo, com o nome inteiro no balão ao passar o mouse. Some sozinho quando o filtro de mês não tem nenhuma campanha.
+
 **Quem edita, quem vê.** Lançar e mexer nos indicadores é só de admin — a mesma regra em vigor no banco (RLS), não só na tela: uma conta restrita que tentasse gravar direto pela API seria barrada. A leitura é aberta pra qualquer conta logada, porque isso não é dado de comissão nem de contrato — é o placar que a equipe toda pode acompanhar. A conta financeira não vê a aba (ela só lida com valor de nota).
 
 ## Leitura em páginas (limite de 1.000 linhas)
