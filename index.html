@@ -2515,15 +2515,28 @@ function updateTrafegoCell(id, field, value){
   if(!r) return;
   r[field] = value;
   persistTrafego();
-  if(field === 'mes' || field === 'conta') render();
-  else updateMarketingSummaries();
+  render();   // mês/conta podem mudar o mês do filtro ou a ordem da linha
 }
 function onTrafegoMonthSelect(el){ updateTrafegoCell(Number(el.dataset.id), 'mes', el.value); }
 function onTrafegoContaSelect(el){ updateTrafegoCell(Number(el.dataset.id), 'conta', el.value); }
-function onTrafegoTexto(el){ updateTrafegoCell(Number(el.dataset.id), 'campanha', el.value); }
+/* Nome da campanha e os números brutos NÃO chamam render() a cada tecla —
+   só mudam o dado e (nos números) a linha calculada, direto no DOM.
+   Nada mais na tela depende do nome digitado em tempo real, e a ordem
+   da tabela só é reordenada de novo no próximo render "de verdade"
+   (trocar de mês, adicionar/excluir linha). */
+function onTrafegoTexto(el){
+  const r = trafegoRows.find(function(x){ return x.id === Number(el.dataset.id); });
+  if(!r) return;
+  r.campanha = el.value;
+  persistTrafego();
+}
 function onTrafegoNumInput(el){
+  const r = trafegoRows.find(function(x){ return x.id === Number(el.dataset.id); });
+  if(!r) return;
   const v = el.value;
-  updateTrafegoCell(Number(el.dataset.id), el.dataset.field, v === '' ? null : parseFloat(v));
+  r[el.dataset.field] = v === '' ? null : parseFloat(v);
+  persistTrafego();
+  atualizarLinhaTrafego(r);
 }
 
 /* As seis colunas calculadas — nunca digitadas, sempre em cima do que
@@ -2540,6 +2553,33 @@ function trafegoCalc(r){
     cpm: (r.impressoes && Number(r.impressoes) > 0) ? (gasto / Number(r.impressoes) * 1000) : null,
     connect: div(r.visitasLp, r.cliquesLink),
   };
+}
+/* Atualiza só as 6 células calculadas da linha + o total do cabeçalho,
+   sem chamar render(). Um input numa tabela grande que dispara render()
+   a cada tecla reconstrói a linha inteira — inclusive o próprio campo
+   em que a pessoa está digitando — e ela perde o foco no meio da
+   palavra, sobrando uma letra de cada vez. Mesmo truque que as outras
+   tabelas do sistema já usam para não perder foco (ex.: KPIs de
+   Renovações em atualizarResumoRenovacoes). */
+function atualizarLinhaTrafego(r){
+  const pct1 = function(v){ return (v*100).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}) + '%'; };
+  const c = trafegoCalc(r);
+  const set = function(id, txt){ const el = document.getElementById(id); if(el) el.textContent = txt; };
+  set('trf-custoMql-'+r.id, c.custoMql===null?'—':fmtMoney(c.custoMql));
+  set('trf-cpc-'+r.id, c.cpc===null?'—':fmtMoney(c.cpc));
+  set('trf-cpl-'+r.id, c.cpl===null?'—':fmtMoney(c.cpl));
+  set('trf-ctr-'+r.id, c.ctr===null?'—':pct1(c.ctr));
+  set('trf-cpm-'+r.id, c.cpm===null?'—':fmtMoney(c.cpm));
+  set('trf-connect-'+r.id, c.connect===null?'—':pct1(c.connect));
+  atualizarResumoTrafego();
+}
+function atualizarResumoTrafego(){
+  const el = document.getElementById('trafego-meta-valores');
+  if(!el) return;
+  const linhas = trafegoRows.filter(function(r){ return (r.ano||2026) === yearFilter && (trafegoFilter === 'Todos' || r.mes === trafegoFilter); });
+  const gastoTotal = linhas.reduce(function(a,r){ return a + (Number(r.gasto)||0); }, 0);
+  const leadsTotal = linhas.reduce(function(a,r){ return a + (Number(r.leads)||0); }, 0);
+  el.textContent = fmtMoney(gastoTotal) + ' investidos · ' + fmtNum(leadsTotal) + ' leads';
 }
 function campoTrafego(r, field, moeda){
   const v = r[field];
@@ -2588,12 +2628,12 @@ function renderTrafegoPagoSection(){
       <td class="num">${campoTrafego(r,'visitasLp',false)}</td>
       <td class="num">${campoTrafego(r,'leads',false)}</td>
       <td class="num">${campoTrafego(r,'mql',false)}</td>
-      <td class="num">${c.custoMql===null?'—':fmtMoney(c.custoMql)}</td>
-      <td class="num">${c.cpc===null?'—':fmtMoney(c.cpc)}</td>
-      <td class="num">${c.cpl===null?'—':fmtMoney(c.cpl)}</td>
-      <td class="num">${c.ctr===null?'—':pct1(c.ctr)}</td>
-      <td class="num">${c.cpm===null?'—':fmtMoney(c.cpm)}</td>
-      <td class="num">${c.connect===null?'—':pct1(c.connect)}</td>
+      <td class="num" id="trf-custoMql-${r.id}">${c.custoMql===null?'—':fmtMoney(c.custoMql)}</td>
+      <td class="num" id="trf-cpc-${r.id}">${c.cpc===null?'—':fmtMoney(c.cpc)}</td>
+      <td class="num" id="trf-cpl-${r.id}">${c.cpl===null?'—':fmtMoney(c.cpl)}</td>
+      <td class="num" id="trf-ctr-${r.id}">${c.ctr===null?'—':pct1(c.ctr)}</td>
+      <td class="num" id="trf-cpm-${r.id}">${c.cpm===null?'—':fmtMoney(c.cpm)}</td>
+      <td class="num" id="trf-connect-${r.id}">${c.connect===null?'—':pct1(c.connect)}</td>
       ${editavel ? `<td class="del-cell"><div class="row-actions"><button class="action-btn danger" title="Excluir" onclick="deleteTrafegoRow(${r.id})">✕</button></div></td>` : ''}
     </tr>`;
   }).join('');
@@ -2615,7 +2655,7 @@ function renderTrafegoPagoSection(){
 
   const tabela = panel('trafego-lista', 'Tráfego pago — visão por campanha', corpoTabela, {
     flush: true,
-    meta: `<b>${linhas.length}</b> campanha${linhas.length===1?'':'s'} · ${fmtMoney(gastoTotal)} investidos · ${fmtNum(leadsTotal)} leads`,
+    meta: `<b>${linhas.length}</b> campanha${linhas.length===1?'':'s'} · <span id="trafego-meta-valores">${fmtMoney(gastoTotal)} investidos · ${fmtNum(leadsTotal)} leads</span>`,
     actions: editavel ? `<button class="btn-add" onclick="addTrafegoRow()">+ Nova campanha</button>` : '',
   });
 
