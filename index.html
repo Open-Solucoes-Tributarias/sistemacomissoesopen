@@ -2790,10 +2790,86 @@ function onMarketingValorInput(el){
   persistMarketing();
   updateMarketingSummaries();
 }
+/* Os cartões de KPI, o resumo do mês e o gráfico dependem de vários
+   campos calculados (delta, %) — mas um render() da seção inteira a
+   cada tecla reconstrói o próprio campo em que a pessoa está digitando.
+   Num input comum isso já derruba o foco; num <input type="number">
+   é pior — a caixa não tem setSelectionRange, o cursor não volta pro
+   lugar certo, e os dígitos entram na ordem trocada. Por isso aqui só
+   os três corpos que realmente mudam são recalculados e trocados por
+   id, sem tocar na tabela nem no campo aberto — mesmo princípio do
+   Tráfego pago (atualizarLinhaTrafego). */
 function updateMarketingSummaries(){
-  // os cartões de KPI dependem de vários campos calculados (delta, %) —
-  // mais simples recalcular a seção toda que atualizar elemento a elemento.
-  render();
+  const trocar = function(id, html){ const el = document.getElementById(id); if(el) el.innerHTML = html; };
+  trocar('secbody-marketing-cartoes', marketingCartoesBodyHtml(marketingRede, marketingFilter));
+  trocar('secbody-marketing-resumo', marketingResumoHtml(marketingRede, marketingFilter));
+  trocar('secbody-marketing-linha', marketingGraficoBodyHtml(marketingRede, marketingMetricaFoco));
+}
+/* Cartões de indicador por conta + editor de indicadores (quando aberto)
+   — o corpo do painel "[Rede] — indicadores". Extraído da renderização
+   principal pra poder ser recalculado sozinho, sem re-render da seção
+   inteira (ver updateMarketingSummaries). */
+function marketingCartoesBodyHtml(rede, filtro){
+  const editavel = isAdmin;
+  const redeInfo = marketingRedeInfo(rede);
+  const indicadores = marketingIndicadoresPara(rede);
+  const contasDaRede = marketingContasPara(rede);
+  const pct1 = function(v){ return v.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}); };
+  const CORES_CARTAO = ['#1C6FBF','#0D9488','#B45309','#7C3AED','#DB2777','#059669','#DC2626','#4338CA'];
+
+  // Um bloco por conta, com o nome dela como título, e um cartão por
+  // indicador cadastrado na rede — o conjunto muda de rede pra rede.
+  const cartoesHtml = contasDaRede.map(function(conta){
+    const k = marketingKpis(conta.key, rede, filtro);
+    const cartoes = k.porIndicador.map(function(p, i){
+      const cor = CORES_CARTAO[i % CORES_CARTAO.length];
+      const valorTxt = p.ind.tipo === 'texto'
+        ? (p.atualTexto ? esc(p.atualTexto) : '—')
+        : (p.atualNum === null ? '—' : (p.ind.moeda ? fmtMoney(p.atualNum) : fmtNum(p.atualNum)));
+      const subTxt = p.ind.tipo === 'texto'
+        ? 'no período selecionado'
+        : (p.delta === null
+            ? 'sem mês anterior pra comparar'
+            : (p.delta >= 0 ? '+' : '') + (p.ind.moeda ? fmtMoney(p.delta) : fmtNum(p.delta)) + (p.pct !== null ? ' (' + (p.pct>=0?'+':'') + pct1(p.pct) + '%)' : ''));
+      return `<div class="kpi-card" style="--kc:${cor}">
+        <div class="kpi-label"><span class="kpi-dot"></span>${esc(p.ind.rotulo)}</div>
+        <div class="kpi-value">${valorTxt}</div>
+        <div class="kpi-sub">${esc(subTxt)}</div>
+      </div>`;
+    }).join('');
+    return `
+      <div class="resumo-section-title" style="margin-bottom:8px;">${esc(conta.label)}</div>
+      <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:18px;">
+        ${cartoes || '<div class="meta-empty" style="padding:16px;">Nenhum indicador cadastrado nesta rede.</div>'}
+      </div>`;
+  }).join('');
+
+  const editorIndicadores = (editavel && marketingEditandoIndicadores) ? `
+    <div class="pesos-lista" style="margin-top:4px;">
+      ${indicadores.length ? indicadores.map(function(ind){
+        return `<div class="peso-item">
+          <span class="peso-nome">${esc(ind.rotulo)}${ind.tipo==='texto' ? ' <span style="opacity:.6;font-weight:600;">(texto)</span>' : ''}</span>
+          <button class="action-btn danger" title="Retirar indicador" onclick="removeMarketingIndicador('${rede}','${ind.chave}')">✕</button>
+        </div>`;
+      }).join('') : '<div class="meta-empty" style="padding:12px;">Nenhum indicador cadastrado.</div>'}
+    </div>
+    <button class="btn-add" style="margin-top:10px;" onclick="addMarketingIndicador()">+ Novo indicador em ${esc(redeInfo.label)}</button>
+  ` : '';
+
+  return cartoesHtml + editorIndicadores;
+}
+/* Corpo do painel "Evolução mensal" — o gráfico de barras + a nota +
+   a legenda. Mesmo motivo da extração acima: recalcular sozinho sem
+   passar pela seção inteira. */
+function marketingGraficoBodyHtml(rede, metricaFoco){
+  const indicadoresNumericos = marketingIndicadoresPara(rede).filter(function(i){ return i.tipo !== 'texto'; });
+  const contasDaRede = marketingContasPara(rede);
+  const serieChart = metricaFoco ? contasDaRede.map(function(conta){
+    return { label: conta.label, cor: conta.cor, valores: marketingSerieValores(conta.key, rede, metricaFoco) };
+  }) : [];
+  return graficoBarrasMarketing(serieChart)
+    + `<div class="painel-nota">Este quadro mostra sempre os 12 meses de ${yearFilter} — mês sem lançamento simplesmente não tem barra.</div>`
+    + `<div class="painel-legenda">${contasDaRede.map(function(c){ return `<span><i style="background:${esc(c.cor)}"></i>${esc(c.label)}</span>`; }).join('')}</div>`;
 }
 
 function renderMarketingSection(){
@@ -2824,51 +2900,9 @@ function renderMarketingSection(){
     return `<button class="pill${marketingFilter===m?' active':''}" onclick="setMarketingFilter('${m}')">${m}</button>`;
   }).join('');
 
-  const pct1 = function(v){ return v.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}); };
-  const CORES_CARTAO = ['#1C6FBF','#0D9488','#B45309','#7C3AED','#DB2777','#059669','#DC2626','#4338CA'];
-
   const contasDaRede = marketingContasPara(marketingRede);
 
-  // Um bloco por conta, com o nome dela como título, e um cartão por
-  // indicador cadastrado na rede — o conjunto muda de rede pra rede.
-  const cartoesHtml = contasDaRede.map(function(conta){
-    const k = marketingKpis(conta.key, marketingRede, marketingFilter);
-    const cartoes = k.porIndicador.map(function(p, i){
-      const cor = CORES_CARTAO[i % CORES_CARTAO.length];
-      const valorTxt = p.ind.tipo === 'texto'
-        ? (p.atualTexto ? esc(p.atualTexto) : '—')
-        : (p.atualNum === null ? '—' : (p.ind.moeda ? fmtMoney(p.atualNum) : fmtNum(p.atualNum)));
-      const subTxt = p.ind.tipo === 'texto'
-        ? 'no período selecionado'
-        : (p.delta === null
-            ? 'sem mês anterior pra comparar'
-            : (p.delta >= 0 ? '+' : '') + (p.ind.moeda ? fmtMoney(p.delta) : fmtNum(p.delta)) + (p.pct !== null ? ' (' + (p.pct>=0?'+':'') + pct1(p.pct) + '%)' : ''));
-      return `<div class="kpi-card" style="--kc:${cor}">
-        <div class="kpi-label"><span class="kpi-dot"></span>${esc(p.ind.rotulo)}</div>
-        <div class="kpi-value">${valorTxt}</div>
-        <div class="kpi-sub">${esc(subTxt)}</div>
-      </div>`;
-    }).join('');
-    return `
-      <div class="resumo-section-title" style="margin-bottom:8px;">${esc(conta.label)}</div>
-      <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:18px;">
-        ${cartoes || '<div class="meta-empty" style="padding:16px;">Nenhum indicador cadastrado nesta rede.</div>'}
-      </div>`;
-  }).join('');
-
-  const editorIndicadores = (editavel && marketingEditandoIndicadores) ? `
-    <div class="pesos-lista" style="margin-top:4px;">
-      ${indicadores.length ? indicadores.map(function(ind){
-        return `<div class="peso-item">
-          <span class="peso-nome">${esc(ind.rotulo)}${ind.tipo==='texto' ? ' <span style="opacity:.6;font-weight:600;">(texto)</span>' : ''}</span>
-          <button class="action-btn danger" title="Retirar indicador" onclick="removeMarketingIndicador('${marketingRede}','${ind.chave}')">✕</button>
-        </div>`;
-      }).join('') : '<div class="meta-empty" style="padding:12px;">Nenhum indicador cadastrado.</div>'}
-    </div>
-    <button class="btn-add" style="margin-top:10px;" onclick="addMarketingIndicador()">+ Novo indicador em ${esc(redeInfo.label)}</button>
-  ` : '';
-
-  const painelIndicadores = panel('marketing-cartoes', esc(redeInfo.label) + ' — indicadores', cartoesHtml + editorIndicadores, {
+  const painelIndicadores = panel('marketing-cartoes', esc(redeInfo.label) + ' — indicadores', marketingCartoesBodyHtml(marketingRede, marketingFilter), {
     actions: editavel ? `<button class="eye-toggle" onclick="setMarketingEditandoIndicadores(${marketingEditandoIndicadores?'false':'true'})">${marketingEditandoIndicadores?'✕ Fechar':'⚙️ Editar indicadores'}</button>` : '',
   });
 
@@ -2881,14 +2915,9 @@ function renderMarketingSection(){
     </select></label>` : '';
 
   const metricaFocoLabel = (indicadoresNumericos.find(function(i){ return i.chave===marketingMetricaFoco; }) || {}).rotulo || '';
-  const serieChart = marketingMetricaFoco ? contasDaRede.map(function(conta){
-    return { label: conta.label, cor: conta.cor, valores: marketingSerieValores(conta.key, marketingRede, marketingMetricaFoco) };
-  }) : [];
 
   const grafico = indicadoresNumericos.length ? panel('marketing-linha', `Evolução mensal — ${esc(metricaFocoLabel)}`,
-    graficoBarrasMarketing(serieChart)
-    + `<div class="painel-nota">Este quadro mostra sempre os 12 meses de ${yearFilter} — mês sem lançamento simplesmente não tem barra.</div>`
-    + `<div class="painel-legenda">${contasDaRede.map(function(c){ return `<span><i style="background:${esc(c.cor)}"></i>${esc(c.label)}</span>`; }).join('')}</div>`,
+    marketingGraficoBodyHtml(marketingRede, marketingMetricaFoco),
     { actions: seletorMetrica }) : '';
 
   const linhas = marketingRows
@@ -2907,10 +2936,11 @@ function renderMarketingSection(){
       if(!editavel){
         return `<td class="num">${ind.tipo==='texto' ? esc(v || '—') : fmtNum(v)}</td>`;
       }
+      const inputId = `mkt-valor-${r.id}-${ind.chave}`;
       if(ind.tipo === 'texto'){
-        return `<td><input type="text" placeholder="—" value="${esc(v||'')}" data-id="${r.id}" data-chave="${ind.chave}" data-tipo="texto" oninput="onMarketingValorInput(this)" /></td>`;
+        return `<td><input id="${inputId}" type="text" placeholder="—" value="${esc(v||'')}" data-id="${r.id}" data-chave="${ind.chave}" data-tipo="texto" oninput="onMarketingValorInput(this)" /></td>`;
       }
-      return `<td class="num"><input class="num" type="number" step="1" placeholder="—" value="${v===null||v===undefined?'':v}" data-id="${r.id}" data-chave="${ind.chave}" data-tipo="numero" oninput="onMarketingValorInput(this)" /></td>`;
+      return `<td class="num"><input id="${inputId}" class="num" type="number" step="1" placeholder="—" value="${v===null||v===undefined?'':v}" data-id="${r.id}" data-chave="${ind.chave}" data-tipo="numero" oninput="onMarketingValorInput(this)" /></td>`;
     }).join('');
     return `<tr>
       <td class="col-mes">${editavel
