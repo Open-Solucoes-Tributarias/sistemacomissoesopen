@@ -8327,7 +8327,7 @@ function montarRelatorioMes(mes){
           return `<span>${g.posicao}º ${esc(g.vendedor)} (${fmtPontos(g.pontos)})</span>`;
         }).join('')}</div>
       </div>` : ''}
-    <p class="rel-nota">Cada indicador vale um peso e cada pessoa leva a fatia que teve dele no mês; os pontos de todas somam 100. Quem faz metade do que a líder fez leva metade dos pontos daquele indicador.</p>`;
+    <p class="rel-nota">Cada indicador vale um peso; quem lidera aquele indicador no mês leva o peso inteiro. Empate leva o peso inteiro pra cada um dos empatados — por isso a soma pode passar de 100 quando há empate.</p>`;
 
   // Gráficos: os mesmos do painel, com os dados do mês (barras) e do ano (linhas).
   const legendaHtml = `<div class="rel-legenda">${vendsPainel.map(function(v){
@@ -8608,16 +8608,22 @@ function excluirPainelLancamento(vendedor, mes){
    Aqui vale o que a Soraya pediu: conta quantas vezes o nome da pessoa
    aparece liderando. Empate num indicador dá vitória para todas as
    empatadas, e quem está zerado não vence nada. */
-/* Ranking com peso.
+/* Ranking com peso — versão da fatia, abandonada.
 
-   A primeira versão contava quantos indicadores cada pessoa liderava. Isso
-   tratava "interação" e "venda de sistema" como equivalentes, e ignorava a
-   margem: liderar por 1 valia igual a liderar pelo dobro.
+   A pontuação virou a FATIA que a pessoa tinha do total da equipe em cada
+   indicador, multiplicada pelo peso daquele indicador. Resolvia o problema
+   da margem (liderar por 1 valia igual a liderar pelo dobro), mas criou
+   outro: dava pra ser campeã sem ter liderado o indicador de maior peso
+   nenhuma vez, só por nunca zerar em nada. Foi o que aconteceu em
+   agosto/2026 — a Rios liderou 5 dos 10 indicadores, dois deles os de
+   venda mais forte, e ainda assim ficou em 3º lugar.
 
-   Agora a pontuação é a FATIA que a pessoa tem do total da equipe em cada
-   indicador, multiplicada pelo peso daquele indicador. Como as fatias de um
-   indicador somam 100%, os pontos de todo mundo somam 100 — o placar lê-se
-   direto: "de cada 100 pontos do ano, fulana ficou com 38".
+   Ranking com peso — versão atual: quem lidera o indicador leva o peso
+   dele inteiro pra si; quem não lidera não leva nada daquele indicador,
+   não importa quão perto tenha chegado. Empate leva o peso inteiro pra
+   cada um dos empatados — a mesma regra que "quantos indicadores liderou"
+   já usava. Por isso a soma de todo mundo pode passar de 100 quando há
+   empate; não é mais garantido somar exatamente 100 como na fatia.
 
    Indicador em que a equipe inteira está zerada sai do cálculo, em vez de
    dar zero a todas; e peso 0 tira o indicador da conta sem tirá-lo da tela. */
@@ -8639,7 +8645,10 @@ function rankingDoMes(periodo){
     const soma = valores.reduce((a,x) => a + (Number(x.valor)||0), 0);
     if(soma > 0 && peso > 0){
       pesoEmJogo += peso;
-      valores.forEach(x => { pontos[x.vendedor] += peso * (x.valor / soma); });
+      // Quem lidera leva o peso do indicador — empate leva o peso inteiro
+      // pra cada um dos empatados, a mesma regra que "quantos indicadores
+      // liderou" já usa. Só liderar conta; a margem não pesa mais.
+      lideres.forEach(l => { pontos[l.vendedor] += peso; });
     }
 
     return {
@@ -9485,9 +9494,8 @@ function renderPainelDashboard(vends){
           }).join('')}
         </div>
         <div class="painel-nota">
-          Cada indicador vale um <b>peso</b>, e cada pessoa leva a fatia que teve dele ${ehMes ? 'no mês' : 'no ano'}.
-          Os pontos de todo mundo somam <b>100</b>, então o placar lê-se direto: de cada 100 pontos, quanto foi de cada uma.
-          Não é só quem lidera — quem faz metade do que a líder fez leva metade dos pontos daquele indicador.
+          Cada indicador vale um <b>peso</b>, e quem lidera aquele indicador ${ehMes ? 'no mês' : 'no ano'} leva o peso inteiro pra si.
+          Não importa a margem — só liderar conta. Empate leva o peso inteiro pra cada um dos empatados, por isso a soma pode passar de <b>100</b>.
           ${isAdmin ? 'Os pesos são seus: use “Pesos do ranking” para mudar o que a empresa valoriza.' : ''}
         </div>
       `;

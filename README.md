@@ -365,7 +365,7 @@ Abre pelo **ranking**, que é o que essa aba tem de mais importante: um quadro e
 
 No ranking, cada indicador mostra quem liderou; **quem empata aparece junto**, com o valor uma vez só.
 
-**A campeã é quem faz mais pontos.** Cada indicador vale um **peso**, e cada pessoa leva a **fatia que teve dele** no período. Como as fatias de um indicador somam 100%, os pontos de todo mundo somam **100** — o placar lê-se direto: *"de cada 100 pontos do ano, Angela ficou com 37,9"*.
+**A campeã é quem soma mais peso liderando.** Cada indicador vale um **peso**, e quem lidera aquele indicador no período leva o **peso inteiro** pra si — não importa a margem, só liderar conta. Quem não lidera não leva nada daquele indicador. O placar lê-se direto: *"de cada 100 pontos do ano, Angela ficou com 37,9"* — mas, diferente de uma fatia, a soma de todo mundo **pode passar de 100** quando há empate (cada empatado leva o peso inteiro, não dividido).
 
 Pesos definidos pela diretoria comercial:
 
@@ -377,7 +377,8 @@ Pesos definidos pela diretoria comercial:
 
 **Vendas de curso In Company** (migração 25) é um indicador à parte de "Vendas de cursos" — não substitui, soma junto. Curso in company é ministrado dentro da empresa cliente, sob medida, e a diretoria quis reconhecer isso separado de um curso aberto qualquer. A marca é por lançamento: na aba **Cursos**, o botão **🏢** nas ações da linha marca ou desmarca, e o curso marcado ganha um selo **"🏢 In Company"** ao lado do nome. Os cursos que já seguiam a convenção de digitar "IN COMPANY" no nome vieram marcados automaticamente na migração — não precisou re-lançar nada.
 
-- **Não é só quem lidera.** Quem faz metade do que a líder fez leva metade dos pontos daquele indicador — a margem conta.
+- **Só liderar conta, a margem não.** Liderar por 1 vale o mesmo que liderar pelo dobro — o peso do indicador inteiro vai pra quem ficou na frente.
+- **Empate leva o peso inteiro pra cada um dos empatados** — não divide. Três pessoas empatadas num indicador de peso 5 rendem 5 pontos pra cada uma, não 5 ÷ 3.
 - **Indicador em que a equipe inteira está zerada sai da conta**, em vez de dar zero a todas.
 - **Peso 0** tira o indicador da pontuação, mas ele continua aparecendo no painel.
 - Empate no ponto (diferença menor que 0,1) coloca as duas como melhores do período.
@@ -386,7 +387,7 @@ Os cartões por indicador continuam mostrando **quem liderou cada quesito**, ago
 
 **Mudar os pesos** — o botão **"⚖️ Pesos do ranking"**, no cabeçalho do quadro, abre a lista com um seletor de 0 a 5 por indicador. Mudar recalcula o ranking na hora, do mês e do ano, e vale para todo mundo (`painel_pesos`, migração 13). Só admin edita; o botão *"Restaurar os pesos padrão"* volta à tabela acima.
 
-> **Por que não é contagem de lideranças, nem soma de colocações.** A primeira versão dava N pontos ao 1º lugar, N−1 ao 2º e assim por diante: num time de quatro, quatro segundos lugares valiam mais que uma liderança isolada, e acabava campeã quem não tinha vencido nada. A segunda versão passou a contar lideranças, o que resolveu aquilo mas criou outro problema — liderar "interação" valia o mesmo que liderar "vendas de sistemas", e dava para ser campeã do ano vencendo só os indicadores de menor importância. Peso + fatia resolve os dois: o que a empresa valoriza pesa mais, e o tamanho da contribuição conta.
+> **Por que não é fatia, nem soma de colocações.** A primeira versão dava N pontos ao 1º lugar, N−1 ao 2º e assim por diante: num time de quatro, quatro segundos lugares valiam mais que uma liderança isolada, e acabava campeã quem não tinha vencido nada. A segunda versão passou a contar lideranças com peso, mas dividindo por **fatia** — a pessoa levava o peso proporcional ao quanto fez do total da equipe naquele indicador, não só por ter liderado. Isso deixava alguém virar campeã sem ter liderado o indicador de maior peso nenhuma vez, só por nunca zerar em nada: foi o que aconteceu em agosto/2026, quando a Rios liderou 5 dos 10 indicadores — dois deles os de venda mais forte — e mesmo assim ficou em 3º lugar. A versão atual corrige isso: só liderar conta, o peso vai inteiro pra quem ficou na frente.
 
 > Os totais de venda são calculados pelo banco, e o painel os relê **depois de cada gravação** nas abas Sistema e Cursos, além de toda vez que a aba é aberta. Não precisa recarregar a página para o mês aparecer.
 
