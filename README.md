@@ -677,7 +677,7 @@ De fábrica, cada rede já vem com um conjunto pensado para o que a diretoria qu
 | YouTube | Visualizações, Total de impressões, Novos inscritos, Receita estimada, Horas exibidas, Vídeo popular (texto), Interações |
 | LinkedIn | Seguidores, Impressões, Interações |
 | TikTok | Visualizações, Visitas, Seguidores, Total de espectadores, Novos espectadores, Compartilhamentos, Interações |
-| PodTributar | Ouvintes, Reproduções, Interações |
+| PodTributar | Visualizações, Tempo de exibição (horas), Receita estimada — hospedado no YouTube, os números são os do YouTube Analytics |
 | RD Station | Busca orgânica, YouTube, Sites (Foco/Open), Conversões, Visitas |
 
 Cada indicador numérico vira um **cartão por conta**, com o valor do mês e a variação contra o mês anterior **que tiver lançamento** (não precisa ser o mês imediatamente anterior — se pular Junho, Julho compara com Maio), em número absoluto e em %.
