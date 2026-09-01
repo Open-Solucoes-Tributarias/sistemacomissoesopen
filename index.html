@@ -646,6 +646,8 @@
     transition:opacity .15s;
   }
   .modal-btn:hover{opacity:.88;}
+  .modal-btn:disabled{opacity:.4;cursor:not-allowed;}
+  .modal-btn:disabled:hover{opacity:.4;}
   .modal-btn-ghost{background:var(--border-soft);color:var(--ink-soft);}
   .modal-btn-primary{background:var(--primary);color:#fff;}
   .modal-btn-danger{background:var(--danger);color:#fff;}
@@ -2687,6 +2689,31 @@ function renderModal(){
         </div>
       </div>
     `;
+  }
+  if(m.type === 'zerar-tudo'){
+    const travado = String(m.texto||'').trim().toUpperCase() !== 'ZERAR TUDO';
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box">
+          <div class="modal-msg">⚠️ Zerar tudo</div>
+          <div class="modal-error" style="position:static;">
+            Isso vai apagar <b>todos os lançamentos</b> de todas as abas (Sistema, Consultoria,
+            Consultoria Órgãos Públicos, Cursos e Bônus e Metas), de <b>todos os anos</b> —
+            não dá pra desfazer. Os produtos, vendedores e parceiros cadastrados continuam.
+            Recomendo exportar os dados antes (botão ⬇ Exportar dados), caso precise deles depois.
+          </div>
+          <label class="meta-field">
+            <span>Para confirmar, digite <b>ZERAR TUDO</b></span>
+            <input id="zerar-tudo-input" class="modal-input" type="text" autocomplete="off" autofocus
+                   value="${esc(m.texto||'')}" oninput="onZerarTudoInput(this)"
+                   onkeydown="if(event.key==='Enter') confirmarZerarTudo(); else if(event.key==='Escape') closeModal();" />
+          </label>
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
+            <button class="modal-btn modal-btn-danger" ${travado?'disabled':''} onclick="confirmarZerarTudo()">Zerar tudo</button>
+          </div>
+        </div>
+      </div>`;
   }
   if(m.type === 'acesso-usuario'){
     return `
@@ -5129,29 +5156,41 @@ function resetToOriginal(){
   );
 }
 
+/* "Zerar tudo" apaga os lançamentos de todo mundo, de todos os anos, sem
+   volta — o botão mais destrutivo do sistema. Um clique + um "confirmar"
+   é fácil demais de acertar sem querer (o dedo escorrega, alguém aperta
+   Enter no lugar errado). Por isso, além do aviso, ela precisa DIGITAR
+   "ZERAR TUDO": o botão de confirmar só liga quando o texto bate. */
 function wipeAllData(){
-  showConfirm(
-    "⚠️ ISSO VAI APAGAR TODOS OS LANÇAMENTOS de todas as abas (Sistema, Consultoria, Consultoria Órgãos Públicos, Cursos e Bônus e Metas), de todos os anos — não dá pra desfazer. Os produtos, vendedores e parceiros cadastrados continuam. Recomendo exportar os dados antes (botão ⬇ Exportar dados), caso precise deles depois. Tem certeza que quer zerar tudo?",
-    () => {
-      rows = [];
-      nextId = 1;
-      persist();
+  modalState = { type:'zerar-tudo', texto:'' };
+  render();
+}
+function onZerarTudoInput(el){
+  if(!modalState) return;
+  modalState.texto = el.value;
+  render();
+  const ne = document.getElementById('zerar-tudo-input');
+  if(ne){ ne.focus(); }
+}
+function confirmarZerarTudo(){
+  if(!modalState || String(modalState.texto||'').trim().toUpperCase() !== 'ZERAR TUDO') return;
+  closeModal();
+  rows = [];
+  nextId = 1;
+  persist();
 
-      ENTITY_KEYS.forEach(key => {
-        state[key].rows = [];
-        state[key].nextId = 1;
-        persistEntityRows(key);
-      });
+  ENTITY_KEYS.forEach(key => {
+    state[key].rows = [];
+    state[key].nextId = 1;
+    persistEntityRows(key);
+  });
 
-      bonusRows = [];
-      bonusNextId = 1;
-      persistBonus();
+  bonusRows = [];
+  bonusNextId = 1;
+  persistBonus();
 
-      closedMonths = [];
-      persistClosedMonths();
-    },
-    "Zerar tudo"
-  );
+  closedMonths = [];
+  persistClosedMonths();
 }
 
 function setFilter(m){ filter = m; render(); }
