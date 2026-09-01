@@ -1334,18 +1334,69 @@ const ENTITY_KEYS = ["consultoria","publicos","cursos"];
    que ela mesma usa pra "seguidores" e pra "alcance", porque no YouTube é
    inscrito e visualização, no PodTributar é ouvinte e reprodução. */
 const MARKETING_CONTAS = [
-  {key:"open", label:"Open"},
-  {key:"foco", label:"Foco Tributário"},
+  {key:"open", label:"Open", cor:"#1C6FBF"},
+  {key:"foco", label:"Foco Tributário", cor:"#EA580C"},
 ];
 const MARKETING_REDES = [
-  {key:"instagram",   label:"Instagram",   seguidores:"Seguidores", alcance:"Contas alcançadas", interacoes:"Interações"},
-  {key:"youtube",      label:"YouTube",     seguidores:"Inscritos",  alcance:"Visualizações",     interacoes:"Interações"},
-  {key:"linkedin",     label:"LinkedIn",    seguidores:"Seguidores", alcance:"Impressões",        interacoes:"Interações"},
-  {key:"tiktok",       label:"TikTok",      seguidores:"Seguidores", alcance:"Visualizações",     interacoes:"Interações"},
-  {key:"podtributar",  label:"PodTributar", seguidores:"Ouvintes",   alcance:"Reproduções",       interacoes:"Interações"},
+  {key:"instagram",   label:"Instagram"},
+  {key:"youtube",     label:"YouTube"},
+  {key:"linkedin",    label:"LinkedIn"},
+  {key:"tiktok",      label:"TikTok"},
+  {key:"podtributar", label:"PodTributar"},
+  {key:"rdstation",   label:"RD Station"},
 ];
 function marketingRedeInfo(key){ return MARKETING_REDES.find(function(r){ return r.key === key; }) || MARKETING_REDES[0]; }
 function marketingContaInfo(key){ return MARKETING_CONTAS.find(function(c){ return c.key === key; }) || MARKETING_CONTAS[0]; }
+
+/* Indicadores por rede (migração 26): cada plataforma mostra números
+   diferentes — o YouTube tem "Receita estimada", o RD Station nem se
+   parece com rede social. Isso é só o padrão de fábrica, usado antes do
+   banco responder; quem administra pode incluir e retirar indicador
+   pela tela (tabela `marketing_indicadores`), sem precisar de migração. */
+const MARKETING_INDICADORES_PADRAO = {
+  instagram: [
+    {chave:'alcance', rotulo:'Contas alcançadas', tipo:'numero', moeda:false},
+    {chave:'impressoes', rotulo:'Impressões', tipo:'numero', moeda:false},
+    {chave:'seguidores', rotulo:'Seguidores', tipo:'numero', moeda:false},
+    {chave:'visitas', rotulo:'Visitas', tipo:'numero', moeda:false},
+    {chave:'interacoes', rotulo:'Interações', tipo:'numero', moeda:false},
+  ],
+  youtube: [
+    {chave:'visualizacoes', rotulo:'Visualizações', tipo:'numero', moeda:false},
+    {chave:'impressoes', rotulo:'Total de impressões', tipo:'numero', moeda:false},
+    {chave:'inscritos', rotulo:'Novos inscritos', tipo:'numero', moeda:false},
+    {chave:'receita', rotulo:'Receita estimada', tipo:'numero', moeda:true},
+    {chave:'horas_exibidas', rotulo:'Horas exibidas', tipo:'numero', moeda:false},
+    {chave:'video_popular', rotulo:'Vídeo popular', tipo:'texto', moeda:false},
+    {chave:'interacoes', rotulo:'Interações', tipo:'numero', moeda:false},
+  ],
+  linkedin: [
+    {chave:'seguidores', rotulo:'Seguidores', tipo:'numero', moeda:false},
+    {chave:'impressoes', rotulo:'Impressões', tipo:'numero', moeda:false},
+    {chave:'interacoes', rotulo:'Interações', tipo:'numero', moeda:false},
+  ],
+  tiktok: [
+    {chave:'visualizacoes', rotulo:'Visualizações', tipo:'numero', moeda:false},
+    {chave:'visitas', rotulo:'Visitas', tipo:'numero', moeda:false},
+    {chave:'seguidores', rotulo:'Seguidores', tipo:'numero', moeda:false},
+    {chave:'espectadores', rotulo:'Total de espectadores', tipo:'numero', moeda:false},
+    {chave:'novos_espectadores', rotulo:'Novos espectadores', tipo:'numero', moeda:false},
+    {chave:'compartilhamentos', rotulo:'Compartilhamentos', tipo:'numero', moeda:false},
+    {chave:'interacoes', rotulo:'Interações', tipo:'numero', moeda:false},
+  ],
+  podtributar: [
+    {chave:'ouvintes', rotulo:'Ouvintes', tipo:'numero', moeda:false},
+    {chave:'reproducoes', rotulo:'Reproduções', tipo:'numero', moeda:false},
+    {chave:'interacoes', rotulo:'Interações', tipo:'numero', moeda:false},
+  ],
+  rdstation: [
+    {chave:'busca_organica', rotulo:'Busca orgânica', tipo:'numero', moeda:false},
+    {chave:'youtube_ref', rotulo:'YouTube', tipo:'numero', moeda:false},
+    {chave:'sites', rotulo:'Sites (Foco/Open)', tipo:'numero', moeda:false},
+    {chave:'conversoes', rotulo:'Conversões', tipo:'numero', moeda:false},
+    {chave:'visitas', rotulo:'Visitas', tipo:'numero', moeda:false},
+  ],
+};
 
 const TABS = [
   {key:"vendas", label:"Sistema"},
@@ -1437,6 +1488,9 @@ let marketingRows = [];
 let marketingNextId = 1;
 let marketingRede = "instagram";
 let marketingFilter = "Todos";
+let marketingIndicadoresDb = null;   // null = ainda não leu o banco, usa o padrão
+let marketingEditandoIndicadores = false;
+let marketingMetricaFoco = null;     // indicador em foco no gráfico de evolução (por rede)
 let closedMonths = [];
 let metas = [];      // regras de meta: gatilho da empresa que premia uma pessoa
 let metasNextId = 1;
@@ -2204,8 +2258,7 @@ function persistMarketing(){
     (async function(){
       try{
         const dbRows = marketingRows.map(function(r){
-          return { id:r.id, ano:r.ano||2026, mes:r.mes, conta:r.conta, rede:r.rede,
-                   seguidores:numOrNull(r.seguidores), alcance:numOrNull(r.alcance), interacoes:numOrNull(r.interacoes) };
+          return { id:r.id, ano:r.ano||2026, mes:r.mes, conta:r.conta, rede:r.rede, valores:r.valores||{} };
         });
         await sbUpsert('marketing_metricas', dbRows, 'id');
         const existing = carregouDoBanco.marketing ? ((await sbSelectTudo('marketing_metricas','select=id&order=id.asc')) || []) : [];
@@ -2224,8 +2277,7 @@ async function tryLoadMarketingAsync(){
     carregouDoBanco.marketing = true;
     if(dbRows){
       marketingRows = dbRows.map(function(d){
-        return { id:d.id, ano:d.ano, mes:d.mes, conta:d.conta, rede:d.rede,
-                 seguidores:d.seguidores, alcance:d.alcance, interacoes:d.interacoes };
+        return { id:d.id, ano:d.ano, mes:d.mes, conta:d.conta, rede:d.rede, valores:d.valores || {} };
       });
       marketingNextId = marketingRows.length ? Math.max.apply(null, marketingRows.map(function(r){ return r.id||0; }))+1 : 1;
       render();
@@ -2233,8 +2285,59 @@ async function tryLoadMarketingAsync(){
   } catch(e){ console.error(e); }
 }
 
-function setMarketingRede(key){ marketingRede = key; render(); }
+/* Indicadores por rede (migração 26). marketingIndicadoresDb, uma vez
+   lido, tem só as redes que já foram gravadas no banco — pra rede que
+   nunca gravou nada (ex.: recém-adicionada), cai no padrão de fábrica. */
+async function tryLoadMarketingIndicadoresAsync(){
+  try{
+    const dbRows = await sbSelectTudo('marketing_indicadores','select=*&order=rede.asc,ordem.asc,chave.asc');
+    if(dbRows && dbRows.length){
+      const porRede = {};
+      dbRows.forEach(function(d){
+        (porRede[d.rede] = porRede[d.rede] || []).push({chave:d.chave, rotulo:d.rotulo, tipo:d.tipo, moeda:!!d.moeda, ordem:d.ordem});
+      });
+      marketingIndicadoresDb = porRede;
+      render();
+    }
+  } catch(e){ console.error(e); }
+}
+function marketingIndicadoresPara(rede){
+  return (marketingIndicadoresDb && marketingIndicadoresDb[rede]) || MARKETING_INDICADORES_PADRAO[rede] || [];
+}
+function setMarketingEditandoIndicadores(v){ marketingEditandoIndicadores = !!v; render(); }
+function addMarketingIndicador(){
+  showPrompt('Nome do novo indicador em ' + marketingRedeInfo(marketingRede).label + ' (ex.: "Cliques no link"):', function(nome){
+    nome = String(nome||'').trim();
+    if(!nome) return;
+    const chaveBase = slug(nome).replace(/-/g,'_') || 'indicador';
+    const existentes = marketingIndicadoresPara(marketingRede);
+    let chave = chaveBase, n = 2;
+    while(existentes.some(function(i){ return i.chave === chave; })){ chave = chaveBase + '_' + (n++); }
+    const ordem = existentes.length ? Math.max.apply(null, existentes.map(function(i){ return i.ordem||0; })) + 1 : 1;
+    const novo = {chave:chave, rotulo:nome, tipo:'numero', moeda:false, ordem:ordem};
+    const porRede = Object.assign({}, marketingIndicadoresDb || {});
+    porRede[marketingRede] = existentes.concat([novo]);
+    marketingIndicadoresDb = porRede;
+    sbUpsert('marketing_indicadores', [{rede:marketingRede, chave:chave, rotulo:nome, tipo:'numero', moeda:false, ordem:ordem}], 'rede,chave')
+      .catch(function(e){ console.error(e); });
+    render();
+  });
+}
+function removeMarketingIndicador(rede, chave){
+  const info = marketingIndicadoresPara(rede).find(function(i){ return i.chave === chave; });
+  showConfirm('Retirar o indicador "' + (info ? info.rotulo : chave) + '"? Os números já lançados continuam guardados, só somem da tela.', function(){
+    const porRede = Object.assign({}, marketingIndicadoresDb || {});
+    porRede[rede] = marketingIndicadoresPara(rede).filter(function(i){ return i.chave !== chave; });
+    marketingIndicadoresDb = porRede;
+    sbDeleteAll('marketing_indicadores', 'rede=eq.'+encodeURIComponent(rede)+'&chave=eq.'+encodeURIComponent(chave))
+      .catch(function(e){ console.error(e); });
+    render();
+  }, 'Retirar');
+}
+
+function setMarketingRede(key){ marketingRede = key; marketingMetricaFoco = null; render(); }
 function setMarketingFilter(m){ marketingFilter = m; render(); }
+function setMarketingMetricaFoco(el){ marketingMetricaFoco = el.value; render(); }
 
 /* Todos os lançamentos de uma conta+rede no ano, em ordem cronológica —
    é a partir dessa sequência que dá pra achar "o mês atual" e "o mês
@@ -2244,10 +2347,19 @@ function marketingSerieDoAno(conta, rede){
     .filter(function(r){ return (r.ano||2026) === yearFilter && r.conta === conta && r.rede === rede; })
     .sort(function(a,b){ return MONTHS.indexOf(a.mes) - MONTHS.indexOf(b.mes); });
 }
-/* O "medidor" de verdade não é o número absoluto de seguidores — é ele
-   comparado ao mês anterior (cresceu? quanto?) e a taxa de engajamento
-   (de quem alcançou, quantos interagiram). Isso é o que decide se um
-   número grande é bom ou só grande. */
+/* Os 12 valores do ano de um indicador, um por mês — null onde não tem
+   lançamento. É o que o gráfico de evolução mensal usa. */
+function marketingSerieValores(conta, rede, chave){
+  const porMes = {};
+  marketingSerieDoAno(conta, rede).forEach(function(r){ porMes[r.mes] = (r.valores||{})[chave]; });
+  return MONTHS.map(function(m){
+    const v = porMes[m];
+    return (v === undefined || v === null || v === '') ? null : Number(v);
+  });
+}
+/* O "medidor" de verdade não é o número absoluto — é ele comparado ao
+   mês anterior que tiver lançamento (cresceu? quanto?). Um cartão por
+   indicador da rede, calculado do mesmo jeito pra qualquer um deles. */
 function marketingKpis(conta, rede, mesFiltro){
   const serie = marketingSerieDoAno(conta, rede);
   let atual = null, anterior = null;
@@ -2262,14 +2374,17 @@ function marketingKpis(conta, rede, mesFiltro){
       if(achou){ anterior = achou; break; }
     }
   }
-  const seguidoresAtual = atual ? Number(atual.seguidores) : null;
-  const seguidoresAnterior = anterior ? Number(anterior.seguidores) : null;
-  const delta = (seguidoresAtual !== null && seguidoresAnterior !== null) ? (seguidoresAtual - seguidoresAnterior) : null;
-  const pct = (delta !== null && seguidoresAnterior) ? (delta / seguidoresAnterior * 100) : null;
-  const alcance = atual ? Number(atual.alcance) : null;
-  const interacoes = atual ? Number(atual.interacoes) : null;
-  const engajamento = (alcance) ? (interacoes || 0) / alcance * 100 : null;
-  return { atual, anterior, seguidoresAtual, delta, pct, alcance, interacoes, engajamento };
+  const porIndicador = marketingIndicadoresPara(rede).map(function(ind){
+    const vAtual = atual ? (atual.valores||{})[ind.chave] : undefined;
+    const vAnterior = anterior ? (anterior.valores||{})[ind.chave] : undefined;
+    const numerico = ind.tipo !== 'texto';
+    const atualNum = (numerico && vAtual !== undefined && vAtual !== null && vAtual !== '') ? Number(vAtual) : null;
+    const anteriorNum = (numerico && vAnterior !== undefined && vAnterior !== null && vAnterior !== '') ? Number(vAnterior) : null;
+    const delta = (atualNum !== null && anteriorNum !== null) ? (atualNum - anteriorNum) : null;
+    const pct = (delta !== null && anteriorNum) ? (delta / anteriorNum * 100) : null;
+    return { ind, atualNum, atualTexto: vAtual, delta, pct };
+  });
+  return { atual, anterior, porIndicador };
 }
 
 function addMarketingRow(){
@@ -2279,8 +2394,7 @@ function addMarketingRow(){
   const jaTem = marketingRows.filter(function(r){ return (r.ano||2026)===yearFilter && r.mes===mes && r.rede===marketingRede; })
     .map(function(r){ return r.conta; });
   const conta = MARKETING_CONTAS.find(function(c){ return jaTem.indexOf(c.key) === -1; }) || MARKETING_CONTAS[0];
-  marketingRows.unshift({ id: marketingNextId++, ano: yearFilter, mes, rede: marketingRede, conta: conta.key,
-                           seguidores: null, alcance: null, interacoes: null });
+  marketingRows.unshift({ id: marketingNextId++, ano: yearFilter, mes, rede: marketingRede, conta: conta.key, valores: {} });
   persistMarketing();
   render();
 }
@@ -2301,20 +2415,34 @@ function updateMarketingCell(id, field, value){
 }
 function onMarketingMonthSelect(el){ updateMarketingCell(Number(el.dataset.id), 'mes', el.value); }
 function onMarketingContaSelect(el){ updateMarketingCell(Number(el.dataset.id), 'conta', el.value); }
-function onMarketingNumInput(el){
-  const v = el.value;
-  updateMarketingCell(Number(el.dataset.id), el.dataset.field, v === '' ? null : parseFloat(v));
+function onMarketingValorInput(el){
+  const r = marketingRows.find(function(r){ return r.id === Number(el.dataset.id); });
+  if(!r) return;
+  const chave = el.dataset.chave;
+  const texto = el.dataset.tipo === 'texto';
+  r.valores = Object.assign({}, r.valores || {});
+  if(texto){
+    r.valores[chave] = el.value === '' ? null : el.value;
+  } else {
+    r.valores[chave] = el.value === '' ? null : parseFloat(el.value);
+  }
+  persistMarketing();
+  updateMarketingSummaries();
 }
 function updateMarketingSummaries(){
-  // os cartões de KPI dependem de vários campos calculados (delta, %,
-  // engajamento) — mais simples recalcular a seção toda que atualizar
-  // elemento a elemento.
+  // os cartões de KPI dependem de vários campos calculados (delta, %) —
+  // mais simples recalcular a seção toda que atualizar elemento a elemento.
   render();
 }
 
 function renderMarketingSection(){
   const editavel = isAdmin;
   const redeInfo = marketingRedeInfo(marketingRede);
+  const indicadores = marketingIndicadoresPara(marketingRede);
+  const indicadoresNumericos = indicadores.filter(function(i){ return i.tipo !== 'texto'; });
+  if(!marketingMetricaFoco || !indicadoresNumericos.some(function(i){ return i.chave === marketingMetricaFoco; })){
+    marketingMetricaFoco = indicadoresNumericos.length ? indicadoresNumericos[0].chave : null;
+  }
 
   const redesPillsHtml = MARKETING_REDES.map(function(r){
     return `<button class="pill seller-pill${marketingRede===r.key?' active':''}" onclick="setMarketingRede('${r.key}')">${esc(r.label)}</button>`;
@@ -2324,35 +2452,66 @@ function renderMarketingSection(){
   }).join('');
 
   const pct1 = function(v){ return v.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}); };
+  const CORES_CARTAO = ['#1C6FBF','#0D9488','#B45309','#7C3AED','#DB2777','#059669','#DC2626','#4338CA'];
 
-  // Um bloco por conta, com o nome dela como título — não dentro do
-  // rótulo do cartão, que é estreito demais pra "Foco Tributário ·
-  // Contas alcançadas" sem cortar no meio da palavra.
+  // Um bloco por conta, com o nome dela como título, e um cartão por
+  // indicador cadastrado na rede — o conjunto muda de rede pra rede.
   const cartoesHtml = MARKETING_CONTAS.map(function(conta){
     const k = marketingKpis(conta.key, marketingRede, marketingFilter);
-    const deltaTxt = k.delta === null
-      ? 'sem mês anterior pra comparar'
-      : (k.delta >= 0 ? '+' : '') + fmtNum(k.delta) + (k.pct !== null ? ' (' + (k.pct>=0?'+':'') + pct1(k.pct) + '%)' : '');
+    const cartoes = k.porIndicador.map(function(p, i){
+      const cor = CORES_CARTAO[i % CORES_CARTAO.length];
+      const valorTxt = p.ind.tipo === 'texto'
+        ? (p.atualTexto ? esc(p.atualTexto) : '—')
+        : (p.atualNum === null ? '—' : (p.ind.moeda ? fmtMoney(p.atualNum) : fmtNum(p.atualNum)));
+      const subTxt = p.ind.tipo === 'texto'
+        ? 'no período selecionado'
+        : (p.delta === null
+            ? 'sem mês anterior pra comparar'
+            : (p.delta >= 0 ? '+' : '') + (p.ind.moeda ? fmtMoney(p.delta) : fmtNum(p.delta)) + (p.pct !== null ? ' (' + (p.pct>=0?'+':'') + pct1(p.pct) + '%)' : ''));
+      return `<div class="kpi-card" style="--kc:${cor}">
+        <div class="kpi-label"><span class="kpi-dot"></span>${esc(p.ind.rotulo)}</div>
+        <div class="kpi-value">${valorTxt}</div>
+        <div class="kpi-sub">${esc(subTxt)}</div>
+      </div>`;
+    }).join('');
     return `
       <div class="resumo-section-title" style="margin-bottom:8px;">${esc(conta.label)}</div>
-      <div class="kpis" style="grid-template-columns:repeat(3,1fr);margin-bottom:18px;">
-        <div class="kpi-card" style="--kc:#1C6FBF">
-          <div class="kpi-label"><span class="kpi-dot"></span>${esc(redeInfo.seguidores)}</div>
-          <div class="kpi-value">${k.seguidoresAtual===null ? '—' : fmtNum(k.seguidoresAtual)}</div>
-          <div class="kpi-sub">${esc(deltaTxt)}</div>
-        </div>
-        <div class="kpi-card" style="--kc:#0D9488">
-          <div class="kpi-label"><span class="kpi-dot"></span>${esc(redeInfo.alcance)}</div>
-          <div class="kpi-value">${k.alcance===null ? '—' : fmtNum(k.alcance)}</div>
-          <div class="kpi-sub">no período selecionado</div>
-        </div>
-        <div class="kpi-card" style="--kc:#B45309">
-          <div class="kpi-label"><span class="kpi-dot"></span>Engajamento</div>
-          <div class="kpi-value">${k.engajamento===null ? '—' : pct1(k.engajamento) + '%'}</div>
-          <div class="kpi-sub">${esc(redeInfo.interacoes)}: ${k.interacoes===null ? '—' : fmtNum(k.interacoes)}</div>
-        </div>
+      <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:18px;">
+        ${cartoes || '<div class="meta-empty" style="padding:16px;">Nenhum indicador cadastrado nesta rede.</div>'}
       </div>`;
   }).join('');
+
+  const editorIndicadores = (editavel && marketingEditandoIndicadores) ? `
+    <div class="pesos-lista" style="margin-top:4px;">
+      ${indicadores.length ? indicadores.map(function(ind){
+        return `<div class="peso-item">
+          <span class="peso-nome">${esc(ind.rotulo)}${ind.tipo==='texto' ? ' <span style="opacity:.6;font-weight:600;">(texto)</span>' : ''}</span>
+          <button class="action-btn danger" title="Retirar indicador" onclick="removeMarketingIndicador('${marketingRede}','${ind.chave}')">✕</button>
+        </div>`;
+      }).join('') : '<div class="meta-empty" style="padding:12px;">Nenhum indicador cadastrado.</div>'}
+    </div>
+    <button class="btn-add" style="margin-top:10px;" onclick="addMarketingIndicador()">+ Novo indicador em ${esc(redeInfo.label)}</button>
+  ` : '';
+
+  const painelIndicadores = panel('marketing-cartoes', esc(redeInfo.label) + ' — indicadores', cartoesHtml + editorIndicadores, {
+    actions: editavel ? `<button class="eye-toggle" onclick="setMarketingEditandoIndicadores(${marketingEditandoIndicadores?'false':'true'})">${marketingEditandoIndicadores?'✕ Fechar':'⚙️ Editar indicadores'}</button>` : '',
+  });
+
+  const seletorMetrica = indicadoresNumericos.length ? `<label class="ordem-wrap"><span>Indicador</span>
+    <select onchange="setMarketingMetricaFoco(this)">
+      ${indicadoresNumericos.map(function(i){ return `<option value="${i.chave}" ${marketingMetricaFoco===i.chave?'selected':''}>${esc(i.rotulo)}</option>`; }).join('')}
+    </select></label>` : '';
+
+  const metricaFocoLabel = (indicadoresNumericos.find(function(i){ return i.chave===marketingMetricaFoco; }) || {}).rotulo || '';
+  const serieChart = marketingMetricaFoco ? MARKETING_CONTAS.map(function(conta){
+    return { label: conta.label, cor: conta.cor, valores: marketingSerieValores(conta.key, marketingRede, marketingMetricaFoco) };
+  }) : [];
+
+  const grafico = indicadoresNumericos.length ? panel('marketing-linha', `Evolução mensal — ${esc(metricaFocoLabel)}`,
+    graficoLinhaMarketing(serieChart)
+    + `<div class="painel-nota">Este quadro mostra sempre os 12 meses de ${yearFilter} — a linha quebra nos meses sem lançamento, em vez de cair pra zero.</div>`
+    + `<div class="painel-legenda">${MARKETING_CONTAS.map(function(c){ return `<span><i style="background:${esc(c.cor)}"></i>${esc(c.label)}</span>`; }).join('')}</div>`,
+    { actions: seletorMetrica }) : '';
 
   const linhas = marketingRows
     .filter(function(r){
@@ -2365,6 +2524,16 @@ function renderMarketingSection(){
     });
 
   const linhasHtml = linhas.map(function(r){
+    const celulasIndicadores = indicadores.map(function(ind){
+      const v = (r.valores||{})[ind.chave];
+      if(!editavel){
+        return `<td class="num">${ind.tipo==='texto' ? esc(v || '—') : fmtNum(v)}</td>`;
+      }
+      if(ind.tipo === 'texto'){
+        return `<td><input type="text" placeholder="—" value="${esc(v||'')}" data-id="${r.id}" data-chave="${ind.chave}" data-tipo="texto" oninput="onMarketingValorInput(this)" /></td>`;
+      }
+      return `<td class="num"><input class="num" type="number" step="1" placeholder="—" value="${v===null||v===undefined?'':v}" data-id="${r.id}" data-chave="${ind.chave}" data-tipo="numero" oninput="onMarketingValorInput(this)" /></td>`;
+    }).join('');
     return `<tr>
       <td class="col-mes">${editavel
         ? `<select data-id="${r.id}" onchange="onMarketingMonthSelect(this)">${MONTHS.map(function(m){ return `<option value="${m}" ${r.mes===m?'selected':''}>${monthShort(m)}</option>`; }).join('')}</select>`
@@ -2372,15 +2541,7 @@ function renderMarketingSection(){
       <td>${editavel
         ? `<select data-id="${r.id}" onchange="onMarketingContaSelect(this)">${MARKETING_CONTAS.map(function(c){ return `<option value="${c.key}" ${r.conta===c.key?'selected':''}>${esc(c.label)}</option>`; }).join('')}</select>`
         : esc(marketingContaInfo(r.conta).label)}</td>
-      <td class="num">${editavel
-        ? `<input class="num" type="number" step="1" placeholder="—" value="${r.seguidores===null||r.seguidores===undefined?'':r.seguidores}" data-id="${r.id}" data-field="seguidores" oninput="onMarketingNumInput(this)" />`
-        : fmtNum(r.seguidores)}</td>
-      <td class="num">${editavel
-        ? `<input class="num" type="number" step="1" placeholder="—" value="${r.alcance===null||r.alcance===undefined?'':r.alcance}" data-id="${r.id}" data-field="alcance" oninput="onMarketingNumInput(this)" />`
-        : fmtNum(r.alcance)}</td>
-      <td class="num">${editavel
-        ? `<input class="num" type="number" step="1" placeholder="—" value="${r.interacoes===null||r.interacoes===undefined?'':r.interacoes}" data-id="${r.id}" data-field="interacoes" oninput="onMarketingNumInput(this)" />`
-        : fmtNum(r.interacoes)}</td>
+      ${celulasIndicadores}
       ${editavel ? `<td class="del-cell"><div class="row-actions"><button class="action-btn danger" title="Excluir" onclick="deleteMarketingRow(${r.id})">✕</button></div></td>` : ''}
     </tr>`;
   }).join('');
@@ -2389,7 +2550,7 @@ function renderMarketingSection(){
     ? `<div class="table-scroll"><table class="table-plain">
         <thead><tr>
           <th class="col-mes">Mês</th><th>Conta</th>
-          <th class="num">${esc(redeInfo.seguidores)}</th><th class="num">${esc(redeInfo.alcance)}</th><th class="num">${esc(redeInfo.interacoes)}</th>
+          ${indicadores.map(function(ind){ return `<th class="num">${esc(ind.rotulo)}</th>`; }).join('')}
           ${editavel ? '<th></th>' : ''}
         </tr></thead>
         <tbody>${linhasHtml}</tbody>
@@ -2404,13 +2565,14 @@ function renderMarketingSection(){
 
   return `
     <div class="filters-row"><div class="months">${redesPillsHtml}</div></div>
-    ${cartoesHtml}
+    ${painelIndicadores}
+    ${grafico}
     <div class="filters-row" style="padding-top:0;"><div class="months">${mesesPillsHtml}</div></div>
     ${tabela}
     <div class="totais-nota">
-      Os cartões comparam o mês selecionado com o mês anterior <b>que tiver lançamento</b> — não precisam ser
-      seguidos. Engajamento é ${esc(redeInfo.interacoes).toLowerCase()} dividido por ${esc(redeInfo.alcance).toLowerCase()}.
-      Lançar é só de admin; a equipe toda enxerga.
+      Os cartões e o gráfico comparam o mês com o mês anterior <b>que tiver lançamento</b> — não precisam ser
+      seguidos. Cada rede tem seus próprios indicadores; quem administra inclui e retira pelo botão
+      "Editar indicadores". Lançar é só de admin; a equipe toda enxerga.
     </div>
   `;
 }
@@ -8566,6 +8728,55 @@ function graficoLinhaPainel(vends, opts){
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">${grade}${rotulos}${linhas}</svg>`;
 }
 
+/* Gráfico de evolução do Marketing: uma linha por conta (Open / Foco
+   Tributário), 12 meses do ano do filtro. Diferente do painel de
+   equipe, aqui um mês sem lançamento é buraco de verdade — não é zero,
+   é "não temos o dado" — então a linha quebra em vez de descer ao chão. */
+function graficoLinhaMarketing(series, opts){
+  const w = 760, h = (opts && opts.h) || 260, padBottom = 28, padTop = 12, padLeft = 44;
+  const plotH = h - padBottom - padTop;
+  const plotW = w - padLeft - 12;
+  const todos = series.flatMap(function(s){ return s.valores.filter(function(v){ return v !== null && v !== undefined; }); });
+  const max = Math.max(1, ...todos);
+  const px = i => padLeft + (plotW/11)*i;
+  const py = val => padTop + plotH - (val/max)*plotH;
+  const grade = [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const y = padTop + plotH - f*plotH;
+    return `<line x1="${padLeft}" y1="${y}" x2="${w-12}" y2="${y}" stroke="#F1F5F9" stroke-width="1"/>
+            <text x="${padLeft-8}" y="${y+4}" text-anchor="end" font-size="10" fill="#94A3B8">${Math.round(max*f).toLocaleString('pt-BR')}</text>`;
+  }).join('');
+  const rotulos = MONTHS.map((m,i) =>
+    `<text x="${px(i)}" y="${h-8}" text-anchor="middle" font-size="10" fill="#94A3B8">${monthNumber(m)}</text>`).join('');
+  if(!todos.length){
+    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">${grade}${rotulos}</svg>`;
+  }
+  const linhas = series.map(function(s){
+    const cor = esc(s.cor);
+    // quebra a linha em trechos contínuos — sem interpolar por cima de mês sem dado
+    const trechos = [];
+    let atual = [];
+    s.valores.forEach(function(val, i){
+      if(val === null || val === undefined){
+        if(atual.length) trechos.push(atual);
+        atual = [];
+      } else {
+        atual.push([i, val]);
+      }
+    });
+    if(atual.length) trechos.push(atual);
+    const polys = trechos.map(function(t){
+      const pontos = t.map(function(p){ return `${px(p[0])},${py(p[1])}`; }).join(' ');
+      return `<polyline points="${pontos}" fill="none" stroke="${cor}" stroke-width="2" stroke-linejoin="round"/>`;
+    }).join('');
+    const bolinhas = s.valores.map(function(val, i){
+      if(val === null || val === undefined) return '';
+      return `<circle cx="${px(i)}" cy="${py(val)}" r="2.5" fill="${cor}"><title>${esc(s.label)} · ${MONTHS[i]}: ${val.toLocaleString('pt-BR')}</title></circle>`;
+    }).join('');
+    return polys + bolinhas;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">${grade}${rotulos}${linhas}</svg>`;
+}
+
 /* ---------------- Painel da Equipe: telas ---------------- */
 
 function renderPainelSection(){
@@ -9757,6 +9968,7 @@ function boot(){
     tryLoadEntityFromStorageAsync('cursos'),
     tryLoadBonusFromStorageAsync(),
     tryLoadMarketingAsync(),
+    tryLoadMarketingIndicadoresAsync(),
     tryLoadClosedMonthsFromStorageAsync(),
     tryLoadMetasFromStorageAsync(),
     tryLoadRelatoriosFromStorageAsync(),

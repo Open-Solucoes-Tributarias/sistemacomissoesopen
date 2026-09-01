@@ -52,6 +52,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_nota_emitida_migration.sql → migração 23: o visto de "nota emitida" e a função que o grava
 ├── supabase_marketing_metricas_migration.sql → migração 24: crescimento das redes sociais (aba Marketing)
 ├── supabase_curso_in_company_migration.sql → migração 25: curso In Company como indicador próprio do ranking
+├── supabase_marketing_indicadores_migration.sql → migração 26: indicadores configuráveis por rede + RD Station (aba Marketing)
 └── .gitignore
 ```
 
@@ -214,7 +215,8 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `closed_months` | Meses fechados para edição |
 | `extra_years` | Anos adicionados manualmente |
 | `app_user_access` | Nível de acesso de cada conta de login (admin, financeiro ou restrita + nome pra filtrar) |
-| `marketing_metricas` | Crescimento das redes sociais: mês, conta (Open/Foco Tributário), rede, seguidores, alcance e interações (migração 24) |
+| `marketing_metricas` | Crescimento das redes sociais: mês, conta (Open/Foco Tributário), rede, e `valores` — um jsonb com um número (ou texto) por indicador daquela rede (migração 24, virou jsonb na migração 26) |
+| `marketing_indicadores` | Catálogo de quais indicadores cada rede tem — chave, rótulo, se é número ou texto, se é moeda. É nela que o botão "Editar indicadores" mexe (migração 26) |
 
 As colunas `nota_emitida` e `nota_emitida_em` de `vendas` e `lancamentos` guardam o visto do financeiro (migração 23); só a função `marcar_nota_emitida` escreve nelas.
 
@@ -652,27 +654,35 @@ O botão **"📊 Baixar CSV"** gera o arquivo do período, uma linha por pessoa 
 
 ## Marketing
 
-Marketing também é equipe — fica ao lado de **Relatório de Desempenho** e **Bônus e Metas**, no grupo "Equipe" do menu. Acompanha o crescimento das redes que a empresa mantém, para apresentar ao dono da empresa: **Instagram, YouTube, LinkedIn, TikTok e PodTributar**, em **duas contas** — **Open** e **Foco Tributário**.
+Marketing também é equipe — fica ao lado de **Relatório de Desempenho** e **Bônus e Metas**, no grupo "Equipe" do menu. Acompanha o crescimento das redes que a empresa mantém, para apresentar ao dono da empresa: **Instagram, YouTube, LinkedIn, TikTok, PodTributar e RD Station**, em **duas contas** — **Open** e **Foco Tributário**.
 
-Um seletor de rede no topo da aba escolhe qual delas está em foco (o rótulo dos campos muda com ela: no YouTube é "Inscritos" e "Visualizações"; no PodTributar é "Ouvintes" e "Reproduções" — cada rede com o nome que ela mesma usa):
+Um seletor de rede no topo da aba escolhe qual delas está em foco.
 
-| Campo | O que é |
+**Os indicadores são configuráveis, por rede** (migração 26). Cada plataforma tem seu próprio conjunto de números — o YouTube tem "Receita estimada", o RD Station nem se parece com rede social — e quem administra **inclui e retira indicador pela própria tela**, sem precisar de migração de banco:
+
+- O botão **"⚙️ Editar indicadores"**, no quadro de cartões, abre a lista dos indicadores daquela rede, cada um com um ✕ para retirar.
+- **"+ Novo indicador em [rede]"** cadastra um indicador novo (só pede o nome) — passa a aparecer nos cartões, na tabela e no gráfico daquela rede.
+- Retirar um indicador só tira ele da tela; os números já lançados continuam guardados no banco (`marketing_indicadores` define o catálogo, `marketing_metricas.valores` — um jsonb — guarda os valores por lançamento).
+- Um indicador pode ser **texto** em vez de número (o caso de fábrica é "Vídeo popular" no YouTube — o nome do vídeo que mais rendeu no mês). Indicador de texto aparece no cartão e na tabela, mas fica de fora do gráfico e das contas de crescimento, que só fazem sentido para número.
+
+De fábrica, cada rede já vem com um conjunto pensado para o que a diretoria quer acompanhar:
+
+| Rede | Indicadores de fábrica |
 |---|---|
-| Mês | o mês do lançamento |
-| Conta | Open ou Foco Tributário |
-| Seguidores (ou Inscritos/Ouvintes) | o total da audiência no fim do mês |
-| Alcance (ou Visualizações/Impressões/Reproduções) | quanto a rede entregou naquele mês |
-| Interações | curtidas, comentários, compartilhamentos — o que a rede chama de engajamento bruto |
+| Instagram | Contas alcançadas, Impressões, Seguidores, Visitas, Interações |
+| YouTube | Visualizações, Total de impressões, Novos inscritos, Receita estimada, Horas exibidas, Vídeo popular (texto), Interações |
+| LinkedIn | Seguidores, Impressões, Interações |
+| TikTok | Visualizações, Visitas, Seguidores, Total de espectadores, Novos espectadores, Compartilhamentos, Interações |
+| PodTributar | Ouvintes, Reproduções, Interações |
+| RD Station | Busca orgânica, YouTube, Sites (Foco/Open), Conversões, Visitas |
 
-A partir desses três números — sem pedir mais nada de quem lança — o sistema calcula os **medidores** que interessam ao dono da empresa, em cartões por conta:
+Cada indicador numérico vira um **cartão por conta**, com o valor do mês e a variação contra o mês anterior **que tiver lançamento** (não precisa ser o mês imediatamente anterior — se pular Junho, Julho compara com Maio), em número absoluto e em %.
 
-- **Crescimento no mês**: a diferença de seguidores contra o mês anterior **que tiver lançamento** (não precisa ser o mês imediatamente anterior — se pular Junho, Julho compara com Maio), em número absoluto e em %;
-- **Alcance/Visualizações do mês**, para medir entrega, não só audiência acumulada;
-- **Taxa de engajamento**: interações ÷ alcance — mostra se a audiência que a rede entregou de fato reagiu, o número que costuma interessar mais que o total de seguidores.
+**Gráfico de evolução mensal** — abaixo dos cartões, mostra a linha do ano inteiro (sempre os 12 meses de `yearFilter`, não muda com o filtro de mês) de um indicador escolhido no seletor "Indicador", uma linha por conta (Open e Foco Tributário, cada uma numa cor). Mês sem lançamento é buraco de verdade: a linha quebra ali, em vez de descer ao chão como se tivesse caído a zero.
 
-Um filtro de mês (Todos + os 12 meses) recorta a tabela de lançamentos e os cartões ao mesmo tempo, igual ao resto do sistema.
+Um filtro de mês (Todos + os 12 meses) recorta a tabela de lançamentos e os cartões ao mesmo tempo, igual ao resto do sistema. A tabela também segue os indicadores da rede: as colunas mudam sozinhas quando um indicador é incluído ou retirado.
 
-**Quem edita, quem vê.** Lançar é só de admin — a mesma regra em vigor no banco (RLS), não só na tela: uma conta restrita que tentasse gravar direto pela API seria barrada. A leitura é aberta pra qualquer conta logada, porque isso não é dado de comissão nem de contrato — é o placar que a equipe toda pode acompanhar. A conta financeira não vê a aba (ela só lida com valor de nota).
+**Quem edita, quem vê.** Lançar e mexer nos indicadores é só de admin — a mesma regra em vigor no banco (RLS), não só na tela: uma conta restrita que tentasse gravar direto pela API seria barrada. A leitura é aberta pra qualquer conta logada, porque isso não é dado de comissão nem de contrato — é o placar que a equipe toda pode acompanhar. A conta financeira não vê a aba (ela só lida com valor de nota).
 
 ## Leitura em páginas (limite de 1.000 linhas)
 
