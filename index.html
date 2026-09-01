@@ -545,6 +545,9 @@
      nome. O piso empurra o resto para a rolagem horizontal, que já existe. */
   .col-nome{min-width:290px;}
   .col-nome input{min-width:270px;}
+  /* Tráfego pago tem 17 colunas — sem piso, a tabela auto-layout espreme a
+     coluna Conta a quase nada e "Foco Tributário" corta pra uma letra. */
+  .col-conta{min-width:150px;}
   .currency-wrap{display:flex;align-items:center;}
   .currency-wrap input{text-align:right;padding-left:2px;}
   .currency-prefix{
@@ -2614,7 +2617,7 @@ function renderTrafegoPagoSection(){
       <td class="col-mes">${editavel
         ? `<select data-id="${r.id}" onchange="onTrafegoMonthSelect(this)">${MONTHS.map(function(m){ return `<option value="${m}" ${r.mes===m?'selected':''}>${monthShort(m)}</option>`; }).join('')}</select>`
         : esc(monthShort(r.mes))}</td>
-      <td>${editavel
+      <td class="col-conta">${editavel
         ? `<select data-id="${r.id}" onchange="onTrafegoContaSelect(this)">${MARKETING_CONTAS.map(function(c2){ return `<option value="${c2.key}" ${r.conta===c2.key?'selected':''}>${esc(c2.label)}</option>`; }).join('')}</select>`
         : esc(marketingContaInfo(r.conta).label)}</td>
       <td class="col-nome">${editavel
@@ -2641,7 +2644,7 @@ function renderTrafegoPagoSection(){
   const corpoTabela = linhas.length
     ? `<div class="table-scroll"><table class="table-plain">
         <thead><tr>
-          <th class="col-mes">Mês</th><th>Conta</th><th class="col-nome">Campanha</th>
+          <th class="col-mes">Mês</th><th class="col-conta">Conta</th><th class="col-nome">Campanha</th>
           <th class="num">Valor investido</th><th class="num">Orçamento diário</th>
           <th class="num">Alcance</th><th class="num">Impressões</th><th class="num">Cliques no link</th>
           <th class="num">Visitas na LP</th><th class="num">Leads</th><th class="num">MQL</th>
