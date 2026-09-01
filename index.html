@@ -1339,7 +1339,7 @@ const MARKETING_CONTAS = [
 ];
 const MARKETING_REDES = [
   {key:"instagram",   label:"Instagram"},
-  {key:"youtube",     label:"YouTube"},
+  {key:"youtube",     label:"YouTube", contas:["foco"]},   // a Open não tem canal no YouTube
   {key:"linkedin",    label:"LinkedIn"},
   {key:"tiktok",      label:"TikTok"},
   {key:"podtributar", label:"PodTributar"},
@@ -1347,6 +1347,14 @@ const MARKETING_REDES = [
 ];
 function marketingRedeInfo(key){ return MARKETING_REDES.find(function(r){ return r.key === key; }) || MARKETING_REDES[0]; }
 function marketingContaInfo(key){ return MARKETING_CONTAS.find(function(c){ return c.key === key; }) || MARKETING_CONTAS[0]; }
+/* Nem toda rede tem as duas contas — o YouTube só existe na Foco
+   Tributário. `contas` na rede restringe quais contas aparecem nos
+   cartões, no gráfico e no seletor da tabela pra ela. */
+function marketingContasPara(rede){
+  const info = marketingRedeInfo(rede);
+  if(!info.contas) return MARKETING_CONTAS;
+  return MARKETING_CONTAS.filter(function(c){ return info.contas.indexOf(c.key) !== -1; });
+}
 
 /* Indicadores por rede (migração 26): cada plataforma mostra números
    diferentes — o YouTube tem "Receita estimada", o RD Station nem se
@@ -2393,7 +2401,8 @@ function addMarketingRow(){
   // criar duas linhas repetidas sem querer
   const jaTem = marketingRows.filter(function(r){ return (r.ano||2026)===yearFilter && r.mes===mes && r.rede===marketingRede; })
     .map(function(r){ return r.conta; });
-  const conta = MARKETING_CONTAS.find(function(c){ return jaTem.indexOf(c.key) === -1; }) || MARKETING_CONTAS[0];
+  const contasDaRede = marketingContasPara(marketingRede);
+  const conta = contasDaRede.find(function(c){ return jaTem.indexOf(c.key) === -1; }) || contasDaRede[0];
   marketingRows.unshift({ id: marketingNextId++, ano: yearFilter, mes, rede: marketingRede, conta: conta.key, valores: {} });
   persistMarketing();
   render();
@@ -2454,9 +2463,11 @@ function renderMarketingSection(){
   const pct1 = function(v){ return v.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}); };
   const CORES_CARTAO = ['#1C6FBF','#0D9488','#B45309','#7C3AED','#DB2777','#059669','#DC2626','#4338CA'];
 
+  const contasDaRede = marketingContasPara(marketingRede);
+
   // Um bloco por conta, com o nome dela como título, e um cartão por
   // indicador cadastrado na rede — o conjunto muda de rede pra rede.
-  const cartoesHtml = MARKETING_CONTAS.map(function(conta){
+  const cartoesHtml = contasDaRede.map(function(conta){
     const k = marketingKpis(conta.key, marketingRede, marketingFilter);
     const cartoes = k.porIndicador.map(function(p, i){
       const cor = CORES_CARTAO[i % CORES_CARTAO.length];
@@ -2503,14 +2514,14 @@ function renderMarketingSection(){
     </select></label>` : '';
 
   const metricaFocoLabel = (indicadoresNumericos.find(function(i){ return i.chave===marketingMetricaFoco; }) || {}).rotulo || '';
-  const serieChart = marketingMetricaFoco ? MARKETING_CONTAS.map(function(conta){
+  const serieChart = marketingMetricaFoco ? contasDaRede.map(function(conta){
     return { label: conta.label, cor: conta.cor, valores: marketingSerieValores(conta.key, marketingRede, marketingMetricaFoco) };
   }) : [];
 
   const grafico = indicadoresNumericos.length ? panel('marketing-linha', `Evolução mensal — ${esc(metricaFocoLabel)}`,
     graficoBarrasMarketing(serieChart)
     + `<div class="painel-nota">Este quadro mostra sempre os 12 meses de ${yearFilter} — mês sem lançamento simplesmente não tem barra.</div>`
-    + `<div class="painel-legenda">${MARKETING_CONTAS.map(function(c){ return `<span><i style="background:${esc(c.cor)}"></i>${esc(c.label)}</span>`; }).join('')}</div>`,
+    + `<div class="painel-legenda">${contasDaRede.map(function(c){ return `<span><i style="background:${esc(c.cor)}"></i>${esc(c.label)}</span>`; }).join('')}</div>`,
     { actions: seletorMetrica }) : '';
 
   const linhas = marketingRows
@@ -2539,7 +2550,7 @@ function renderMarketingSection(){
         ? `<select data-id="${r.id}" onchange="onMarketingMonthSelect(this)">${MONTHS.map(function(m){ return `<option value="${m}" ${r.mes===m?'selected':''}>${monthShort(m)}</option>`; }).join('')}</select>`
         : esc(monthShort(r.mes))}</td>
       <td>${editavel
-        ? `<select data-id="${r.id}" onchange="onMarketingContaSelect(this)">${MARKETING_CONTAS.map(function(c){ return `<option value="${c.key}" ${r.conta===c.key?'selected':''}>${esc(c.label)}</option>`; }).join('')}</select>`
+        ? `<select data-id="${r.id}" onchange="onMarketingContaSelect(this)">${contasDaRede.map(function(c){ return `<option value="${c.key}" ${r.conta===c.key?'selected':''}>${esc(c.label)}</option>`; }).join('')}</select>`
         : esc(marketingContaInfo(r.conta).label)}</td>
       ${celulasIndicadores}
       ${editavel ? `<td class="del-cell"><div class="row-actions"><button class="action-btn danger" title="Excluir" onclick="deleteMarketingRow(${r.id})">✕</button></div></td>` : ''}

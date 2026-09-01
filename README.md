@@ -657,7 +657,7 @@ O botão **"📊 Baixar CSV"** gera o arquivo do período, uma linha por pessoa 
 
 Marketing também é equipe — fica ao lado de **Relatório de Desempenho** e **Bônus e Metas**, no grupo "Equipe" do menu. Acompanha o crescimento das redes que a empresa mantém, para apresentar ao dono da empresa: **Instagram, YouTube, LinkedIn, TikTok, PodTributar e RD Station**, em **duas contas** — **Open** e **Foco Tributário**.
 
-Um seletor de rede no topo da aba escolhe qual delas está em foco.
+Um seletor de rede no topo da aba escolhe qual delas está em foco. **Nem toda rede tem as duas contas** — o YouTube só existe na Foco Tributário (a Open não tem canal), então nele os cartões, o gráfico e a tabela só mostram essa conta. É configurado em `MARKETING_REDES` (campo `contas`); de fábrica só o YouTube tem essa restrição, mas o mesmo campo serve pra qualquer rede que amanhã só exista numa das duas contas.
 
 **Os indicadores são configuráveis, por rede** (migração 26). Cada plataforma tem seu próprio conjunto de números — o YouTube tem "Receita estimada", o RD Station nem se parece com rede social — e quem administra **inclui e retira indicador pela própria tela**, sem precisar de migração de banco:
 
