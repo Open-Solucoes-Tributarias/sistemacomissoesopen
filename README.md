@@ -50,6 +50,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_acesso_financeiro_migration.sql → migração 21: nível de acesso financeiro (vê o valor das notas, nenhuma comissão)
 ├── supabase_renovacao_upgrade_migration.sql → migração 22: upgrade de plano na aba Renovações
 ├── supabase_nota_emitida_migration.sql → migração 23: o visto de "nota emitida" e a função que o grava
+├── supabase_marketing_metricas_migration.sql → migração 24: crescimento das redes sociais (aba Marketing)
 └── .gitignore
 ```
 
@@ -212,6 +213,7 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `closed_months` | Meses fechados para edição |
 | `extra_years` | Anos adicionados manualmente |
 | `app_user_access` | Nível de acesso de cada conta de login (admin, financeiro ou restrita + nome pra filtrar) |
+| `marketing_metricas` | Crescimento das redes sociais: mês, conta (Open/Foco Tributário), rede, seguidores, alcance e interações (migração 24) |
 
 As colunas `nota_emitida` e `nota_emitida_em` de `vendas` e `lancamentos` guardam o visto do financeiro (migração 23); só a função `marcar_nota_emitida` escreve nelas.
 
@@ -640,6 +642,30 @@ O botão **"📊 Baixar CSV"** gera o arquivo do período, uma linha por pessoa 
 **Quem entra na folha** — o botão **"👥 Quem entra"** abre a lista de todas as pessoas que o sistema conhece, com uma caixa marcada para cada uma. Desmarcar alguém tira essa pessoa da tabela, do total, do CSV e do PDF. Não apaga lançamento nenhum: é só o que vai para a contabilidade, e o cabeçalho do painel avisa quantas estão de fora.
 
 > O sistema guarda **quem fica de fora**, não quem fica dentro. É de propósito: assim uma pessoa cadastrada depois aparece na folha sozinha, em vez de sumir calada. Esquecer alguém num relatório de pagamento é bem pior do que ter uma linha a mais para tirar. A lista fica no banco (`entity_vendors` com `entidade='fechamento_fora'`), então vale para todo mundo, e só admin edita.
+
+## Marketing
+
+Marketing também é equipe — fica ao lado de **Relatório de Desempenho** e **Bônus e Metas**, no grupo "Equipe" do menu. Acompanha o crescimento das redes que a empresa mantém, para apresentar ao dono da empresa: **Instagram, YouTube, LinkedIn, TikTok e PodTributar**, em **duas contas** — **Open** e **Foco Tributário**.
+
+Um seletor de rede no topo da aba escolhe qual delas está em foco (o rótulo dos campos muda com ela: no YouTube é "Inscritos" e "Visualizações"; no PodTributar é "Ouvintes" e "Reproduções" — cada rede com o nome que ela mesma usa):
+
+| Campo | O que é |
+|---|---|
+| Mês | o mês do lançamento |
+| Conta | Open ou Foco Tributário |
+| Seguidores (ou Inscritos/Ouvintes) | o total da audiência no fim do mês |
+| Alcance (ou Visualizações/Impressões/Reproduções) | quanto a rede entregou naquele mês |
+| Interações | curtidas, comentários, compartilhamentos — o que a rede chama de engajamento bruto |
+
+A partir desses três números — sem pedir mais nada de quem lança — o sistema calcula os **medidores** que interessam ao dono da empresa, em cartões por conta:
+
+- **Crescimento no mês**: a diferença de seguidores contra o mês anterior **que tiver lançamento** (não precisa ser o mês imediatamente anterior — se pular Junho, Julho compara com Maio), em número absoluto e em %;
+- **Alcance/Visualizações do mês**, para medir entrega, não só audiência acumulada;
+- **Taxa de engajamento**: interações ÷ alcance — mostra se a audiência que a rede entregou de fato reagiu, o número que costuma interessar mais que o total de seguidores.
+
+Um filtro de mês (Todos + os 12 meses) recorta a tabela de lançamentos e os cartões ao mesmo tempo, igual ao resto do sistema.
+
+**Quem edita, quem vê.** Lançar é só de admin — a mesma regra em vigor no banco (RLS), não só na tela: uma conta restrita que tentasse gravar direto pela API seria barrada. A leitura é aberta pra qualquer conta logada, porque isso não é dado de comissão nem de contrato — é o placar que a equipe toda pode acompanhar. A conta financeira não vê a aba (ela só lida com valor de nota).
 
 ## Leitura em páginas (limite de 1.000 linhas)
 
