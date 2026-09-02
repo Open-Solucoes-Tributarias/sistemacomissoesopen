@@ -3857,6 +3857,72 @@ function renderModal(){
         </div>
       </div>`;
   }
+  if(m.type === 'import-consultoria'){
+    const d = m.dados;
+    const novos = d ? d.itens.filter(function(i){ return i.mes && !i.duplicada; }) : [];
+    const problemas = d ? d.itens.filter(function(i){ return i.aviso; }) : [];
+    const previa = d ? d.itens.slice(0, 60) : [];
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-wide">
+          <div class="modal-msg">Importar planilha de Consultoria</div>
+          <div class="painel-equipe-nota">
+            Reconheço colunas com estes nomes (com ou sem acento, em qualquer ordem):
+            <b>Mês</b>, <b>Empresa</b>, <b>Valor</b>, <b>Tipo de contrato</b>, <b>Parceiro</b>,
+            <b>Participação</b>, <b>Forma de pagamento</b>, <b>Colaborador</b>, <b>Vendedor</b> e
+            <b>% Comissão</b>. Sem cabeçalho reconhecido, uso essa mesma ordem. Aceito <b>.xlsx</b>
+            e <b>.csv</b>; se preferir, selecione as células no Excel, copie com Ctrl+C e cole no
+            campo de baixo.
+          </div>
+          <label class="import-arquivo">
+            <input type="file" accept=".xlsx,.csv,.txt,.tsv" onchange="onArquivoConsultoria(this)" />
+            <span>📄 Escolher arquivo da planilha</span>
+          </label>
+          <textarea class="modal-textarea" style="min-height:90px;" placeholder="…ou cole aqui as células copiadas do Excel"
+                    oninput="onColarConsultoria(this)"></textarea>
+          ${m.lendo ? `<div class="modal-msg" style="margin:10px 0 0;">Lendo a planilha…</div>` : ''}
+          ${m.erro ? `<div class="modal-error">${esc(m.erro)}</div>` : ''}
+          ${d ? `
+            <div class="import-resumo">
+              <b>${novos.length}</b> lançamento${novos.length===1?'':'s'} novo${novos.length===1?'':'s'} de <b>${d.itens.length}</b> linha${d.itens.length===1?'':'s'} lida${d.itens.length===1?'':'s'}
+              ${problemas.length ? ` · <span class="import-alerta">${problemas.length} com aviso</span>` : ''}
+              ${d.cols.temCabecalho ? ' · cabeçalho reconhecido' : ' · sem cabeçalho, usei a ordem mês / empresa / valor / tipo / parceiro / forma de pagamento / colaborador / vendedor / % comissão'}
+            </div>
+            <div class="table-scroll import-previa">
+              <table class="table-plain">
+                <thead><tr>
+                  <th>Empresa</th><th class="num">Valor</th><th>Mês</th><th>Tipo</th>
+                  <th>Parceiro</th><th>Forma de pagamento</th><th>Colaborador</th>
+                  <th>Vendedor</th><th class="num">% Comissão</th><th></th>
+                </tr></thead>
+                <tbody>${previa.map(function(i){
+                  return `<tr class="${i.aviso ? 'row-pending' : ''}">
+                    <td>${esc(i.empresa)}</td>
+                    <td class="num">${i.valor === null ? '—' : fmtMoney(i.valor)}</td>
+                    <td>${i.mes ? esc(i.mes) : '—'}</td>
+                    <td>${esc(i.tipo)}</td>
+                    <td>${esc(i.parceiro) || '—'}</td>
+                    <td>${esc(i.formaPagamento) || '—'}</td>
+                    <td>${esc(i.colaborador) || '—'}</td>
+                    <td>${esc(i.vendedor) || '—'}</td>
+                    <td class="num">${i.comissaoPercent === null ? '—' : i.comissaoPercent + '%'}</td>
+                    <td>${i.aviso ? `<span class="import-alerta">${esc(i.aviso)}</span>` : '✓'}</td>
+                  </tr>`;
+                }).join('')}</tbody>
+              </table>
+            </div>
+            ${d.itens.length > previa.length ? `<div class="import-resumo">…e mais ${d.itens.length - previa.length} linha${d.itens.length - previa.length === 1 ? '' : 's'}.</div>` : ''}
+            ${problemas.length ? `<div class="import-resumo import-alerta">Linhas com aviso não são importadas: as duplicadas já estão cadastradas (mesma empresa, mês, ano e valor), e as sem mês reconhecido precisam do mês na planilha.</div>` : ''}
+          ` : ''}
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
+            <button class="modal-btn modal-btn-primary" ${novos.length ? '' : 'disabled'} onclick="confirmarImportacaoConsultoria()">
+              ${novos.length ? 'Importar ' + novos.length + (novos.length===1?' lançamento':' lançamentos') : 'Importar'}
+            </button>
+          </div>
+        </div>
+      </div>`;
+  }
 
   let bodyHtml = `<div class="modal-msg">${esc(m.message)}</div>`;
   let actionsHtml = '';
@@ -7279,6 +7345,7 @@ function renderEntitySection(key){
           </select>
         </label>
         <button class="btn-add btn-secondary" onclick="addEntityVendor('${key}')">+ Vendedor</button>
+        ${key === 'consultoria' ? `<button class="btn-add btn-secondary" onclick="abrirImportarConsultoria()">📄 Importar planilha</button>` : ''}
         <button class="btn-add" onclick="addEntityRow('${key}')">+ Novo lançamento</button>
       </div>`,
     })}
@@ -7941,6 +8008,154 @@ function confirmarImportacaoRenovacoes(){
   persistRenovacoes();
   closeModal();
   showAlert(novos.length + (novos.length === 1 ? ' empresa importada.' : ' empresas importadas.'));
+}
+
+/* ---------- Importar a planilha de Consultoria ----------
+   Mesmo mecanismo da planilha de renovações (linhasDoXlsx, linhasDeTexto,
+   mesDaPlanilha, valorDaPlanilha já existem pra isso) — só muda o que cada
+   coluna vira. Notas de antes do sistema existir não precisam ser
+   digitadas uma a uma. */
+function mapearColunasConsultoria(linhas){
+  const cab = linhas[0] || [];
+  const rotulos = cab.map(semAcento);
+  const acha = function(re){ return rotulos.findIndex(function(r){ return re.test(r); }); };
+  const empresa = acha(/empresa|cliente|razao|nome/);
+  const valor = acha(/valor.*contrato|^valor$|mensalidade/);
+  const mes = acha(/^mes$|mes de|data|vencim/);
+  if(empresa >= 0 && (valor >= 0 || mes >= 0)){
+    return {
+      temCabecalho: true, empresa: empresa, valor: valor, mes: mes,
+      tipo: acha(/tipo.*contrato|^tipo$/),
+      parceiro: acha(/parceiro/),
+      participacao: acha(/participa/),
+      formaPagamento: acha(/forma.*pagamento|^pagamento$/),
+      colaborador: acha(/colaborador/),
+      vendedor: acha(/^vendedor$|^vendedor 1$|^vendedor1$/),
+      comissaoPercent: acha(/comiss/),
+      observacoes: acha(/observa/),
+    };
+  }
+  // Sem cabeçalho reconhecido: assume a ordem descrita — mês, empresa,
+  // valor, tipo, parceiro, forma de pagamento, colaborador, vendedor,
+  // % comissão.
+  return {
+    temCabecalho: false, mes:0, empresa:1, valor:2, tipo:3, parceiro:4,
+    formaPagamento:5, colaborador:6, vendedor:7, comissaoPercent:8,
+    participacao:-1, observacoes:-1,
+  };
+}
+function prepararImportacaoConsultoria(linhas){
+  if(!linhas.length) throw new Error('A planilha veio vazia.');
+  const cols = mapearColunasConsultoria(linhas);
+  const corpo = cols.temCabecalho ? linhas.slice(1) : linhas;
+  const tiposValidos = ENTITIES.consultoria.fields.find(function(f){ return f.key === 'tipo'; }).options;
+  const celula = function(l, idx){ return idx >= 0 && l[idx] !== null && l[idx] !== undefined ? String(l[idx]).trim() : ''; };
+
+  const existentes = {};
+  state.consultoria.rows.forEach(function(r){
+    existentes[semAcento(r.empresa) + '|' + r.mes + '|' + (r.ano||2026) + '|' + (Number(r.valorContrato)||0)] = true;
+  });
+
+  const itens = [];
+  corpo.forEach(function(l){
+    const empresa = celula(l, cols.empresa);
+    if(!empresa) return;
+    const valor = cols.valor >= 0 ? valorDaPlanilha(l[cols.valor]) : null;
+    const m = cols.mes >= 0 ? mesDaPlanilha(l[cols.mes]) : null;
+    const ano = (m && m.ano) ? m.ano : yearFilter;
+    const mes = m ? m.mes : null;
+    const tipoTexto = celula(l, cols.tipo);
+    const tipo = tiposValidos.find(function(t){ return semAcento(t) === semAcento(tipoTexto); }) || tiposValidos[0];
+    const participacaoBruta = cols.participacao >= 0 ? valorDaPlanilha(l[cols.participacao]) : null;
+    const comissaoBruta = cols.comissaoPercent >= 0 ? l[cols.comissaoPercent] : null;
+    const comissaoPercent = (comissaoBruta === null || comissaoBruta === undefined || comissaoBruta === '')
+      ? null : (Number(String(comissaoBruta).replace(',', '.').replace('%', '')) || null);
+    const chave = semAcento(empresa) + '|' + mes + '|' + ano + '|' + (valor||0);
+    const duplicada = !!existentes[chave];
+    if(!duplicada && mes) existentes[chave] = true;
+    itens.push({
+      empresa: empresa, valor: valor, mes: mes, ano: ano, tipo: tipo,
+      parceiro: celula(l, cols.parceiro), participacao: participacaoBruta,
+      formaPagamento: celula(l, cols.formaPagamento), colaborador: celula(l, cols.colaborador),
+      vendedor: celula(l, cols.vendedor), comissaoPercent: comissaoPercent,
+      observacoes: celula(l, cols.observacoes),
+      duplicada: duplicada,
+      aviso: !mes ? 'mês não reconhecido' : (duplicada ? 'já cadastrada' : ''),
+    });
+  });
+  if(!itens.length) throw new Error('Não achei nenhuma empresa na planilha. Confira se a coluna de empresa tem dado.');
+  return { itens: itens, cols: cols };
+}
+
+function abrirImportarConsultoria(){
+  if(!isAdmin) return;
+  modalState = { type:'import-consultoria', dados:null, erro:'', lendo:false };
+  render();
+}
+async function onArquivoConsultoria(input){
+  const arq = input.files && input.files[0];
+  if(!arq) return;
+  modalState.lendo = true; modalState.erro = ''; render();
+  try{
+    let linhas;
+    if(/\.(csv|txt|tsv)$/i.test(arq.name)){
+      let texto = await arq.text();
+      if(texto.indexOf('�') >= 0){
+        texto = new TextDecoder('iso-8859-1').decode(await arq.arrayBuffer());
+      }
+      linhas = linhasDeTexto(texto);
+    } else {
+      linhas = await linhasDoXlsx(await arq.arrayBuffer());
+    }
+    modalState.dados = prepararImportacaoConsultoria(linhas);
+    modalState.erro = '';
+  }catch(e){
+    console.error(e);
+    modalState.dados = null;
+    modalState.erro = e && e.message ? e.message : 'Não consegui ler esse arquivo.';
+  }
+  modalState.lendo = false;
+  render();
+}
+function onColarConsultoria(el){
+  const texto = el.value;
+  if(!String(texto).trim()){ modalState.dados = null; modalState.erro = ''; render(); return; }
+  try{
+    modalState.dados = prepararImportacaoConsultoria(linhasDeTexto(texto));
+    modalState.erro = '';
+  }catch(e){
+    modalState.dados = null;
+    modalState.erro = e && e.message ? e.message : 'Não consegui ler o que foi colado.';
+  }
+  render();
+}
+function confirmarImportacaoConsultoria(){
+  const m = modalState;
+  if(!m || !m.dados) return;
+  const novos = m.dados.itens.filter(function(i){ return i.mes && !i.duplicada; });
+  if(!novos.length){ showAlert('Não há nada novo para importar.'); return; }
+  const anos = {};
+  novos.forEach(function(i){
+    state.consultoria.rows.push({
+      id: state.consultoria.nextId++, mes: i.mes, ano: i.ano,
+      empresa: i.empresa, valorContrato: i.valor, tipo: i.tipo, parceiro: i.parceiro,
+      participacao: i.participacao, formaPagamento: i.formaPagamento, colaborador: i.colaborador,
+      observacoes: i.observacoes,
+      comissaoPercent: i.comissaoPercent, vendedor: i.vendedor,
+      comissaoPercent2: null, vendedor2: "", comissaoPercent3: null, vendedor3: "",
+      pago: false, mesPagamento: null,
+    });
+    anos[i.ano] = true;
+  });
+  Object.keys(anos).map(Number).forEach(function(a){
+    if(a !== 2026 && extraYears.indexOf(a) === -1 && a !== yearFilter){
+      extraYears.push(a);
+      persistExtraYears();
+    }
+  });
+  persistEntityRows('consultoria');
+  closeModal();
+  showAlert(novos.length + (novos.length === 1 ? ' lançamento importado.' : ' lançamentos importados.'));
 }
 
 /* ---------- Renovação renovada vira venda na aba Sistema ----------

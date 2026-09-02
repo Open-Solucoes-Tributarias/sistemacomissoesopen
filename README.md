@@ -560,6 +560,18 @@ As empresas do mês também saem no **relatório mensal em PDF**, numa seção p
 
 Como no resto do sistema, quem administra vê e edita tudo; uma conta restrita só enxergaria as empresas que ela mesma trouxe, e sem editar (`contratos_consultoria`, migração 10).
 
+## Importar a planilha de Consultoria
+
+Notas de antes do sistema existir não precisam ser digitadas uma por uma. O botão **"📄 Importar planilha"**, na aba Consultoria, lê o arquivo — mesmo mecanismo já usado pela planilha de renovações (`linhasDoXlsx`, `linhasDeTexto`, leitura de `.xlsx` sem biblioteca externa), só que reconhecendo as colunas do lançamento de consultoria em vez de empresa/valor/mês.
+
+Três caminhos, todos no mesmo lugar: **arquivo `.xlsx`**, **arquivo `.csv`** (inclusive o que o Excel do Windows salva em latin-1) ou **colar** as células copiadas do Excel.
+
+Colunas reconhecidas pelo nome do cabeçalho (com ou sem acento, em qualquer ordem): **Mês**, **Empresa**, **Valor**, **Tipo de contrato**, **Parceiro**, **Participação**, **Forma de pagamento**, **Colaborador**, **Vendedor** e **% Comissão**. Sem cabeçalho reconhecido, assume essa mesma ordem. O **tipo de contrato** cai em "Recuperação" quando o texto da planilha não bate com nenhuma das três opções válidas (Recuperação/Mensal/Personalizado); mês e valor aceitam os mesmos formatos livres da planilha de renovações.
+
+Antes de gravar aparece uma **prévia** com todas as colunas lidas, linha a linha. Ficam de fora, sinalizadas em âmbar: **lançamentos já cadastrados** (mesma empresa, mês, ano e valor) e **linhas cujo mês não foi reconhecido**. O lançamento entra só com **um vendedor** (o campo Vendedor 2 e 3 ficam em branco, editáveis depois na tela) — igual a um lançamento novo criado na mão, dá pra editar qualquer campo depois de importado.
+
+Por enquanto é só para a aba **Consultoria**; as outras abas de lançamento continuam sem importador de planilha.
+
 ## Relatório mensal em PDF
 
 O botão **"📄 Relatório do mês"**, no topo de qualquer aba, gera um documento único com **tudo o que aconteceu num mês**. Ele abre com a **mesma faixa do sistema** — marca, degradê marinho, globo d'água e o filete azul —, então o papel sai com a cara da empresa. Escolhe-se o mês e o sistema monta o relatório e abre a janela de impressão do navegador — para salvar em PDF, basta escolher **"Salvar como PDF"** no destino.
