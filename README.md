@@ -13,9 +13,11 @@ HUB Comercial de controle de vendas, comissões, parceiros e pagamentos da equip
 O HUB Comercial usa a **identidade da Open Soluções Tributárias**, a mesma do mapa de produto:
 
 - **A marca** — o globo de meridianos com "OPEN" e a assinatura — aparece na barra lateral, na faixa de título, na tela de login e no cabeçalho do relatório em PDF. É desenhada em **SVG dentro do próprio arquivo** (função `marcaOpenHtml`), então acompanha o tamanho pedido, imprime nítida e não depende de carregar imagem de fora (o que o CSP bloqueia).
-- **Faixa de título** em degradê marinho, com a marca à esquerda, um filete divisor, o rótulo em caixa alta espaçada e o nome da aba; à direita o exercício e o indicador de "salvo". Um globo d'água discreto no canto e um **filete azul claro** fechando embaixo, como no material impresso.
-- **Cartões** brancos com **filete azul no topo**, borda azul clara e cantos suaves. Nos indicadores o filete vem na cor da pessoa; o cartão de total é marinho cheio.
+- **O nome do produto** — a etiqueta **HUB** em degradê ao lado da palavra **Comercial** (função `hubMarcaHtml`) — fica no topo da barra lateral, na faixa de título de toda aba, na tela de login e no cabeçalho do relatório em PDF, para o aplicativo se apresentar pelo nome em qualquer tela. Tem uma versão clara, para os fundos marinhos, e uma escura, para a barra lateral branca.
+- **Faixa de título** em degradê marinho com dois halos suaves da própria paleta, a marca à esquerda, um filete divisor, o nome do produto e o nome da aba; à direita o exercício e o indicador de "salvo". Um globo d'água discreto no canto e um **filete azul claro** fechando embaixo, com o degradê correndo devagar.
+- **Cartões** brancos com **filete azul no topo**, borda azul clara e cantos suaves. Nos indicadores o filete vem na cor da pessoa, com um halo na mesma cor que cresce quando o mouse passa; o cartão de total é marinho cheio.
 - **Rótulos em caixa alta bem espaçada** (`letter-spacing`) nos títulos de painel, grupos do menu e cabeçalhos de tabela — é a assinatura tipográfica da identidade.
+- **Movimento com parcimônia**: a troca de aba faz o conteúdo entrar com um leve deslize (a marcação `animarEntrada` só vale nesse render — filtro e busca redesenham a tela a cada tecla e piscariam), cartões e botões sobem alguns pixels no hover, e quem pede menos movimento no sistema operacional (`prefers-reduced-motion`) não vê nenhum.
 - Paleta: marinho `#0A2540`, azul do degradê `#14508C`, azul de destaque `#4FA3E3`, azul de ação `#1C6FBF`, fundo `#F4F7FB`.
 
 Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola na horizontal, e o conteúdo ocupa a largura toda. Na impressão o menu some e a faixa sai em preto no branco.
