@@ -558,7 +558,7 @@
   .pct-wrap input{text-align:right;padding-right:2px;}
   .pct-suffix{color:var(--ink-faint);font-size:12px;font-weight:600;padding-right:10px;user-select:none;}
   .pct-disabled{display:block;text-align:right;padding-right:14px;color:var(--ink-faint);}
-  /* Comissão do Sistema: % em cima, valor embaixo */
+  /* Comissão do HUB Comercial: % em cima, valor embaixo */
   .com-cell{padding:4px 0 !important;min-width:96px;}
   .com-cell .pct-wrap input.pct-mini{
     font-size:11.5px;padding:2px 0;color:var(--ink-soft);font-weight:600;
@@ -1411,7 +1411,7 @@ const MARKETING_INDICADORES_PADRAO = {
 };
 
 const TABS = [
-  {key:"vendas", label:"Sistema"},
+  {key:"vendas", label:"HUB Comercial"},
   {key:"renovacoes", label:"Renovações"},
   {key:"consultoria", label:"Consultoria"},
   {key:"publicos", label:"Consultoria Órgãos Públicos"},
@@ -1512,7 +1512,7 @@ let metas = [];      // regras de meta: gatilho da empresa que premia uma pessoa
 let metasNextId = 1;
 let pagamentosMonthFilter = "Todos";
 let aReceberMonthFilter = "Todos";   // filtra "a receber" pelo mês da VENDA
-let vendasOrdem = "padrao";          // ordenação da aba Sistema (só exibição)
+let vendasOrdem = "padrao";          // ordenação da aba HUB Comercial (só exibição)
 
 /* ---------------- Painel de relatórios mensais da equipe ----------------
    Indicadores de andamento que a pessoa lança à mão, mês a mês — diferente
@@ -1528,8 +1528,8 @@ const METRICAS = [
   {key:'reunioes',        col:'reunioes',         label:'Reuniões realizadas'},
   {key:'vendasCursos',    col:'vendas_cursos',    label:'Vendas de cursos',        auto:true, moeda:true},
   {key:'vendasCursosInCompany', col:'vendas_cursos_incompany', label:'Vendas de curso In Company', auto:true, moeda:true},
-  {key:'vendasSistemas',  col:'vendas_sistemas',  label:'Vendas de sistemas',      auto:true, moeda:true},
-  {key:'qtdSistemas',     col:'qtd_sistemas',     label:'Qtd. sistemas vendidos',  auto:true},
+  {key:'vendasSistemas',  col:'vendas_sistemas',  label:'Vendas de HUB Comercial',      auto:true, moeda:true},
+  {key:'qtdSistemas',     col:'qtd_sistemas',     label:'Qtd. de HUB Comercial vendidos',  auto:true},
 ];
 const METRICAS_MANUAIS = METRICAS.filter(m => !m.auto);
 
@@ -1959,7 +1959,7 @@ function checkStorageAvailability(){
     .catch(function(){ storageAvailable = false; render(); });
 }
 
-/* ---------- Sistema (vendas + vendas_comissoes) ---------- */
+/* ---------- HUB Comercial (vendas + vendas_comissoes) ---------- */
 const VENDA_NON_SELLER_FIELDS = new Set(['id','ano','mes','cliente','venda','valor','parceiro','participacao','formaPagamento','colaborador','observacoes','vendedor2','vendedor3','vendedorResponsavel','pago','mesPagamento','parcelaLabel','comissaoPercents','renovacao','novoContrato','upgrade','notaEmitida','notaEmitidaEm']);
 
 function persist(){
@@ -2986,7 +2986,7 @@ function renderMarketingSection(){
   `;
 }
 
-/* ---------- Catálogos simples (produtos, parceiros, vendedores do Sistema) ---------- */
+/* ---------- Catálogos simples (produtos, parceiros, vendedores do HUB Comercial) ---------- */
 let vendaProductsTimer = null;
 function persistVendaProducts(){
   saving = true; updateSaveStatus();
@@ -3235,7 +3235,7 @@ function setPesoMetrica(el, key){
 }
 function setPainelEditandoPesos(v){ painelEditandoPesos = !!v; render(); }
 function restaurarPesosPadrao(){
-  showConfirm('Voltar todos os pesos para o padrão? Reuniões, vendas de cursos, vendas de curso In Company, vendas de sistemas e quantidade de vendas voltam a valer 5; interação volta a valer 1.', function(){
+  showConfirm('Voltar todos os pesos para o padrão? Reuniões, vendas de cursos, vendas de curso In Company, vendas de HUB Comercial e quantidade de vendas voltam a valer 5; interação volta a valer 1.', function(){
     painelPesos = Object.assign({}, PESOS_PADRAO);
     persistPainelPesos();
     render();
@@ -3505,7 +3505,7 @@ function renderModal(){
   if(!modalState) return '';
   const m = modalState;
   if(m.type === 'manage-sellers'){
-    let bodyHtml = `<div class="modal-msg">Vendedoras do Sistema</div>`;
+    let bodyHtml = `<div class="modal-msg">Vendedoras do HUB Comercial</div>`;
     bodyHtml += `<div class="extra-vendedor-list">` + SELLERS.map(s => `
       <div class="extra-vendedor-row">
         <span style="display:flex;align-items:center;gap:8px;flex:1;font-weight:600;font-size:13.5px;"><span class="th-dot" style="background:${s.color}"></span>${esc(s.label)}</span>
@@ -3529,7 +3529,7 @@ function renderModal(){
         <div class="modal-box">
           <div class="modal-msg">⚠️ Zerar tudo</div>
           <div class="modal-error" style="position:static;">
-            Isso vai apagar <b>todos os lançamentos</b> de todas as abas (Sistema, Consultoria,
+            Isso vai apagar <b>todos os lançamentos</b> de todas as abas (HUB Comercial, Consultoria,
             Consultoria Órgãos Públicos, Cursos e Bônus e Metas), de <b>todos os anos</b> —
             não dá pra desfazer. Os produtos, vendedores e parceiros cadastrados continuam.
             Recomendo exportar os dados antes (botão ⬇ Exportar dados), caso precise deles depois.
@@ -3721,7 +3721,7 @@ function renderModal(){
           <div class="modal-msg">Upgrade de plano${m.empresa ? ' — ' + esc(m.empresa) : ''}</div>
           <div class="divisao-explica">
             O cliente não sai: ele troca o plano atual por um maior. Como o valor muda, ele precisa ser
-            informado aqui — é por ele que a venda vai entrar na aba Sistema. O valor da carteira fica
+            informado aqui — é por ele que a venda vai entrar na aba HUB Comercial. O valor da carteira fica
             guardado, para dar para ver de quanto para quanto a conta subiu.
           </div>
           ${m.erro ? `<div class="modal-error">${esc(m.erro)}</div>` : ''}
@@ -3737,7 +3737,7 @@ function renderModal(){
           </label>
           <div class="divisao-conferencia" id="upgrade-dif"></div>
           <div class="import-resumo">
-            Ao lançar no Sistema, esta linha vai com a etiqueta <b>⬆ Upgrade</b> — e, diferente de uma
+            Ao lançar no HUB Comercial, esta linha vai com a etiqueta <b>⬆ Upgrade</b> — e, diferente de uma
             renovação comum, <b>conta no ranking da equipe</b>: subir o plano de um cliente é venda.
           </div>
           <div class="modal-actions">
@@ -3754,9 +3754,9 @@ function renderModal(){
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
         <div class="modal-box modal-box-wide">
-          <div class="modal-msg">Lançar renovações na aba Sistema</div>
+          <div class="modal-msg">Lançar renovações na aba HUB Comercial</div>
           <div class="painel-equipe-nota">
-            Vão virar <b>venda do mês</b> na aba Sistema, cada uma no nome de quem cuidou da renovação,
+            Vão virar <b>venda do mês</b> na aba HUB Comercial, cada uma no nome de quem cuidou da renovação,
             e entram na sua lista de comissões — o percentual de cada uma você preenche por lá.
             Só entram as marcadas como <b>Renovado</b> que ainda não foram lançadas.
           </div>
@@ -3766,7 +3766,7 @@ function renderModal(){
           </div>
           ${vendaProducts.length ? `
             <label class="painel-campo" style="margin:12px 0 8px;">
-              <span>Produto na aba Sistema (pode deixar em branco e escolher depois)</span>
+              <span>Produto na aba HUB Comercial (pode deixar em branco e escolher depois)</span>
               <select onchange="setLancarProduto(this)">
                 <option value="">—</option>
                 ${vendaProducts.map(function(pr){ return `<option value="${esc(pr)}" ${m.produto===pr?'selected':''}>${esc(pr)}</option>`; }).join('')}
@@ -3786,7 +3786,7 @@ function renderModal(){
             </table>
           </div>
           ${m.lista.length > previa.length ? `<div class="import-resumo">…e mais ${m.lista.length - previa.length}.</div>` : ''}
-          <div class="import-resumo">As vendas nascem com a observação <b>“Renovação”</b> (ou <b>“Upgrade de plano”</b>), para você distinguir na aba Sistema. Só o upgrade conta no ranking.</div>
+          <div class="import-resumo">As vendas nascem com a observação <b>“Renovação”</b> (ou <b>“Upgrade de plano”</b>), para você distinguir na aba HUB Comercial. Só o upgrade conta no ranking.</div>
           <div class="modal-actions">
             <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
             <button class="modal-btn modal-btn-primary" onclick="confirmarLancarNoSistema()">Lançar ${m.lista.length === 1 ? 'a renovação' : 'as ' + m.lista.length}</button>
@@ -3976,7 +3976,7 @@ function exportResumoCSV(){
     let csv = 'Resumo de Comissoes - ' + scope + '\n\n';
 
     csv += 'VENDEDORAS\n';
-    csv += 'Vendedora;Sistema;Consultoria;Orgaos Publicos;Cursos;Bonus;Total\n';
+    csv += 'Vendedora;HUB Comercial;Consultoria;Orgaos Publicos;Cursos;Bonus;Total\n';
     sellersForCurrentUser().forEach(s => {
       const b = sellerBreakdown[s.label] || {sistema:0,consultoria:0,publicos:0,cursos:0,bonus:0};
       const total = b.sistema+b.consultoria+b.publicos+b.cursos+b.bonus;
@@ -3984,7 +3984,7 @@ function exportResumoCSV(){
     });
 
     csv += '\nPARCEIROS\n';
-    csv += 'Parceiro;Sistema;Consultoria;Orgaos Publicos;Cursos;Total\n';
+    csv += 'Parceiro;HUB Comercial;Consultoria;Orgaos Publicos;Cursos;Total\n';
     partners.forEach(p => {
       const b = partnerBreakdown[p] || {sistema:0,consultoria:0,publicos:0,cursos:0};
       const total = b.sistema+b.consultoria+b.publicos+b.cursos;
@@ -4013,7 +4013,7 @@ function exportFechamentoCSV(){
     const periodo = bonusFilter === 'Todos' ? ('Ano ' + yearFilter) : (bonusFilter + '/' + yearFilter);
     const linhas = fechamentoPagamentos(bonusFilter);
     let csv = 'Fechamento para a contabilidade - ' + periodo + '\n\n';
-    csv += 'Pessoa;Sistema;Orgaos Publicos;Cursos;Bonus;Salario fixo;Total a pagar;Consultoria (a receber);Com Consultoria\n';
+    csv += 'Pessoa;HUB Comercial;Orgaos Publicos;Cursos;Bonus;Salario fixo;Total a pagar;Consultoria (a receber);Com Consultoria\n';
     const soma = {sistema:0, publicos:0, cursos:0, bonus:0, salario:0, aPagar:0, consultoria:0, comConsultoria:0};
     linhas.forEach(function(l){
       Object.keys(soma).forEach(function(k){ soma[k] += l[k]; });
@@ -4172,7 +4172,7 @@ function loadDataSync(){
   render();
 }
 
-/* ---------------- Vendedoras do Sistema (lista editável) ---------------- */
+/* ---------------- Vendedoras do HUB Comercial (lista editável) ---------------- */
 
 
 
@@ -4208,7 +4208,7 @@ function removeSistemaVendedor(key){
   const s = SELLERS.find(s => s.key === key);
   if(!s) return;
   showConfirm(
-    `Remover "${s.label}" da lista de vendedoras do Sistema? Os valores já lançados para ela continuam guardados nos lançamentos antigos, mas a coluna some da tabela e ela deixa de poder ser escolhida em novos lançamentos.`,
+    `Remover "${s.label}" da lista de vendedoras do HUB Comercial? Os valores já lançados para ela continuam guardados nos lançamentos antigos, mas a coluna some da tabela e ela deixa de poder ser escolhida em novos lançamentos.`,
     () => {
       SELLERS = SELLERS.filter(s => s.key !== key);
       if(sellerFilter === key) sellerFilter = "Todas";
@@ -4418,7 +4418,7 @@ function getPagamentosRealizados(){
     if(!r.pago) return;
     if((r.ano||2026) !== yearFilter) return;
     if(pagamentosMonthFilter !== "Todos" && r.mesPagamento !== pagamentosMonthFilter) return;
-    out.push({origem:"Sistema", mesVenda:r.mes, mesPagamento:r.mesPagamento, label:r.cliente||r.venda||"", valor:Number(r.valor)||0});
+    out.push({origem:"HUB Comercial", mesVenda:r.mes, mesPagamento:r.mesPagamento, label:r.cliente||r.venda||"", valor:Number(r.valor)||0});
   });
   ENTITY_KEYS.forEach(key => {
     if(!ENTITIES[key].hasPagamento) return;
@@ -4453,7 +4453,7 @@ function getComissoesPorStatus(pago){
       const comissao = Number(r[s.key])||0;
       if(comissao <= 0) return;
       out.push({
-        vendedor: s.label, origem: 'Sistema', cliente: r.cliente || r.venda || '—',
+        vendedor: s.label, origem: 'HUB Comercial', cliente: r.cliente || r.venda || '—',
         mesVenda: r.mes, mesPagamento: r.mesPagamento || null,
         valorPago: Number(r.valor)||0, pct: null, comissao: comissao,
       });
@@ -4604,7 +4604,7 @@ function renderPagamentosSection(){
   }).join('');
 
   const rowsHtml = entries.length === 0
-    ? `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhum pagamento marcado como realizado ainda neste filtro. Marque a caixinha "Pago" nas abas Sistema, Consultoria ou Consultoria Órgãos Públicos.</td></tr>`
+    ? `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhum pagamento marcado como realizado ainda neste filtro. Marque a caixinha "Pago" nas abas HUB Comercial, Consultoria ou Consultoria Órgãos Públicos.</td></tr>`
     : entries.map(e => `
       <tr>
         <td>${monthShort(e.mesPagamento)}</td>
@@ -4727,7 +4727,7 @@ function toggleMonthClosed(ano, mes){
 
 const META_ORIGENS = [
   {key:'cursos',      label:'Cursos'},
-  {key:'sistema',     label:'Sistema'},
+  {key:'sistema',     label:'HUB Comercial'},
   {key:'consultoria', label:'Consultoria'},
   {key:'publicos',    label:'Consultoria Órgãos Públicos'},
   {key:'todas',       label:'Todas as abas somadas'},
@@ -4912,7 +4912,7 @@ function lancarBonusDaMeta(id){
 function getPartnerEntries(){
   const out = [];
   const sources = [
-    {origem:'Sistema', list: rows, valorField:'valor', labelFn: r => r.cliente || r.venda || ''},
+    {origem:'HUB Comercial', list: rows, valorField:'valor', labelFn: r => r.cliente || r.venda || ''},
     {origem:'Consultoria', list: state.consultoria.rows, valorField:'valorContrato', labelFn: r => r.empresa || ''},
     {origem:'Consultoria Órgãos Públicos', list: state.publicos.rows, valorField:'valorContrato', labelFn: r => r.orgao || ''},
     {origem:'Cursos', list: state.cursos.rows, valorField:'valorContrato', labelFn: r => r.curso || ''},
@@ -5251,7 +5251,7 @@ function renderBonusSection(){
           <thead>
             <tr>
               <th>Pessoa</th>
-              <th class="num">Sistema</th>
+              <th class="num">HUB Comercial</th>
               <th class="num">Órgãos Públicos</th>
               <th class="num">Cursos</th>
               <th class="num">Bônus</th>
@@ -5276,7 +5276,7 @@ function renderBonusSection(){
         </table>
       </div>
       <div class="totais-nota">
-        <b>Total a pagar</b> = comissões de Sistema, Órgãos Públicos e Cursos + bônus e metas + salário fixo.
+        <b>Total a pagar</b> = comissões de HUB Comercial, Órgãos Públicos e Cursos + bônus e metas + salário fixo.
         É o valor de cada pessoa para mandar à contabilidade.
         A <b>Consultoria fica fora</b>: a comissão dela só se realiza quando o cliente paga, então entra
         aqui apenas como referência, nas duas últimas colunas.
@@ -5412,7 +5412,7 @@ function setFechamentoEditando(v){ fechamentoEditando = !!v; render(); }
    realiza quando o cliente paga — mandar pagar antes disso seria adiantar
    dinheiro que pode não ter entrado. Ela vem em colunas de apoio.
 
-   A lista de pessoas não é só a das vendedoras do Sistema: quem só recebe
+   A lista de pessoas não é só a das vendedoras do HUB Comercial: quem só recebe
    salário (a equipe de consultoria, por exemplo) também precisa entrar,
    senão faltaria gente na folha. */
 function fechamentoPagamentos(mes, todos){
@@ -5549,7 +5549,7 @@ function renderMonthlyChart(){
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="overflow:visible;display:block;">${bars}</svg>`;
 }
 
-/* Faturamento total da empresa — todos os produtos somados (Sistema,
+/* Faturamento total da empresa — todos os produtos somados (HUB Comercial,
    Consultoria, Órgãos Públicos, Cursos), mês a mês. Diferente do
    gráfico de comissões acima: é o valor do contrato, não o que a
    equipe ganha. Mesmo padrão de "valor oculto" pra quem não revelou
@@ -5755,9 +5755,9 @@ function renderParceirosSection(){
 
     ${sectionsToolbarHtml()}
 
-    ${panel('resumo-faturamento-mensal', `Faturamento total da empresa — ${yearFilter}`, renderFaturamentoMensalChart() + `<div class="painel-nota">Todos os produtos somados — Sistema, Consultoria, Órgãos Públicos e Cursos —, o valor do contrato, não a comissão. É o mesmo gráfico que sai no Relatório do mês.</div>`, {meta: 'faturamento, todos os produtos'})}
+    ${panel('resumo-faturamento-mensal', `Faturamento total da empresa — ${yearFilter}`, renderFaturamentoMensalChart() + `<div class="painel-nota">Todos os produtos somados — HUB Comercial, Consultoria, Órgãos Públicos e Cursos —, o valor do contrato, não a comissão. É o mesmo gráfico que sai no Relatório do mês.</div>`, {meta: 'faturamento, todos os produtos'})}
 
-    ${panel('resumo-grafico', `Evolução mensal das comissões — ${yearFilter}`, renderMonthlyChart() + `<div class="painel-nota">São as <b>comissões</b> de todas as origens somadas — Sistema, Consultoria, Órgãos Públicos, Cursos e bônus —, não o faturamento dos contratos. Salário fixo fica de fora.</div>`, {meta: 'comissões, todas as origens'})}
+    ${panel('resumo-grafico', `Evolução mensal das comissões — ${yearFilter}`, renderMonthlyChart() + `<div class="painel-nota">São as <b>comissões</b> de todas as origens somadas — HUB Comercial, Consultoria, Órgãos Públicos, Cursos e bônus —, não o faturamento dos contratos. Salário fixo fica de fora.</div>`, {meta: 'comissões, todas as origens'})}
 
     ${metasPanelHtml}
 
@@ -5768,7 +5768,7 @@ function renderParceirosSection(){
           <thead>
             <tr>
               <th>Vendedora</th>
-              <th class="num">Sistema</th>
+              <th class="num">HUB Comercial</th>
               <th class="num">Consultoria</th>
               <th class="num">Órgãos Públicos</th>
               <th class="num">Cursos</th>
@@ -5779,7 +5779,7 @@ function renderParceirosSection(){
           <tbody>${sellerBreakdownRowsHtml}</tbody>
         </table>
       </div>
-    `, {flush: true, meta: `Sistema + Consultoria + Órgãos Públicos + Cursos + Bônus`})}
+    `, {flush: true, meta: `HUB Comercial + Consultoria + Órgãos Públicos + Cursos + Bônus`})}
 
     ${panel('resumo-parceiros', 'Parceiros — honorários por origem', `
       <div class="kpis" style="margin:0 16px 14px;">${kpiCardsHtml}</div>
@@ -5788,7 +5788,7 @@ function renderParceirosSection(){
           <thead>
             <tr>
               <th>Parceiro</th>
-              <th class="num">Sistema</th>
+              <th class="num">HUB Comercial</th>
               <th class="num">Consultoria</th>
               <th class="num">Órgãos Públicos</th>
               <th class="num">Cursos</th>
@@ -5826,7 +5826,7 @@ function renderParceirosSection(){
     ${renderNotasPanel()}
 
     <div class="footnote" style="text-align:left;color:var(--ink-faint);font-size:12px;">
-      Este resumo é somente leitura — para editar um lançamento, vá até a aba de origem dele (Sistema, Consultoria, Órgãos Públicos, Cursos ou Bônus e Metas). O filtro de mês acima vale para as três seções. O quadro de notas é o mesmo que o financeiro enxerga: o visto que ela dá aparece aqui.
+      Este resumo é somente leitura — para editar um lançamento, vá até a aba de origem dele (HUB Comercial, Consultoria, Órgãos Públicos, Cursos ou Bônus e Metas). O filtro de mês acima vale para as três seções. O quadro de notas é o mesmo que o financeiro enxerga: o visto que ela dá aparece aqui.
     </div>
   `;
 }
@@ -5845,7 +5845,7 @@ function vendasSemResponsavel(){
   });
 }
 
-/* ---------- Comissão do Sistema por percentual ----------
+/* ---------- Comissão do HUB Comercial por percentual ----------
    A comissão de cada vendedora continua guardada em reais — é dela que
    sai todo o resto do sistema. A % é opcional: quando preenchida, o valor
    passa a ser calculado por ela e se refaz sozinho se o contrato ou a
@@ -6253,7 +6253,7 @@ function notasDoAno(){
   const out = [];
   const noAno = function(r){ return (r.ano||2026) === yearFilter; };
   rows.filter(noAno).forEach(function(r){
-    out.push({mes:r.mes, origem:'Sistema', nome:r.cliente || r.venda || '—', valor:Number(r.valor)||0,
+    out.push({mes:r.mes, origem:'HUB Comercial', nome:r.cliente || r.venda || '—', valor:Number(r.valor)||0,
               pago:r.pago, mesPagamento:r.mesPagamento, forma:r.formaPagamento||'',
               tabela:'vendas', entKey:'', id:r.id, emitida:!!r.notaEmitida, emitidaEm:r.notaEmitidaEm||null});
   });
@@ -6400,7 +6400,7 @@ function renderFinanceiroResumo(){
 
   return `
     <div class="kpis">
-      <div class="kpi-card" style="--kc:#1C6FBF"><div class="kpi-label"><span class="kpi-dot"></span>Sistema</div><div class="kpi-value">${fmtMoney(ano.sistema)}</div></div>
+      <div class="kpi-card" style="--kc:#1C6FBF"><div class="kpi-label"><span class="kpi-dot"></span>HUB Comercial</div><div class="kpi-value">${fmtMoney(ano.sistema)}</div></div>
       <div class="kpi-card" style="--kc:#0D9488"><div class="kpi-label"><span class="kpi-dot"></span>Consultoria</div><div class="kpi-value">${fmtMoney(ano.consultoria)}</div></div>
       <div class="kpi-card" style="--kc:#8B5CF6"><div class="kpi-label"><span class="kpi-dot"></span>Órgãos Públicos</div><div class="kpi-value">${fmtMoney(ano.publicos)}</div></div>
       <div class="kpi-card" style="--kc:#F59E0B"><div class="kpi-label"><span class="kpi-dot"></span>Cursos</div><div class="kpi-value">${fmtMoney(ano.cursos)}</div></div>
@@ -6410,7 +6410,7 @@ function renderFinanceiroResumo(){
     ${panel('fin-meses', 'Faturamento por mês', `
       <div class="table-scroll">
         <table class="table-plain">
-          <thead><tr><th>Mês</th><th class="num">Sistema</th><th class="num">Consultoria</th><th class="num">Órgãos Públicos</th><th class="num">Cursos</th><th class="num">Total</th></tr></thead>
+          <thead><tr><th>Mês</th><th class="num">HUB Comercial</th><th class="num">Consultoria</th><th class="num">Órgãos Públicos</th><th class="num">Cursos</th><th class="num">Total</th></tr></thead>
           <tbody>${porMes.map(function(x){
             return `<tr><td>${esc(x.mes)}</td>
               <td class="num">${fmtMoney(x.f.sistema)}</td>
@@ -6580,7 +6580,7 @@ function renderVendasSection(){
     </div>` : '';
 
   return `
-    ${avisoFalhaHtml('vendas', 'as vendas do Sistema')}
+    ${avisoFalhaHtml('vendas', 'as vendas do HUB Comercial')}
     ${avisoResp}
     ${kpiToggleHtml}
     <div class="kpis">${kpiCardsHtml}</div>
@@ -6599,7 +6599,7 @@ function renderVendasSection(){
       <input id="search-vendas-colaborador" class="search-input" type="text" placeholder="🔍 Buscar colaborador..." value="${esc(searchColaborador)}" oninput="onVendasSearchInput(this,'colaborador')" />
     </div>
 
-    ${panel('vendas-lancamentos', 'Lançamentos do Sistema', `
+    ${panel('vendas-lancamentos', 'Lançamentos do HUB Comercial', `
       <div class="table-scroll">
         <table>
           <thead>
@@ -7401,7 +7401,7 @@ function pessoasDeContratos(){
   return (painelContratos || PAINEL_CONTRATOS_PADRAO).slice();
 }
 
-/* ---------- Renovações do sistema ----------
+/* ---------- Renovações do HUB Comercial ----------
    Renovar contrato não é vender: não tem prospecção, não tem proposta, não
    entra no ranking de vendas. É um processo próprio, tocado por uma dupla,
    e o que importa saber é quais empresas renovaram, quais não renovaram e
@@ -7594,7 +7594,7 @@ function setRenovacaoStatus(id, valor){
   // lançada, então o sistema avisa e não apaga nada sozinho.
   if(r.vendaId && r.renovado === true && novo !== true){
     showConfirm(
-      'Esta renovação já foi lançada como venda na aba Sistema. Mudar a situação aqui NÃO apaga a venda de lá — se ela não valer mais, exclua também na aba Sistema. Continuar?',
+      'Esta renovação já foi lançada como venda na aba HUB Comercial. Mudar a situação aqui NÃO apaga a venda de lá — se ela não valer mais, exclua também na aba HUB Comercial. Continuar?',
       function(){
         r.renovado = novo; r.upgrade = false;
         persistRenovacoes();
@@ -7611,7 +7611,7 @@ function setRenovacaoStatus(id, valor){
 }
 
 /* O upgrade pede uma pergunta a mais: o plano novo custa outro valor, e é
-   justamente esse o motivo do upgrade existir. Lançar no Sistema pelo
+   justamente esse o motivo do upgrade existir. Lançar no HUB Comercial pelo
    valor antigo seria lançar errado, então o valor novo é perguntado na
    hora — e o valor da carteira fica guardado, para dar para ver de quanto
    para quanto a conta subiu. */
@@ -7621,7 +7621,7 @@ function abrirUpgradeRenovacao(id){
   if(!r) return;
   if(r.upgrade){    // clicar de novo no botão aceso desfaz o upgrade
     if(r.vendaId){
-      showAlert('Este upgrade já foi lançado como venda na aba Sistema. Para desfazer, exclua a venda por lá primeiro.');
+      showAlert('Este upgrade já foi lançado como venda na aba HUB Comercial. Para desfazer, exclua a venda por lá primeiro.');
       return;
     }
     r.upgrade = false; r.valorUpgrade = null; r.renovado = null;
@@ -7629,7 +7629,7 @@ function abrirUpgradeRenovacao(id){
     return;
   }
   if(r.vendaId){
-    showAlert('Esta renovação já foi lançada como venda na aba Sistema pelo valor antigo. Para transformá-la em upgrade, exclua a venda por lá primeiro.');
+    showAlert('Esta renovação já foi lançada como venda na aba HUB Comercial pelo valor antigo. Para transformá-la em upgrade, exclua a venda por lá primeiro.');
     return;
   }
   modalState = {
@@ -8158,9 +8158,9 @@ function confirmarImportacaoConsultoria(){
   showAlert(novos.length + (novos.length === 1 ? ' lançamento importado.' : ' lançamentos importados.'));
 }
 
-/* ---------- Renovação renovada vira venda na aba Sistema ----------
+/* ---------- Renovação renovada vira venda na aba HUB Comercial ----------
    A renovação que se confirma é faturamento do mês e precisa entrar na
-   lista de comissões do Sistema, como qualquer outra venda. Mas isso é
+   lista de comissões do HUB Comercial, como qualquer outra venda. Mas isso é
    dinheiro: não acontece sozinho ao marcar "Renovado", e sim quando ela
    manda, numa conferência que mostra o que vai ser lançado e quanto dá.
 
@@ -8243,7 +8243,7 @@ function montarCarteira(anoOrigem, anoDestino){
 
   showConfirm(
     'Montar a carteira de ' + anoDestino + ' com ' + partes.join(' e ').replace(/<\/?b>/g,'') +
-    ', somando ' + fmtMoney(total) + '? Todas entram no mesmo mês, como "em aberto" — a situação e o lançamento no Sistema recomeçam do zero.',
+    ', somando ' + fmtMoney(total) + '? Todas entram no mesmo mês, como "em aberto" — a situação e o lançamento no HUB Comercial recomeçam do zero.',
     function(){
       daCarteira.forEach(function(r){
         renovacoes.push({
@@ -8284,8 +8284,8 @@ function abrirLancarNoSistema(){
   if(!lista.length){
     const jaForam = renovacoes.filter(function(r){ return r.ano === yearFilter && r.vendaId; }).length;
     showAlert(jaForam
-      ? 'Nenhuma renovação nova para lançar. As que já foram estão marcadas com “no Sistema”.'
-      : 'Marque as empresas como “Renovado” primeiro — só as renovadas viram venda no Sistema.');
+      ? 'Nenhuma renovação nova para lançar. As que já foram estão marcadas com “no HUB Comercial”.'
+      : 'Marque as empresas como “Renovado” primeiro — só as renovadas viram venda no HUB Comercial.');
     return;
   }
   modalState = { type:'lancar-renovacoes', lista: lista, produto: '' };
@@ -8327,7 +8327,7 @@ function confirmarLancarNoSistema(){
     ? ' ' + fechados.filter(function(v,i,a){ return a.indexOf(v)===i; }).join(', ') + ' está fechado para lançamentos, então essas ficaram de fora.'
     : '';
   showAlert(lancadas
-    ? lancadas + (lancadas === 1 ? ' renovação lançada' : ' renovações lançadas') + ' na aba Sistema. Preencha o percentual de comissão de cada uma por lá.' + aviso
+    ? lancadas + (lancadas === 1 ? ' renovação lançada' : ' renovações lançadas') + ' na aba HUB Comercial. Preencha o percentual de comissão de cada uma por lá.' + aviso
     : 'Nada foi lançado.' + aviso);
   setTimeout(tryLoadPainelTotaisAsync, 900);
 }
@@ -8338,7 +8338,7 @@ function irParaVendaDaRenovacao(id){
   if(!r || !r.vendaId) return;
   const v = rows.find(function(x){ return x.id === r.vendaId; });
   if(!v){
-    showAlert('A venda desta renovação não está mais na aba Sistema — ela deve ter sido excluída por lá.');
+    showAlert('A venda desta renovação não está mais na aba HUB Comercial — ela deve ter sido excluída por lá.');
     return;
   }
   activeTab = 'vendas';
@@ -8819,7 +8819,7 @@ function montarRelatorioMes(mes){
   partnerMonthFilter = mes;
 
   const fatur = [
-    {label:'Sistema',                  valor: faturamentoDaOrigem('sistema', ano, mes)},
+    {label:'HUB Comercial',                  valor: faturamentoDaOrigem('sistema', ano, mes)},
     {label:'Consultoria',              valor: faturamentoDaOrigem('consultoria', ano, mes)},
     {label:'Consultoria Órgãos Públicos', valor: faturamentoDaOrigem('publicos', ano, mes)},
     {label:'Cursos',                   valor: faturamentoDaOrigem('cursos', ano, mes)},
@@ -9150,7 +9150,7 @@ function montarRelatorioMes(mes){
       <section class="rel-sec">
         <h2>Ganhos por vendedora <span class="rel-sub">${fmtMoney(totComissao)} no total</span></h2>
         ${relTabela(
-          [{label:'Vendedora'},{label:'Sistema',num:true},{label:'Consultoria',num:true},
+          [{label:'Vendedora'},{label:'HUB Comercial',num:true},{label:'Consultoria',num:true},
            {label:'Órgãos Públicos',num:true},{label:'Cursos',num:true},{label:'Bônus',num:true},{label:'Total',num:true}],
           linhasVend, 'Nenhuma comissão em ' + mes + '.')}
       </section>
@@ -9162,7 +9162,7 @@ function montarRelatorioMes(mes){
       </section>
 
       <section class="rel-sec">
-        <h2>Sistema <span class="rel-sub">${vendasMes.length} venda${vendasMes.length===1?'':'s'} · ${fmtMoney(faturamentoDaOrigem('sistema', ano, mes))}</span></h2>
+        <h2>HUB Comercial <span class="rel-sub">${vendasMes.length} venda${vendasMes.length===1?'':'s'} · ${fmtMoney(faturamentoDaOrigem('sistema', ano, mes))}</span></h2>
         ${relTabela(
           [{label:'Cliente'},{label:'Venda'},{label:'Valor do contrato',num:true},{label:'Quem vendeu'},{label:'Pagamento'},{label:'Comissões'}],
           linhasSistema, 'Nenhuma venda em ' + mes + '.')}
@@ -9227,7 +9227,7 @@ function montarRelatorioMes(mes){
       <section class="rel-sec">
         <h2>Totais do ano por vendedora <span class="rel-sub">volume vendido, não comissão</span></h2>
         ${relTabela(
-          [{label:'Vendedora'},{label:'Vendido em sistemas',num:true},{label:'Qtd. sistemas',num:true},{label:'Vendido em cursos',num:true}],
+          [{label:'Vendedora'},{label:'Vendido em HUB Comercial',num:true},{label:'Qtd. HUB Comercial',num:true},{label:'Vendido em cursos',num:true}],
           linhasTotaisAno, 'Nenhuma venda registrada em ' + ano + '.')}
       </section>
 
@@ -9242,7 +9242,7 @@ function montarRelatorioMes(mes){
       </section>
 
       ${renovMesTodas.length ? `<section class="rel-sec">
-        <h2>Renovações do sistema <span class="rel-sub">${renovMesTodas.length} ${renovMesTodas.length===1?'empresa':'empresas'} em ${esc(mes)}</span></h2>
+        <h2>Renovações do HUB Comercial <span class="rel-sub">${renovMesTodas.length} ${renovMesTodas.length===1?'empresa':'empresas'} em ${esc(mes)}</span></h2>
         <div class="rel-cards">
           <div class="rel-card"><span>Renovadas</span><b>${renovadas.length}</b><span>${fmtMoney(somaRenovM(renovadas))}${upgradesM.length ? ' · ' + upgradesM.length + ' com upgrade' : ''}</span></div>
           <div class="rel-card"><span>Upgrades</span><b>${upgradesM.length}</b><span>${ganhoUpgradeM>=0?'+':''}${fmtMoney(ganhoUpgradeM)} de aumento</span></div>
@@ -9532,10 +9532,10 @@ function renderPainelSection(){
   const faltaSistema = olhaVendas ? vendasSemResponsavel().length : 0;
   const faltaCursos  = olhaVendas ? entityRowsSemDivisao('cursos').length : 0;
   const partes = [];
-  if(faltaSistema) partes.push(`<b>${faltaSistema}</b> venda${faltaSistema===1?'':'s'} na aba Sistema`);
+  if(faltaSistema) partes.push(`<b>${faltaSistema}</b> venda${faltaSistema===1?'':'s'} na aba HUB Comercial`);
   if(faltaCursos)  partes.push(`<b>${faltaCursos}</b> lançamento${faltaCursos===1?'':'s'} na aba Cursos`);
   const comoResolver = faltaCursos
-    ? 'Preencha “Quem vendeu” na aba Sistema e a divisão em “Vendas por vendedora” na aba Cursos.'
+    ? 'Preencha “Quem vendeu” na aba HUB Comercial e a divisão em “Vendas por vendedora” na aba Cursos.'
     : 'Preencha a coluna “Quem vendeu” na aba de origem.';
   const avisoPainel = partes.length ? `
     <div class="storage-warning aviso-resp">
@@ -9771,7 +9771,7 @@ function painelEmpresasNovas(pessoa, slugPessoa){
 }
 
 
-/* Aba "Renovações": empresas que estão renovando o sistema, quem cuidou de
+/* Aba "Renovações": empresas que estão renovando o HUB Comercial, quem cuidou de
    cada uma e o desfecho. Não entra no ranking — renovar não é vender. */
 function renderPainelRenovacoes(){
   const pessoas = pessoasDeRenovacao();
@@ -9844,7 +9844,7 @@ function renderPainelRenovacoes(){
       <td class="col-nome">${editavel
         ? `<input class="contrato-linha-input" id="renov-emp-${r.id}" type="text" placeholder="Nome da empresa"
                   value="${esc(r.empresa)}" oninput="onRenovacaoTexto(this,${r.id})" />`
-        : esc(r.empresa || '—')}${r.vendaId ? `<button class="selo-sistema" title="Já lançada na aba Sistema — clique para ver" onclick="irParaVendaDaRenovacao(${r.id})">no Sistema</button>` : ''}</td>
+        : esc(r.empresa || '—')}${r.vendaId ? `<button class="selo-sistema" title="Já lançada na aba HUB Comercial — clique para ver" onclick="irParaVendaDaRenovacao(${r.id})">no HUB Comercial</button>` : ''}</td>
       <td class="col-valor col-valor-larga">${editavel
         ? `<div class="currency-wrap"><span class="currency-prefix">R$</span><input class="num contrato-linha-input" type="number" step="0.01" placeholder="—"
                   value="${r.valor===null||r.valor===undefined?'':r.valor}" oninput="onRenovacaoValor(this,${r.id})" /></div>`
@@ -9950,15 +9950,15 @@ function renderPainelRenovacoes(){
          doAno.length ? 'Nenhuma empresa nesse filtro.' : 'Nenhuma empresa em renovação lançada em ' + yearFilter + '.'
        }</div>`}
     <div class="totais-nota">
-      Cada linha é uma empresa que está renovando o sistema. A situação começa <b>em aberto</b> e recebe
+      Cada linha é uma empresa que está renovando o HUB Comercial. A situação começa <b>em aberto</b> e recebe
       <b>Renovado</b>, <b>Upgrade</b> ou <b>Não renovado</b> quando se sabe o desfecho — clicar de novo no botão aceso volta para em aberto.
       <b>Upgrade</b> é o cliente que ficou mas migrou para um plano maior: ele pede o <b>valor do plano novo</b>,
-      conta como renovação na taxa (o cliente não saiu) e, ao ir para o Sistema, é o único que <b>entra no ranking</b> —
+      conta como renovação na taxa (o cliente não saiu) e, ao ir para o HUB Comercial, é o único que <b>entra no ranking</b> —
       subir o plano de um cliente é venda, renovar o mesmo plano não é.
       A <b>taxa de renovação</b> só conta as decididas, então as em aberto não puxam o número para baixo.
       Esta lista sozinha <b>não entra</b> no ranking nem nos totais de venda. Quando você usa
-      <b>“Lançar no Sistema”</b>, as renovadas viram venda do mês na aba Sistema, no nome de quem renovou —
-      e aí sim entram nas comissões e no desempenho. A etiqueta <b>“no Sistema”</b> marca as que já foram.
+      <b>“Lançar no HUB Comercial”</b>, as renovadas viram venda do mês na aba HUB Comercial, no nome de quem renovou —
+      e aí sim entram nas comissões e no desempenho. A etiqueta <b>“no HUB Comercial”</b> marca as que já foram.
     </div>
     ${editavel ? `<div class="contrato-add">
       <button class="modal-btn modal-btn-ghost" style="width:100%;" onclick="addRenovacao()">+ Empresa em renovação</button>
@@ -9966,7 +9966,7 @@ function renderPainelRenovacoes(){
   `, {
     flush: true,
     meta: `<b>${todas.length}</b> empresa${todas.length===1?'':'s'} ${esc(rotuloRenovacao())}${recortado ? ` <span class="col-apoio">de ${doAno.length} no ano</span>` : ''}`,
-    actions: editavel ? `${prontas ? `<button class="eye-toggle" onclick="abrirLancarNoSistema()">📤 Lançar ${prontas} no Sistema</button>` : ''}${(doAno.length || contratosNovosParaCarteira(yearFilter, yearFilter+1).length) ? `<button class="eye-toggle" title="Traz as renovações do ano e os contratos novos marcados com ✨, que vencem no ano seguinte" onclick="repetirCarteiraNoProximoAno()">📅 Montar carteira de ${yearFilter+1}</button>` : ''}<button class="btn-add" onclick="abrirImportarRenovacoes()">📄 Importar planilha</button>` : '',
+    actions: editavel ? `${prontas ? `<button class="eye-toggle" onclick="abrirLancarNoSistema()">📤 Lançar ${prontas} no HUB Comercial</button>` : ''}${(doAno.length || contratosNovosParaCarteira(yearFilter, yearFilter+1).length) ? `<button class="eye-toggle" title="Traz as renovações do ano e os contratos novos marcados com ✨, que vencem no ano seguinte" onclick="repetirCarteiraNoProximoAno()">📅 Montar carteira de ${yearFilter+1}</button>` : ''}<button class="btn-add" onclick="abrirImportarRenovacoes()">📄 Importar planilha</button>` : '',
   });
 
   const resumo = pessoas.length ? panel('painel-renov-pessoas', 'Por responsável', `
@@ -10051,7 +10051,7 @@ function renderPainelLancamento(vends){
           <b>${fmtMetrica(m, valorMetrica(painelVendedor, painelMes, m.key))}</b>
         </div>
       `).join('')}
-      <div class="painel-calc-nota">Calculado a partir das abas Sistema e Cursos, para ${esc(painelVendedor)} em ${esc(painelMes)}.</div>
+      <div class="painel-calc-nota">Calculado a partir das abas HUB Comercial e Cursos, para ${esc(painelVendedor)} em ${esc(painelMes)}.</div>
     </div>`;
 
   const formulario = panel('painel-form', 'Lançar mês', `
@@ -10142,7 +10142,7 @@ function renderPainelDashboard(vends){
           <div class="painel-duplo">
             <div>
               <div class="painel-num">${fmtMoney(totais[v]?.vendasSistemas||0)}</div>
-              <div class="painel-num-rot">em sistemas · ${(totais[v]?.qtdSistemas||0).toLocaleString('pt-BR')} venda${(totais[v]?.qtdSistemas||0)===1?'':'s'}</div>
+              <div class="painel-num-rot">em HUB Comercial · ${(totais[v]?.qtdSistemas||0).toLocaleString('pt-BR')} venda${(totais[v]?.qtdSistemas||0)===1?'':'s'}</div>
             </div>
             <div>
               <div class="painel-num">${fmtMoney(totais[v]?.vendasCursos||0)}</div>
@@ -10288,7 +10288,7 @@ let usuarioCriado = null;   // {email, senha} — pra mostrar a senha uma vez
      restrita   → é uma vendedora: vê só os lançamentos dela. */
 const NIVEIS_ACESSO = [
   { id:'admin',      titulo:'Administrador', texto:'vê e edita tudo, e pode gerenciar usuários' },
-  { id:'financeiro', titulo:'Financeiro',     texto:'vê o valor de contrato de todas as notas (sistema, renovações, consultoria, órgãos públicos e cursos) e <b>nenhuma comissão</b> — nem percentual, nem bônus, nem meta, de ninguém' },
+  { id:'financeiro', titulo:'Financeiro',     texto:'vê o valor de contrato de todas as notas (HUB Comercial, renovações, consultoria, órgãos públicos e cursos) e <b>nenhuma comissão</b> — nem percentual, nem bônus, nem meta, de ninguém' },
   { id:'restrita',   titulo:'Restrita',       texto:'é uma vendedora: vê apenas os lançamentos em que o nome dela aparece' },
 ];
 function seletorNivelHtml(nivelAtual, onchangeJs, grupo){

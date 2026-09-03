@@ -33,20 +33,20 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_hardening_migration.sql     → migração 4: correções da conferência (ver "Segurança")
 ├── supabase_metas_migration.sql         → migração 5: metas viram regras configuráveis
 ├── supabase_painel_equipe_migration.sql → migração 6: painel de relatórios mensais da equipe
-├── supabase_vendedor_responsavel_migration.sql → migração 7: quem efetivamente vendeu (Sistema e Cursos)
+├── supabase_vendedor_responsavel_migration.sql → migração 7: quem efetivamente vendeu (HUB Comercial e Cursos)
 ├── supabase_vendas_curso_por_vendedora_migration.sql → migração 8: divide o faturamento do curso entre as vendedoras
 ├── supabase_contratos_reunioes_migration.sql → migração 9: equipe de consultoria (contratos e reuniões)
 ├── supabase_contratos_novos_migration.sql → migração 10: empresas com contrato assinado (nome, CNPJ e rentabilidade)
 ├── supabase_salario_fixo_migration.sql → migração 11: salário fixo do colaborador na aba Bônus e Metas
 ├── supabase_fechamento_fora_migration.sql → migração 12: quem fica de fora do fechamento para a contabilidade
 ├── supabase_pesos_ranking_migration.sql → migração 13: pesos dos indicadores no ranking da equipe
-├── supabase_renovacoes_migration.sql   → migração 14: renovações do sistema (empresa, responsável e desfecho)
+├── supabase_renovacoes_migration.sql   → migração 14: renovações do HUB Comercial (empresa, responsável e desfecho)
 ├── supabase_renovacoes_valor_migration.sql → migração 15: valor do contrato nas renovações
-├── supabase_renovacoes_venda_migration.sql → migração 16: liga a renovação à venda que ela gera no Sistema
+├── supabase_renovacoes_venda_migration.sql → migração 16: liga a renovação à venda que ela gera no HUB Comercial
 ├── supabase_venda_renovacao_migration.sql → migração 17: venda de renovação fica fora do ranking
 ├── supabase_vendas_safe_renovacao_migration.sql → migração 18: a view vendas_safe devolve a coluna renovacao
-├── supabase_venda_novo_contrato_migration.sql → migração 19: tag de contrato novo na aba Sistema
-├── supabase_venda_upgrade_migration.sql → migração 20: tag de upgrade na aba Sistema
+├── supabase_venda_novo_contrato_migration.sql → migração 19: tag de contrato novo na aba HUB Comercial
+├── supabase_venda_upgrade_migration.sql → migração 20: tag de upgrade na aba HUB Comercial
 ├── supabase_acesso_financeiro_migration.sql → migração 21: nível de acesso financeiro (vê o valor das notas, nenhuma comissão)
 ├── supabase_renovacao_upgrade_migration.sql → migração 22: upgrade de plano na aba Renovações
 ├── supabase_nota_emitida_migration.sql → migração 23: o visto de "nota emitida" e a função que o grava
@@ -61,7 +61,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 
 É a aba que abre **assim que o sistema carrega** — de propósito: os totais aparecem direto, sem precisar navegar até achá-los. Dois gráficos no topo, os 12 meses do `yearFilter`:
 
-- **Faturamento total da empresa** — todos os produtos somados (Sistema, Consultoria, Órgãos Públicos, Cursos), o valor do contrato, não a comissão. É o mesmo gráfico que sai na primeira página do Relatório do mês.
+- **Faturamento total da empresa** — todos os produtos somados (HUB Comercial, Consultoria, Órgãos Públicos, Cursos), o valor do contrato, não a comissão. É o mesmo gráfico que sai na primeira página do Relatório do mês.
 - **Evolução mensal das comissões** — o que a equipe ganha (comissões de todas as origens, mais bônus), não o faturamento dos contratos. Salário fixo fica de fora.
 
 Os dois respeitam o botão **"Mostrar valores" / "Ocultar valores"**: por padrão os números ficam escondidos (a barra aparece, o valor não), e só mostram ao clicar — o mesmo cuidado que o resto do Resumo Geral já tinha.
@@ -74,7 +74,7 @@ O sistema exige login (e-mail e senha) antes de mostrar qualquer dado. Não exis
 - **Chave pública (anon key)**: já está embutida no `index.html` (constante `SUPABASE_ANON_KEY`). Essa chave é **pública por padrão no Supabase** — sozinha, ela não abre porta nenhuma: quem decide o que pode ser lido/escrito são as políticas de RLS do banco.
 - **Modelo de acesso — três categorias de conta**:
   - **Admin** (Soraya, Deborah, Open): vê e edita todos os dados do sistema, em todas as abas.
-  - **Financeiro**: vê o **valor de contrato de todas as notas** que entraram — Sistema, Renovações, Consultoria, Consultoria Órgãos Públicos e Cursos — e **nenhuma comissão de ninguém**: nem valor, nem percentual, nem bônus, nem meta, nem salário, nem a divisão dos cursos. Marca cada nota como **emitida** conforme emite a nota fiscal, e isso é a **única coisa** que essa conta escreve. Não leva nome de pessoa, porque a conta não é de ninguém em particular. Veja "Nível financeiro" abaixo.
+  - **Financeiro**: vê o **valor de contrato de todas as notas** que entraram — HUB Comercial, Renovações, Consultoria, Consultoria Órgãos Públicos e Cursos — e **nenhuma comissão de ninguém**: nem valor, nem percentual, nem bônus, nem meta, nem salário, nem a divisão dos cursos. Marca cada nota como **emitida** conforme emite a nota fiscal, e isso é a **única coisa** que essa conta escreve. Não leva nome de pessoa, porque a conta não é de ninguém em particular. Veja "Nível financeiro" abaixo.
   - **Restrita** (Gustavo, Rios, Luciana, Angela): só **visualiza**, em modo somente leitura, os lançamentos onde o nome da pessoa aparece como vendedor(a) ou colaborador(a) — nunca vê nem edita o que é dos colegas. Isso existe pra ninguém comparar comissão de ninguém.
 
   Um mesmo contrato pode ter até 3 vendedores + colaborador na mesma linha. Nesses contratos divididos, a pessoa vê o lançamento e a **própria** comissão, mas o nome e a porcentagem dos colegas vêm em branco — o corte é feito coluna a coluna, pelas views `_safe` do banco (veja `supabase_column_masking_migration.sql`).
@@ -116,7 +116,7 @@ Existe quem precise conferir **faturamento** sem ter acesso a remuneração: alg
 
 **O que essa conta vê:**
 
-- as abas **Resumo Geral**, **Sistema**, **Renovações**, **Consultoria**, **Consultoria Órgãos Públicos** e **Cursos**;
+- as abas **Resumo Geral**, **HUB Comercial**, **Renovações**, **Consultoria**, **Consultoria Órgãos Públicos** e **Cursos**;
 - de cada lançamento: mês, cliente/empresa, produto ou contrato, **valor de contrato**, forma de pagamento, se está pago e o mês do pagamento;
 - o **nome de quem atendeu** a conta — saber de quem é a nota ajuda a resolvê-la, e nome não é remuneração;
 - no lugar do painel de parceiros, um **Resumo do financeiro**: faturamento por origem, faturamento mês a mês e a lista de todas as notas do ano;
@@ -132,7 +132,7 @@ Existe quem precise conferir **faturamento** sem ter acesso a remuneração: alg
 
 **Por que dá para confiar nisso.** O corte não é feito na tela: é feito no banco. As views `_safe` devolvem `null` no lugar dos percentuais para essa conta, e as tabelas de comissão (`vendas_comissoes`, `bonus`, `metas`, `curso_vendas`) não têm nenhuma política de leitura que aceite o nível financeiro — a resposta vem vazia. Esconder só no navegador seria fingimento: o dado viajaria junto na resposta da API e bastaria abrir o console para lê-lo. Aqui ele não sai do banco.
 
-Isso foi conferido de verdade, simulando a sessão dessa conta direto no Postgres: 205 notas de Sistema, 175 lançamentos das outras abas e 419 renovações visíveis, com **zero** comissões, bônus, metas, percentuais e divisões de curso.
+Isso foi conferido de verdade, simulando a sessão dessa conta direto no Postgres: 205 notas de HUB Comercial, 175 lançamentos das outras abas e 419 renovações visíveis, com **zero** comissões, bônus, metas, percentuais e divisões de curso.
 
 **Como criar:** aba **Usuários e Acessos** → escolha **Financeiro** no nível de acesso. Essa conta não pede nome nos lançamentos, porque não é de ninguém em particular.
 
@@ -167,7 +167,7 @@ insert into app_user_access (auth_user_id, full_access, person_name)
 select id, false, 'Nome Como Aparece Nos Lançamentos' from auth.users where email = 'vendedor@empresa.com.br';
 ```
 
-O `person_name` precisa bater (sem diferenciar maiúscula/minúscula, ignorando espaço nas pontas) com o nome usado nos campos de vendedor/colaborador das abas Sistema, Consultoria, Órgãos Públicos, Cursos e Bônus. Se a pessoa aparecer com nomes diferentes em lugares diferentes (ex: "Rios" numa aba e "Ana Rios" em outra), só um desses nomes vai casar — vale a pena padronizar o nome nos lançamentos antes de cadastrar o acesso.
+O `person_name` precisa bater (sem diferenciar maiúscula/minúscula, ignorando espaço nas pontas) com o nome usado nos campos de vendedor/colaborador das abas HUB Comercial, Consultoria, Órgãos Públicos, Cursos e Bônus. Se a pessoa aparecer com nomes diferentes em lugares diferentes (ex: "Rios" numa aba e "Ana Rios" em outra), só um desses nomes vai casar — vale a pena padronizar o nome nos lançamentos antes de cadastrar o acesso.
 
 5. Repita para cada integrante da equipe. Sem uma linha em `app_user_access`, a conta consegue logar mas não vê nenhum dado.
 
@@ -184,16 +184,16 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 5. Rode `supabase_hardening_migration.sql` — correções encontradas na conferência do banco.
 6. Rode `supabase_metas_migration.sql` — novo formato das metas (recria a tabela `metas`).
 7. Rode `supabase_painel_equipe_migration.sql` — cria a tabela do Relatório de Desempenho, a view `painel_equipe_totais` (que calcula os indicadores de venda) e a lista de quem aparece no painel.
-8. Rode `supabase_vendedor_responsavel_migration.sql` — cria a coluna "Quem vendeu" nas abas Sistema e Cursos, e faz o painel contar uma venda por pessoa.
+8. Rode `supabase_vendedor_responsavel_migration.sql` — cria a coluna "Quem vendeu" nas abas HUB Comercial e Cursos, e faz o painel contar uma venda por pessoa.
 9. Rode `supabase_vendas_curso_por_vendedora_migration.sql` — troca o "quem vendeu" do curso pela divisão do faturamento por vendedora.
 10. Rode `supabase_contratos_reunioes_migration.sql` — cria a equipe de consultoria (contratos e reuniões).
 11. Rode `supabase_contratos_novos_migration.sql` — cria a lista de empresas que assinaram contrato, com CNPJ e avaliação de rentabilidade.
 12. Rode `supabase_salario_fixo_migration.sql` — permite lançar o salário fixo do colaborador sem misturá-lo com bônus e comissões.
 13. Rode `supabase_fechamento_fora_migration.sql` — permite tirar pessoas do fechamento para a contabilidade.
 14. Rode `supabase_pesos_ranking_migration.sql` — cria os pesos dos indicadores do ranking.
-15. Rode `supabase_renovacoes_migration.sql` — cria a aba de renovações do sistema.
+15. Rode `supabase_renovacoes_migration.sql` — cria a aba de renovações do HUB Comercial.
 16. Rode `supabase_renovacoes_valor_migration.sql` — acrescenta o valor do contrato nas renovações.
-17. Rode `supabase_renovacoes_venda_migration.sql` — liga a renovação à venda lançada na aba Sistema.
+17. Rode `supabase_renovacoes_venda_migration.sql` — liga a renovação à venda lançada na aba HUB Comercial.
 18. Rode `supabase_venda_renovacao_migration.sql` — tira as vendas de renovação do ranking de desempenho.
 19. Rode `supabase_vendas_safe_renovacao_migration.sql` — faz a view `vendas_safe` devolver a coluna `renovacao` (sem isso o selo some ao recarregar).
 20. Rode `supabase_venda_novo_contrato_migration.sql` — cria a tag de contrato novo.
@@ -207,8 +207,8 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 
 | Tabela | Conteúdo |
 |---|---|
-| `vendas` | Lançamentos da aba Sistema (inclui `vendedor_responsavel` — quem efetivamente fez a venda — e `renovacao`, que tira a venda do ranking) |
-| `vendas_comissoes` | Comissão de cada vendedor(a) por lançamento do Sistema (valor e, opcionalmente, a % que o gerou) |
+| `vendas` | Lançamentos da aba HUB Comercial (inclui `vendedor_responsavel` — quem efetivamente fez a venda — e `renovacao`, que tira a venda do ranking) |
+| `vendas_comissoes` | Comissão de cada vendedor(a) por lançamento do HUB Comercial (valor e, opcionalmente, a % que o gerou) |
 | `lancamentos` | Lançamentos de Consultoria, Consultoria Órgãos Públicos e Cursos (uma tabela só, filtrada pela coluna `entidade`) |
 | `lancamentos_extra_vendedores` | Vendedores extras (4º em diante) por lançamento |
 | `lancamento_vendas` | Divisão do faturamento de um curso entre quem vendeu (sem relação com comissão) |
@@ -217,10 +217,10 @@ Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem
 | `relatorios_equipe` | Indicadores mensais digitados: andamento da equipe e contratos/reuniões (Relatório de Desempenho) |
 | `contratos_consultoria` | Empresas que assinaram contrato: quem trouxe, mês, nome, CNPJ e se o negócio foi rentável |
 | `painel_pesos` | Peso de cada indicador no ranking da equipe |
-| `renovacoes` | Empresas renovando o sistema: mês, responsável, nome, valor, se renovou e a venda que gerou |
+| `renovacoes` | Empresas renovando o HUB Comercial: mês, responsável, nome, valor, se renovou e a venda que gerou |
 | `partners` | Parceiros cadastrados |
-| `venda_products` | Catálogo de produtos da aba Sistema |
-| `sellers` | Vendedoras do Sistema (lista editável) |
+| `venda_products` | Catálogo de produtos da aba HUB Comercial |
+| `sellers` | Vendedoras do HUB Comercial (lista editável) |
 | `entity_vendors` | Vendedores(as) por aba (Consultoria / Órgãos Públicos / Cursos), quem aparece no Relatório de Desempenho (`entidade='painel'`), quem é acompanhado por contratos/reuniões (`entidade='painel_contratos'`) e quem fica de fora do fechamento (`entidade='fechamento_fora'`) |
 | `closed_months` | Meses fechados para edição |
 | `extra_years` | Anos adicionados manualmente |
@@ -265,7 +265,7 @@ Pronto, o código está no GitHub. Agora é só seguir o passo "Deploy no Vercel
 
 ## Ordenação dos lançamentos
 
-Em todas as abas de lançamento — **Sistema**, **Consultoria**, **Órgãos Públicos** e **Cursos** — o cabeçalho do painel tem um seletor **"Ordenar"**:
+Em todas as abas de lançamento — **HUB Comercial**, **Consultoria**, **Órgãos Públicos** e **Cursos** — o cabeçalho do painel tem um seletor **"Ordenar"**:
 
 | Opção | Efeito |
 |---|---|
@@ -294,7 +294,7 @@ A equipe de consultoria só recebe quando o **cliente paga a nota** — contrato
 | 💰 **Comissões liberadas** | O cliente já pagou. Lista, por vendedor(a), qual cliente pagou, em que mês, o valor pago e quanto ele(a) recebe disso. |
 | ⏳ **A receber** | Nota emitida mas ainda não paga. Mesma quebra, serve como previsão do que entra quando o cliente pagar. |
 
-O que move um lançamento de um quadro para o outro é a caixinha **"Pago"** na aba de origem (Sistema, Consultoria ou Órgãos Públicos). Marcou como pago, a comissão sai de "a receber" e entra em "liberadas".
+O que move um lançamento de um quadro para o outro é a caixinha **"Pago"** na aba de origem (HUB Comercial, Consultoria ou Órgãos Públicos). Marcou como pago, a comissão sai de "a receber" e entra em "liberadas".
 
 Cada quadro tem seu **próprio filtro de mês**, e eles filtram por coisas diferentes — o que é proposital:
 
@@ -307,7 +307,7 @@ Os dois quadros já descontam a participação do parceiro antes de calcular a c
 
 Cada vendedor(a) logado enxerga **apenas as próprias linhas** — é o mesmo corte de acesso do resto do sistema, feito no banco. Admin vê todo mundo, agrupado por pessoa e com subtotal.
 
-> **Cursos não tem controle de pagamento.** As abas Sistema, Consultoria e Órgãos Públicos têm a coluna "Pago"; a de Cursos não, então lançamentos de curso não aparecem nesses dois quadros. Se a equipe de cursos também passar a receber só depois do pagamento, dá pra ativar o controle lá.
+> **Cursos não tem controle de pagamento.** As abas HUB Comercial, Consultoria e Órgãos Públicos têm a coluna "Pago"; a de Cursos não, então lançamentos de curso não aparecem nesses dois quadros. Se a equipe de cursos também passar a receber só depois do pagamento, dá pra ativar o controle lá.
 
 ## Relatório de Desempenho
 
@@ -318,7 +318,7 @@ São nove indicadores por vendedora, por mês, divididos em dois grupos:
 | Grupo | Indicadores | De onde vem |
 |---|---|---|
 | Andamento | Interação, Propostas, Prospecção zero, Prospecção, Negócios abertos, Reuniões realizadas | **digitado à mão** todo mês |
-| Vendas | Vendas de cursos (R$), Vendas de sistemas (R$), Qtd. sistemas vendidos | **calculado sozinho** pelos lançamentos que já existem no sistema |
+| Vendas | Vendas de cursos (R$), Vendas de HUB Comercial (R$), Qtd. de HUB Comercial vendidos | **calculado sozinho** pelos lançamentos que já existem no sistema |
 
 **Os três indicadores de venda não são mais digitados.** Quem faz a soma é a view `painel_equipe_totais` no banco:
 
@@ -330,9 +330,9 @@ Cada aba carrega os lançamentos numa consulta principal e mais algumas secundá
 
 Agora as consultas secundárias falham sozinhas, sem derrubar os lançamentos, e se a consulta principal falhar a aba mostra um **aviso amarelo** pedindo para recarregar a página. A divisão das vendas (dado só de admin) nem é pedida por conta restrita.
 
-### Comissão por percentual (aba Sistema)
+### Comissão por percentual (aba HUB Comercial)
 
-Na aba Sistema, cada coluna de vendedora tem **dois campos**: a **%** em cima e o **valor em R$** embaixo.
+Na aba HUB Comercial, cada coluna de vendedora tem **dois campos**: a **%** em cima e o **valor em R$** embaixo.
 
 - Preencheu a **%**? O valor sai calculado na hora, e fica em azul para você saber que veio de uma taxa. Se o valor do contrato ou a participação do parceiro mudarem depois, a comissão **se refaz sozinha**.
 - Prefere digitar o **valor** direto? Digite embaixo — a % é limpa e aquele valor fica fixo.
@@ -345,24 +345,24 @@ A base do cálculo é a mesma das outras abas: o valor do contrato **menos a par
 
 Essa é a distinção que faz o painel bater com a realidade.
 
-Nas abas **Sistema** e **Cursos**, a comissão de uma venda é **dividida entre várias pessoas** — mas quem fez a venda foi uma só. Os campos de vendedor desses lançamentos dizem quem **ganha comissão**, não quem vendeu. Antes o painel tratava as duas coisas como a mesma, e creditava o contrato inteiro a cada nome que aparecia:
+Nas abas **HUB Comercial** e **Cursos**, a comissão de uma venda é **dividida entre várias pessoas** — mas quem fez a venda foi uma só. Os campos de vendedor desses lançamentos dizem quem **ganha comissão**, não quem vendeu. Antes o painel tratava as duas coisas como a mesma, e creditava o contrato inteiro a cada nome que aparecia:
 
 | Aba | O painel contava | O real |
 |---|---|---|
-| Sistema | R$ 4.336.963,30 · 123 sistemas | **R$ 984.411,80 · 36 vendas** |
+| HUB Comercial | R$ 4.336.963,30 · 123 lançamentos | **R$ 984.411,80 · 36 vendas** |
 | Cursos | R$ 386.166 contados em dobro nos lançamentos divididos | — |
 
 As duas abas resolvem isso, cada uma do jeito que o dado pede:
 
-**Sistema — coluna "Quem vendeu"**, depois de "Venda". Cada venda é o contrato de um cliente, feito por uma pessoa: escolhe-se um nome. A coluna fica amarela enquanto estiver vazia.
+**HUB Comercial — coluna "Quem vendeu"**, depois de "Venda". Cada venda é o contrato de um cliente, feito por uma pessoa: escolhe-se um nome. A coluna fica amarela enquanto estiver vazia.
 
 **Cursos — coluna "Vendas por vendedora"**, depois de "Nome do Curso". Aqui um nome só não serve: o lançamento é o **faturamento total do curso**, e esse total vem de várias vendedoras — parte uma trouxe, parte outra. O botão abre um quadro onde se informa **quanto cada uma vendeu, em reais**, com uma conferência ao vivo ("Somado: R$ X de R$ Y — falta R$ Z"). O atalho ⤵ joga o que falta na linha escolhida. O botão fica verde quando a divisão fecha com o valor do contrato.
 
 > **A comissão não muda em nada.** Ela continua saindo dos campos "Vendedor / % Comissão" do lançamento. Uma pessoa pode ganhar 1% do total de cursos sem ter vendido nenhum — e vai continuar ganhando, apareça ela na divisão ou não. São duas leituras do mesmo lançamento: **quem ganha** × **quem vendeu**.
 
-> **Nada foi preenchido automaticamente, de propósito.** No Sistema, nenhuma venda tinha uma vendedora única — todas eram divididas entre 2 e 6 pessoas. Em Cursos, a mesma pessoa aparece como vendedora em 10 dos 12 lançamentos, com 1% em todos: é o papel dela na comissão, não a venda. Copiar esses campos repetiria exatamente o erro que a coluna existe para corrigir.
+> **Nada foi preenchido automaticamente, de propósito.** No HUB Comercial, nenhuma venda tinha uma vendedora única — todas eram divididas entre 2 e 6 pessoas. Em Cursos, a mesma pessoa aparece como vendedora em 10 dos 12 lançamentos, com 1% em todos: é o papel dela na comissão, não a venda. Copiar esses campos repetiria exatamente o erro que a coluna existe para corrigir.
 
-O nome de quem vendeu no Sistema tem a mesma máscara dos outros vendedores: conta restrita só lê se for ela mesma. Na divisão dos cursos vale o mesmo: **cada vendedora vê a própria linha** — na coluna "Sua venda" aparece quanto ela vendeu daquele curso — e as linhas das colegas ficam invisíveis. Editar a divisão continua sendo só de admin.
+O nome de quem vendeu no HUB Comercial tem a mesma máscara dos outros vendedores: conta restrita só lê se for ela mesma. Na divisão dos cursos vale o mesmo: **cada vendedora vê a própria linha** — na coluna "Sua venda" aparece quanto ela vendeu daquele curso — e as linhas das colegas ficam invisíveis. Editar a divisão continua sendo só de admin.
 
 A aba **Consultoria** e a de **Órgãos Públicos** não têm essa coluna — o painel não conta essas duas origens.
 
@@ -382,7 +382,7 @@ Pesos definidos pela diretoria comercial:
 
 | Peso | Indicadores | Por quê |
 |---|---|---|
-| **5** | Reuniões realizadas, Vendas de cursos, Vendas de curso In Company, Vendas de sistemas, Qtd. sistemas vendidos | é o que vira contrato |
+| **5** | Reuniões realizadas, Vendas de cursos, Vendas de curso In Company, Vendas de HUB Comercial, Qtd. de HUB Comercial vendidos | é o que vira contrato |
 | **2** | Propostas, Prospecção, Prospecção zero, Negócios abertos | é caminho para o contrato, não o contrato |
 | **1** | Interação | volume de contato, o mais fácil de inflar |
 
@@ -400,7 +400,7 @@ Os cartões por indicador continuam mostrando **quem liderou cada quesito**, ago
 
 > **Por que não é fatia, nem soma de colocações.** A primeira versão dava N pontos ao 1º lugar, N−1 ao 2º e assim por diante: num time de quatro, quatro segundos lugares valiam mais que uma liderança isolada, e acabava campeã quem não tinha vencido nada. A segunda versão passou a contar lideranças com peso, mas dividindo por **fatia** — a pessoa levava o peso proporcional ao quanto fez do total da equipe naquele indicador, não só por ter liderado. Isso deixava alguém virar campeã sem ter liderado o indicador de maior peso nenhuma vez, só por nunca zerar em nada: foi o que aconteceu em agosto/2026, quando a Rios liderou 5 dos 10 indicadores — dois deles os de venda mais forte — e mesmo assim ficou em 3º lugar. A versão atual corrige isso: só liderar conta, o peso vai inteiro pra quem ficou na frente.
 
-> Os totais de venda são calculados pelo banco, e o painel os relê **depois de cada gravação** nas abas Sistema e Cursos, além de toda vez que a aba é aberta. Não precisa recarregar a página para o mês aparecer.
+> Os totais de venda são calculados pelo banco, e o painel os relê **depois de cada gravação** nas abas HUB Comercial e Cursos, além de toda vez que a aba é aberta. Não precisa recarregar a página para o mês aparecer.
 
 **Quem aparece** — o painel tem a **própria lista de pessoas**, separada da lista de vendedoras do sistema, porque ele acompanha só a equipe comercial que lança andamento. Hoje são **Angela, Rios, Uilma e Luciana**. Quem é admin muda isso pelo botão **"Quem aparece"** no topo do painel, marcando ou desmarcando nomes — desmarcar alguém só tira do painel, não mexe em lançamento, comissão nem em nenhuma outra aba. A lista fica no banco (`entity_vendors` com `entidade='painel'`), então vale para todo mundo.
 
@@ -418,11 +418,11 @@ Para incluir alguém, use **"👤 Quem está na equipe"** no topo da aba — ou 
 
 > Quem está nessa lista **não entra no ranking de vendas** e não aparece nos cartões do dashboard — o ranking mede quem vende, e essas pessoas são medidas por outra coisa. As duas listas são independentes: a mesma pessoa pode estar nas duas, se fizer sentido.
 
-## Renovações do sistema
+## Renovações do HUB Comercial
 
 Renovar contrato não é vender: não tem prospecção, não tem proposta, não gera comissão de venda nova. É um **processo próprio**, tocado por uma dupla — hoje **Uilma e Luciana** —, com lista de gente própria.
 
-Fica em **aba própria no menu lateral, em Lançamentos, logo abaixo de Sistema**. É um cadastro de contratos por mês, com valor e responsável, igual em natureza a Consultoria e Cursos — e é para a aba Sistema que as renovações confirmadas vão. Ela morou por um tempo dentro do Relatório de Desempenho, mas ali era leitura de indicadores, não lançamento: com quase 200 empresas por ano, o cadastro estava a dois cliques de profundidade dentro da aba cujo assunto (o ranking) justamente não conta renovação.
+Fica em **aba própria no menu lateral, em Lançamentos, logo abaixo de HUB Comercial**. É um cadastro de contratos por mês, com valor e responsável, igual em natureza a Consultoria e Cursos — e é para a aba HUB Comercial que as renovações confirmadas vão. Ela morou por um tempo dentro do Relatório de Desempenho, mas ali era leitura de indicadores, não lançamento: com quase 200 empresas por ano, o cadastro estava a dois cliques de profundidade dentro da aba cujo assunto (o ranking) justamente não conta renovação.
 
 O cadastro é o mínimo que responde à pergunta do mês:
 
@@ -448,36 +448,36 @@ Por isso a situação tem um terceiro botão, **Upgrade**, que se comporta difer
 2. O valor da carteira **não é apagado**. A linha guarda os dois — o antigo em `valor`, o novo em `valor_upgrade` —, e a tabela mostra o novo logo abaixo do antigo, na etiqueta âmbar **⬆ R$ 47.952,00** (clicar nela corrige o valor).
 3. Na **taxa de renovação**, upgrade conta como renovação: o cliente ficou.
 4. Um cartão **"Upgrades"** aparece no topo com **quanto a carteira cresceu no total** — a soma de todas as diferenças. É o número para levar para a diretoria.
-5. Ao ir para a aba Sistema, a venda nasce com a etiqueta **⬆️ Upgrade** (não ♻️ Renovação), pelo **valor novo**, com a observação *"Upgrade de plano"* — e, por isso, é a única linha vinda das renovações que **conta no ranking da equipe**.
+5. Ao ir para a aba HUB Comercial, a venda nasce com a etiqueta **⬆️ Upgrade** (não ♻️ Renovação), pelo **valor novo**, com a observação *"Upgrade de plano"* — e, por isso, é a única linha vinda das renovações que **conta no ranking da equipe**.
 6. Na **carteira do ano seguinte**, a empresa é copiada já com o **valor novo**: é por ele que ela vai renovar no ano que vem.
 
-Enquanto a linha ainda não foi lançada no Sistema, clicar de novo em **Upgrade** desfaz tudo e volta para *em aberto*. Depois de lançada, o sistema pede que a venda seja excluída na aba Sistema primeiro — comissão já lançada não some sozinha.
+Enquanto a linha ainda não foi lançada no HUB Comercial, clicar de novo em **Upgrade** desfaz tudo e volta para *em aberto*. Depois de lançada, o sistema pede que a venda seja excluída na aba HUB Comercial primeiro — comissão já lançada não some sozinha.
 
-### Da renovação para a aba Sistema
+### Da renovação para a aba HUB Comercial
 
-A renovação que se confirma é faturamento do mês e precisa entrar na lista de comissões como qualquer outra venda. O botão **"📤 Lançar N no Sistema"** faz essa ponte:
+A renovação que se confirma é faturamento do mês e precisa entrar na lista de comissões como qualquer outra venda. O botão **"📤 Lançar N no HUB Comercial"** faz essa ponte:
 
 1. Marque as empresas como **Renovado** (ou **Upgrade**);
-2. Clique em *Lançar no Sistema* — abre uma conferência com o que vai ser lançado, quantas são e quanto somam;
-3. Opcionalmente escolha o **produto** que essas vendas terão na aba Sistema;
+2. Clique em *Lançar no HUB Comercial* — abre uma conferência com o que vai ser lançado, quantas são e quanto somam;
+3. Opcionalmente escolha o **produto** que essas vendas terão na aba HUB Comercial;
 4. Confirme. Cada renovação vira uma **venda do mês**, com o nome da empresa como cliente, o valor do contrato, o mês da renovação e **"Quem vendeu" = quem cuidou da renovação**.
 
-As vendas nascem com a observação **"Renovação"** — ou **"Upgrade de plano"**, no caso dos upgrades —, para se distinguirem na aba Sistema, e **sem percentual de comissão** — esse você preenche por lá, como em qualquer venda.
+As vendas nascem com a observação **"Renovação"** — ou **"Upgrade de plano"**, no caso dos upgrades —, para se distinguirem na aba HUB Comercial, e **sem percentual de comissão** — esse você preenche por lá, como em qualquer venda.
 
-- **Nunca lança duas vezes.** A renovação guarda o id da venda que gerou, então some da fila e ganha a etiqueta **"no Sistema"**, que ao ser clicada leva direto à venda correspondente. Isso vale mesmo depois de recarregar a página.
+- **Nunca lança duas vezes.** A renovação guarda o id da venda que gerou, então some da fila e ganha a etiqueta **"no HUB Comercial"**, que ao ser clicada leva direto à venda correspondente. Isso vale mesmo depois de recarregar a página.
 - **Só entram as marcadas como Renovado ou Upgrade** que ainda não foram lançadas, respeitando o filtro de mês.
 - **Mês fechado é pulado**, e o sistema avisa quais ficaram de fora.
-- **Desmarcar depois não apaga a venda.** O sistema avisa: mexer na situação aqui não desfaz nada na aba Sistema; se a venda não valer mais, exclua também por lá. Comissão já lançada não some sozinha.
+- **Desmarcar depois não apaga a venda.** O sistema avisa: mexer na situação aqui não desfaz nada na aba HUB Comercial; se a venda não valer mais, exclua também por lá. Comissão já lançada não some sozinha.
 
 ### Renovação não conta no ranking
 
 Isto vale para a **renovação comum**; o upgrade é a exceção descrita acima, e conta. A venda que nasce de uma renovação vale **comissão como qualquer outra** e entra no Resumo Geral, no faturamento do mês e no fechamento para a contabilidade. O que ela **não** faz é contar no **ranking de desempenho**: renovar um contrato que já era da casa não é a mesma coisa que trazer cliente novo, e a carteira de renovação é grande o bastante para decidir sozinha quem é campeã do ano.
 
-Na aba Sistema, essas vendas aparecem com o selo verde **"♻️ Renovação"** ao lado do cliente, e o botão **♻️** nas ações da linha marca ou desmarca qualquer venda — inclusive uma que você tenha digitado à mão e queira tirar do ranking.
+Na aba HUB Comercial, essas vendas aparecem com o selo verde **"♻️ Renovação"** ao lado do cliente, e o botão **♻️** nas ações da linha marca ou desmarca qualquer venda — inclusive uma que você tenha digitado à mão e queira tirar do ranking.
 
 #### A natureza da venda: contrato novo, upgrade e renovação
 
-A aba Sistema tem três marcas, e cada venda pode ter no máximo uma:
+A aba HUB Comercial tem três marcas, e cada venda pode ter no máximo uma:
 
 | Marca | O que significa | Conta no ranking? |
 |---|---|---|
@@ -496,7 +496,7 @@ Acima da tabela, uma linha de filtros mostra a contagem no recorte que está na 
 
 > **Atenção para quem for mexer no banco:** o aplicativo não lê a tabela `vendas`, e sim a view `vendas_safe`, que faz o mascaramento por coluna. Toda coluna nova precisa entrar também na view — senão ela é gravada e nunca mais lida. Foi o que aconteceu com `renovacao` na primeira versão: o selo aparecia e sumia no recarregamento (corrigido na migração 18).
 
-> O corte é uma **coluna do banco** (`vendas.renovacao`), não a palavra "Renovação" escrita na observação. Um critério que mexe em desempenho não pode depender de alguém digitar o texto certo. A view `painel_equipe_totais` ignora essas vendas nos indicadores *Vendas de sistemas* e *Qtd. sistemas vendidos*.
+> O corte é uma **coluna do banco** (`vendas.renovacao`), não a palavra "Renovação" escrita na observação. Um critério que mexe em desempenho não pode depender de alguém digitar o texto certo. A view `painel_equipe_totais` ignora essas vendas nos indicadores *Vendas de HUB Comercial* e *Qtd. de HUB Comercial vendidos*.
 
 Enquanto não são lançadas, as renovações não entram em lugar nenhum — a lista sozinha é acompanhamento de carteira. As renovações do mês também saem em seção própria do relatório em PDF.
 
@@ -580,16 +580,16 @@ O que entra:
 
 | Seção | Conteúdo |
 |---|---|
-| Faturamento do mês | total por origem (Sistema, Consultoria, Órgãos Públicos, Cursos) e o total geral, mais comissões, honorários, bônus e comissões liberadas — e logo abaixo, um gráfico com o faturamento total da empresa (todos os produtos somados) mês a mês, os 12 meses do ano |
+| Faturamento do mês | total por origem (HUB Comercial, Consultoria, Órgãos Públicos, Cursos) e o total geral, mais comissões, honorários, bônus e comissões liberadas — e logo abaixo, um gráfico com o faturamento total da empresa (todos os produtos somados) mês a mês, os 12 meses do ano |
 | Ganhos por vendedora | quanto cada uma ganhou em cada origem, mais bônus e total |
 | Comissões liberadas | o que já pode ser pago, por vendedora (cliente já pagou a nota) |
-| Sistema, Consultoria, Órgãos Públicos, Cursos | os lançamentos do mês, com valor, quem vendeu, situação do pagamento e as comissões de cada linha |
+| HUB Comercial, Consultoria, Órgãos Públicos, Cursos | os lançamentos do mês, com valor, quem vendeu, situação do pagamento e as comissões de cada linha |
 | Parceiros | honorários do mês, lançamento a lançamento |
 | Bônus e metas | bônus lançados e a situação de cada meta configurada |
 | Desempenho da equipe | o ranking completo — quem liderou cada indicador (com os empates) e o quadro da campeã do mês |
 | Indicadores do mês | os nove indicadores, pessoa por pessoa |
-| Comparativo do mês | gráficos de barras de vendas de sistemas, vendas de cursos e reuniões |
-| Evolução do ano | gráficos de linha das vendas de sistemas e de cursos ao longo dos 12 meses |
+| Comparativo do mês | gráficos de barras de vendas de HUB Comercial, vendas de cursos e reuniões |
+| Evolução do ano | gráficos de linha das vendas de HUB Comercial e de cursos ao longo dos 12 meses |
 | Totais do ano por vendedora | volume vendido no ano (não comissão) |
 | Equipe de consultoria | cartão com o total de contratos assinados e de reuniões realizadas no mês (soma da equipe toda), e a tabela pessoa a pessoa |
 | Marketing | uma linha por rede com lançamento no ano, com o mesmo resumo automático da aba Marketing — melhor crescimento e maior recuo do mês, comparado ao mês anterior que tiver lançamento —, seguida de um gráfico de evolução por rede (indicador numérico principal dela, 12 meses) e do gráfico de campanhas do Tráfego pago no mês |
@@ -613,7 +613,7 @@ Cada meta tem quatro partes, configuráveis por regra (em **Resumo Geral → Met
 | Parte | O que é |
 |---|---|
 | Quem recebe | a vendedora premiada |
-| Onde é medido | Sistema, Consultoria, Órgãos Públicos, Cursos ou todas somadas |
+| Onde é medido | HUB Comercial, Consultoria, Órgãos Públicos, Cursos ou todas somadas |
 | Alvo | quanto a empresa precisa faturar no mês (valor cheio dos contratos, antes de comissões e parceiros) |
 | Prêmio | um valor fixo em R$, ou uma % **sobre o total faturado** |
 
@@ -658,7 +658,7 @@ Entre os bônus e os salários há o quadro que responde a pergunta do fim do m�
 
 | Coluna | Entra no "Total a pagar"? |
 |---|---|
-| Sistema | sim |
+| HUB Comercial | sim |
 | Órgãos Públicos | sim |
 | Cursos | sim |
 | Bônus | sim |
@@ -761,10 +761,10 @@ Dentro do próprio sistema, o botão **"⬇ Exportar dados"** (no topo da tela) 
 - **Nível financeiro**: um terceiro nível de conta, para quem confere faturamento e não pode ver remuneração — enxerga o valor de todas as notas e nenhuma comissão, bônus, meta ou salário. Feito no banco (RLS + views `_safe`), não na tela. Veja "Nível financeiro" acima.
 - **Escrita por porta estreita**: essa conta precisa marcar as notas emitidas, mas dar-lhe update em `vendas`/`lancamentos` abriria a tabela inteira — RLS filtra linha, não coluna. O visto passa por uma função `security definer` que confere o nível de acesso e altera uma única coluna; a conta continua sem nenhuma permissão de escrita direta.
 - **Acesso por pessoa**: além de exigir login, o banco distingue admins (acesso total) de contas restritas (somente leitura, só dos próprios lançamentos) — a comparação de nomes é feita inteiramente no Postgres, então mesmo alguém manipulando as chamadas à API diretamente (sem passar pela tela) não consegue ver ou editar dado de outra pessoa.
-- **Linha de comissão vazia não conta como participação**: o app grava uma linha em `vendas_comissoes` para cada vendedora em cada venda, quase sempre com valor nulo. Enquanto a regra checava só "existe linha", bastava alguém estar cadastrada como vendedora para enxergar todas as vendas da aba Sistema. Corrigido: agora exige valor preenchido.
+- **Linha de comissão vazia não conta como participação**: o app grava uma linha em `vendas_comissoes` para cada vendedora em cada venda, quase sempre com valor nulo. Enquanto a regra checava só "existe linha", bastava alguém estar cadastrada como vendedora para enxergar todas as vendas da aba HUB Comercial. Corrigido: agora exige valor preenchido.
 - **Funções auxiliares fechadas para quem não fez login**: elas eram chamáveis pelo papel `anon` via `/rest/v1/rpc/`, e uma delas aceitava um nome qualquer — dava para perguntar "fulano participa do lançamento X?" sem ter conta. Acesso revogado e a função passou a responder só sobre quem está logado.
 - **Mascaramento por coluna**: filtrar linhas não bastava, porque um contrato dividido guarda até 3 vendedores + colaborador na mesma linha — quem participava enxergava a % dos colegas daquele contrato. A leitura passou a ser feita por views `_safe`, que zeram coluna a coluna o que não é da pessoa, e a leitura direta das tabelas base ficou restrita a admin, pra que o mascaramento não seja contornável pela API.
-- **Falha de XSS corrigida**: os nomes de vendedoras (aba Sistema) e de vendedores por aba eram inseridos em alguns lugares da tela sem escapar caracteres especiais, permitindo que um nome malicioso injetasse HTML/JavaScript na tela de outras pessoas da equipe. Todos os pontos foram corrigidos para escapar esse texto (ou usar atributos `data-*` em vez de montar o JavaScript do botão como texto).
+- **Falha de XSS corrigida**: os nomes de vendedoras (aba HUB Comercial) e de vendedores por aba eram inseridos em alguns lugares da tela sem escapar caracteres especiais, permitindo que um nome malicioso injetasse HTML/JavaScript na tela de outras pessoas da equipe. Todos os pontos foram corrigidos para escapar esse texto (ou usar atributos `data-*` em vez de montar o JavaScript do botão como texto).
 - **Content-Security-Policy**: foi adicionada uma política restritiva (`script-src`, `connect-src` limitado ao domínio do Supabase, sem `object-src`, sem `form-action`) como camada extra de proteção contra XSS futuro.
 - **Sessão com renovação automática**: o token de login é renovado sozinho antes de expirar; se a renovação falhar (ex: sessão revogada), a pessoa volta pra tela de login em vez de o sistema travar ou salvar dados sem permissão.
 - **Recuperação de senha**: a tela de login tem "Esqueci minha senha", que usa o fluxo de recuperação por e-mail do Supabase — ninguém depende de admin pra trocar senha esquecida.
