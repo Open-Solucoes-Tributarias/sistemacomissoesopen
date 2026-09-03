@@ -1810,7 +1810,7 @@ function renderAuthScreen(){
   } else {
     bodyHtml = `
       <h1>Painel Diretoria Comercial</h1>
-      <p class="auth-sub">Entre com sua conta para acessar o sistema.</p>
+      <p class="auth-sub">Entre com sua conta para acessar o HUB Comercial.</p>
       ${authError ? `<div class="auth-error">${esc(authError)}</div>` : ''}
       ${authNotice ? `<div class="auth-notice">${esc(authNotice)}</div>` : ''}
       <div class="auth-field">
@@ -3560,7 +3560,7 @@ function renderModal(){
               <input type="text" autocomplete="off" placeholder="Ex: Rios"
                      value="${esc(m.pessoa||'')}" oninput="onAcessoFormChange(this,'pessoa')" />
             </label>
-            <div class="usuario-dica">É por esse nome que o sistema decide o que a pessoa enxerga.</div>
+            <div class="usuario-dica">É por esse nome que o HUB Comercial decide o que a pessoa enxerga.</div>
           ` : m.nivel === 'admin'
             ? `<div class="usuario-dica">Administrador vê tudo, não precisa de nome.</div>`
             : `<div class="usuario-dica">O financeiro vê o valor das notas de todo mundo e nenhuma comissão. Não precisa de nome.</div>`}
@@ -6575,7 +6575,7 @@ function renderVendasSection(){
   const avisoResp = (isAdmin && semResp.length) ? `
     <div class="storage-warning aviso-resp">
       🧭 <b>${semResp.length}</b> venda${semResp.length===1?'':'s'} de ${yearFilter} ainda sem <b>quem vendeu</b>.
-      A comissão é dividida entre várias pessoas, então o sistema não tem como adivinhar de quem é a venda —
+      A comissão é dividida entre várias pessoas, então o HUB Comercial não tem como adivinhar de quem é a venda —
       preencha a coluna <b>“Quem vendeu”</b> para essas entrarem no Relatório de Desempenho.
     </div>` : '';
 
@@ -6849,7 +6849,7 @@ function avisoFalhaHtml(chave, oQue){
   if(!falhaAoCarregar[chave]) return '';
   return `<div class="storage-warning">
     ⚠️ Não consegui carregar ${esc(oQue)} do banco agora — o que aparece abaixo pode estar incompleto.
-    Recarregue a página (F5). Se continuar, avise a administração do sistema.
+    Recarregue a página (F5). Se continuar, avise a administração do HUB Comercial.
   </div>`;
 }
 
@@ -9267,7 +9267,7 @@ function montarRelatorioMes(mes){
           linhasEmpresasNovas, 'Nenhuma empresa nova cadastrada em ' + mes + '.')}
       </section>
 
-      <footer class="rel-rodape">Relatório gerado pelo sistema de comissões da Open Soluções Tributárias · ${esc(mes)}/${ano}</footer>
+      <footer class="rel-rodape">Relatório gerado pelo HUB Comercial da Open Soluções Tributárias · ${esc(mes)}/${ano}</footer>
     </div>
   `;
 }
@@ -10446,7 +10446,7 @@ function renderUsuariosSection(){
       <div class="senha-nova-linha"><span>Senha provisória</span><b class="senha-valor">${esc(usuarioCriado.senha)}</b></div>
       <div class="senha-nova-nota">
         Anote ou copie agora: esta é a <b>única vez</b> que ela aparece. O banco guarda a senha
-        embaralhada, então nem o sistema nem eu conseguimos mostrá-la de novo — só definir outra.
+        embaralhada, então nem o HUB Comercial nem eu conseguimos mostrá-la de novo — só definir outra.
       </div>
       <button class="eye-toggle" onclick="fecharSenhaMostrada()">Já anotei, pode fechar</button>
     </div>` : '';
@@ -10479,13 +10479,13 @@ function renderUsuariosSection(){
       </label>
       <div class="usuario-dica">
         Precisa ser <b>exatamente</b> o nome que aparece nos campos de vendedor dos lançamentos —
-        é por ele que o sistema decide o que essa pessoa enxerga. "Rios" e "Ana Rios" são nomes
-        diferentes para o sistema.
+        é por ele que o HUB Comercial decide o que essa pessoa enxerga. "Rios" e "Ana Rios" são nomes
+        diferentes para o HUB Comercial.
       </div>` : usuarioForm.nivel === 'admin' ? `
       <div class="usuario-dica">Conta de administrador não precisa de nome: ela vê tudo.</div>` : `
       <div class="usuario-dica">
         A conta do financeiro não leva nome de pessoa: ela não é de ninguém em particular. Vê o
-        valor das notas de todo mundo justamente para conferir faturamento — e o sistema esconde
+        valor das notas de todo mundo justamente para conferir faturamento — e o HUB Comercial esconde
         as comissões dela no navegador <b>e</b> no banco, então não há como espiar.
       </div>`}
 
@@ -10524,7 +10524,7 @@ function renderUsuariosSection(){
           </table></div>`
         : `<div class="meta-empty">Nenhuma conta cadastrada ainda.</div>`);
 
-  const lista = panel('usuarios-lista', 'Contas do sistema', corpoLista, {
+  const lista = panel('usuarios-lista', 'Contas do HUB Comercial', corpoLista, {
     meta: usuariosLista ? `<b>${usuariosLista.length}</b> conta${usuariosLista.length===1?'':'s'}` : '',
     flush: !!linhas && !usuariosErro,
     actions: `<button class="eye-toggle" onclick="carregarUsuarios()">↻ Atualizar</button>`,
@@ -10626,11 +10626,11 @@ function render(){
         <div class="storage-warning read-only-notice">
           📄 Acesso do financeiro — você vê o <b>valor das notas</b> de todas as abas e marca <b>“Emitida”</b> conforme
           emite cada nota fiscal. Comissões, bônus e salários não aparecem aqui. Para lançar ou corrigir um contrato,
-          fale com a administração do sistema.
+          fale com a administração do HUB Comercial.
         </div>
       ` : (!isAdmin ? `
         <div class="storage-warning read-only-notice">
-          👁 Modo somente leitura — você só vê os lançamentos relacionados a você${currentPersonName ? ` (<b>${esc(currentPersonName)}</b>)` : ''} e não pode editar. Pra lançar ou alterar algo, fale com a administração do sistema.
+          👁 Modo somente leitura — você só vê os lançamentos relacionados a você${currentPersonName ? ` (<b>${esc(currentPersonName)}</b>)` : ''} e não pode editar. Pra lançar ou alterar algo, fale com a administração do HUB Comercial.
         </div>
       ` : '')}
 

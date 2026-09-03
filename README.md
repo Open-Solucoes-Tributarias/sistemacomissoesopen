@@ -1,6 +1,6 @@
 # Comissões — Open Soluções Tributárias
 
-Sistema de controle de vendas, comissões, parceiros e pagamentos da equipe comercial.
+HUB Comercial de controle de vendas, comissões, parceiros e pagamentos da equipe comercial.
 
 ## Stack
 
@@ -10,7 +10,7 @@ Sistema de controle de vendas, comissões, parceiros e pagamentos da equipe come
 
 ## Visual
 
-O sistema usa a **identidade da Open Soluções Tributárias**, a mesma do mapa de produto:
+O HUB Comercial usa a **identidade da Open Soluções Tributárias**, a mesma do mapa de produto:
 
 - **A marca** — o globo de meridianos com "OPEN" e a assinatura — aparece na barra lateral, na faixa de título, na tela de login e no cabeçalho do relatório em PDF. É desenhada em **SVG dentro do próprio arquivo** (função `marcaOpenHtml`), então acompanha o tamanho pedido, imprime nítida e não depende de carregar imagem de fora (o que o CSP bloqueia).
 - **Faixa de título** em degradê marinho, com a marca à esquerda, um filete divisor, o rótulo em caixa alta espaçada e o nome da aba; à direita o exercício e o indicador de "salvo". Um globo d'água discreto no canto e um **filete azul claro** fechando embaixo, como no material impresso.
@@ -59,7 +59,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 
 ## Resumo Geral
 
-É a aba que abre **assim que o sistema carrega** — de propósito: os totais aparecem direto, sem precisar navegar até achá-los. Dois gráficos no topo, os 12 meses do `yearFilter`:
+É a aba que abre **assim que o HUB Comercial carrega** — de propósito: os totais aparecem direto, sem precisar navegar até achá-los. Dois gráficos no topo, os 12 meses do `yearFilter`:
 
 - **Faturamento total da empresa** — todos os produtos somados (Sistema, Consultoria, Órgãos Públicos, Cursos), o valor do contrato, não a comissão. É o mesmo gráfico que sai na primeira página do Relatório do mês.
 - **Evolução mensal das comissões** — o que a equipe ganha (comissões de todas as origens, mais bônus), não o faturamento dos contratos. Salário fixo fica de fora.
@@ -68,12 +68,12 @@ Os dois respeitam o botão **"Mostrar valores" / "Ocultar valores"**: por padrã
 
 ## Login e segurança
 
-O sistema exige login (e-mail e senha) antes de mostrar qualquer dado. Não existe cadastro público pela tela — as contas da equipe são criadas manualmente por um administrador no painel do Supabase (veja "Criando contas da equipe" abaixo). Depois de logada, a pessoa continua com sessão salva no navegador até clicar em "Sair".
+O HUB Comercial exige login (e-mail e senha) antes de mostrar qualquer dado. Não existe cadastro público pela tela — as contas da equipe são criadas manualmente por um administrador no painel do Supabase (veja "Criando contas da equipe" abaixo). Depois de logada, a pessoa continua com sessão salva no navegador até clicar em "Sair".
 
 - **URL do projeto Supabase**: `https://ogkrrlssdrtctdyyvkql.supabase.co`
 - **Chave pública (anon key)**: já está embutida no `index.html` (constante `SUPABASE_ANON_KEY`). Essa chave é **pública por padrão no Supabase** — sozinha, ela não abre porta nenhuma: quem decide o que pode ser lido/escrito são as políticas de RLS do banco.
 - **Modelo de acesso — três categorias de conta**:
-  - **Admin** (Soraya, Deborah, Open): vê e edita todos os dados do sistema, em todas as abas.
+  - **Admin** (Soraya, Deborah, Open): vê e edita todos os dados do HUB Comercial, em todas as abas.
   - **Financeiro**: vê o **valor de contrato de todas as notas** que entraram — Sistema, Renovações, Consultoria, Consultoria Órgãos Públicos e Cursos — e **nenhuma comissão de ninguém**: nem valor, nem percentual, nem bônus, nem meta, nem salário, nem a divisão dos cursos. Marca cada nota como **emitida** conforme emite a nota fiscal, e isso é a **única coisa** que essa conta escreve. Não leva nome de pessoa, porque a conta não é de ninguém em particular. Veja "Nível financeiro" abaixo.
   - **Restrita** (Gustavo, Rios, Luciana, Angela): só **visualiza**, em modo somente leitura, os lançamentos onde o nome da pessoa aparece como vendedor(a) ou colaborador(a) — nunca vê nem edita o que é dos colegas. Isso existe pra ninguém comparar comissão de ninguém.
 
@@ -98,17 +98,17 @@ As senhas não ficam aqui nem em lugar nenhum do código — só no Supabase, em
 
 ### Criando contas da equipe
 
-Pelo próprio sistema: aba **Usuários e Acessos** (só aparece para admin).
+Pelo próprio HUB Comercial: aba **Usuários e Acessos** (só aparece para admin).
 
 1. Preencha o **e-mail** e clique em **Gerar** para uma senha provisória forte — ela evita caracteres que se confundem ao ditar por telefone (0/O, 1/l/I).
-2. Escolha o **nível de acesso**: **Administrador** (vê e edita tudo), **Financeiro** (vê o valor das notas e nenhuma comissão) ou **Restrita**. Só a conta restrita pede o **nome como aparece nos lançamentos** (ex: `Rios`) — é por ele que o sistema decide o que ela enxerga.
-3. **Criar conta.** A senha aparece **uma única vez**, num quadro destacado: copie e repasse por um canal seguro. Depois disso nem o sistema consegue mostrá-la de novo, só definir outra.
+2. Escolha o **nível de acesso**: **Administrador** (vê e edita tudo), **Financeiro** (vê o valor das notas e nenhuma comissão) ou **Restrita**. Só a conta restrita pede o **nome como aparece nos lançamentos** (ex: `Rios`) — é por ele que o HUB Comercial decide o que ela enxerga.
+3. **Criar conta.** A senha aparece **uma única vez**, num quadro destacado: copie e repasse por um canal seguro. Depois disso nem o HUB Comercial consegue mostrá-la de novo, só definir outra.
 
 Na lista abaixo do formulário dá para **redefinir a senha** (🔑) e **mudar o nível de acesso** (✎) de qualquer conta, além de ver quem nunca entrou.
 
 > **Por que isso não roda no navegador.** Criar conta e trocar senha exigem a *chave de serviço* do Supabase, que passa por cima de todas as regras de acesso do banco. Se ela estivesse no `index.html`, qualquer pessoa abriria o código-fonte da página e a copiaria. Por isso essa parte vive numa **função no servidor** (`supabase/functions/admin-usuarios`): a chave fica só lá, o navegador manda apenas o token de quem está logado, e o servidor confere **de novo** se essa pessoa é admin antes de fazer qualquer coisa.
 
-Duas travas embutidas: se a conta for criada mas o registro de acesso falhar, a função **desfaz a conta** (nada de usuário órfão); e não deixa rebaixar a **última conta de administrador**, senão ninguém mais administraria o sistema.
+Duas travas embutidas: se a conta for criada mas o registro de acesso falhar, a função **desfaz a conta** (nada de usuário órfão); e não deixa rebaixar a **última conta de administrador**, senão ninguém mais administraria o HUB Comercial.
 
 ### Nível financeiro — vê o valor das notas, nenhuma comissão
 
@@ -175,7 +175,7 @@ Por padrão o Supabase também aceita auto-cadastro pela API (mesmo sem botão d
 
 ### Migrando um projeto já existente (importante!)
 
-Se você já tem esse sistema rodando com o banco antigo (liberado por link, sem login), siga esta ordem pra não travar o acesso da equipe:
+Se você já tem esse HUB Comercial rodando com o banco antigo (liberado por link, sem login), siga esta ordem pra não travar o acesso da equipe:
 
 1. Crie a conta de cada pessoa da equipe (Authentication → Users → Add user).
 2. Rode `supabase_security_migration.sql` no **SQL Editor** — exige login pra qualquer acesso ao banco.
@@ -305,7 +305,7 @@ Os dois são independentes: dá pra ver o que foi pago em setembro e, ao mesmo t
 
 Os dois quadros já descontam a participação do parceiro antes de calcular a comissão: contrato de R$ 60.000 com 10% de parceiro e 20% de comissão paga R$ 10.800, não R$ 12.000.
 
-Cada vendedor(a) logado enxerga **apenas as próprias linhas** — é o mesmo corte de acesso do resto do sistema, feito no banco. Admin vê todo mundo, agrupado por pessoa e com subtotal.
+Cada vendedor(a) logado enxerga **apenas as próprias linhas** — é o mesmo corte de acesso do resto do HUB Comercial, feito no banco. Admin vê todo mundo, agrupado por pessoa e com subtotal.
 
 > **Cursos não tem controle de pagamento.** As abas Sistema, Consultoria e Órgãos Públicos têm a coluna "Pago"; a de Cursos não, então lançamentos de curso não aparecem nesses dois quadros. Se a equipe de cursos também passar a receber só depois do pagamento, dá pra ativar o controle lá.
 
@@ -318,11 +318,11 @@ São nove indicadores por vendedora, por mês, divididos em dois grupos:
 | Grupo | Indicadores | De onde vem |
 |---|---|---|
 | Andamento | Interação, Propostas, Prospecção zero, Prospecção, Negócios abertos, Reuniões realizadas | **digitado à mão** todo mês |
-| Vendas | Vendas de cursos (R$), Vendas de sistemas (R$), Qtd. sistemas vendidos | **calculado sozinho** pelos lançamentos que já existem no sistema |
+| Vendas | Vendas de cursos (R$), Vendas de sistemas (R$), Qtd. sistemas vendidos | **calculado sozinho** pelos lançamentos que já existem no HUB Comercial |
 
 **Os três indicadores de venda não são mais digitados.** Quem faz a soma é a view `painel_equipe_totais` no banco:
 
-Os três saem da coluna **"Quem vendeu"** dos lançamentos: cada venda conta para **uma pessoa só**, a que estiver marcada ali. Lançamento sem essa marcação não conta para ninguém, e o sistema avisa quantos estão assim.
+Os três saem da coluna **"Quem vendeu"** dos lançamentos: cada venda conta para **uma pessoa só**, a que estiver marcada ali. Lançamento sem essa marcação não conta para ninguém, e o HUB Comercial avisa quantos estão assim.
 
 ### Quando o banco não responde
 
@@ -406,7 +406,7 @@ Os cartões por indicador continuam mostrando **quem liderou cada quesito**, ago
 
 O ano vem do filtro no topo da página — não é fixo.
 
-> **Contas restritas veem o ranking e o comparativo**, com os números de todo mundo — foi uma escolha de quem administra o sistema, para o painel funcionar como placar da equipe. O que elas continuam **não** vendo é o que está por trás desses números: cliente, contrato, percentual e comissão dos colegas seguem escondidos, porque a view `painel_equipe_totais` devolve só os totais por pessoa/mês. Lançar e editar continua sendo exclusivo de admin.
+> **Contas restritas veem o ranking e o comparativo**, com os números de todo mundo — foi uma escolha de quem administra o HUB Comercial, para o painel funcionar como placar da equipe. O que elas continuam **não** vendo é o que está por trás desses números: cliente, contrato, percentual e comissão dos colegas seguem escondidos, porque a view `painel_equipe_totais` devolve só os totais por pessoa/mês. Lançar e editar continua sendo exclusivo de admin.
 
 ### Equipe de consultoria
 
@@ -414,7 +414,7 @@ Nem todo mundo é medido pelos mesmos indicadores. A **equipe de consultoria** �
 
 É uma **lista separada** da de vendedoras, com **dois indicadores** por pessoa e por mês: *contratos assinados* e *reuniões realizadas*. Escolhe-se a pessoa, o mês, digita os dois números e salva. Ao lado, cada pessoa tem um quadro com os meses lançados e o total do ano.
 
-Para incluir alguém, use **"👤 Quem está na equipe"** no topo da aba — ou o botão **"+ Incluir mais pessoas na equipe de consultoria"** no fim da página, que abre a mesma lista e leva a tela até ela (o topo fica longe de quem está lendo os painéis de empresas lá embaixo). Marque quem já existe no sistema, ou cadastre um nome novo pelo botão do fim da lista. A lista fica no banco (`entity_vendors` com `entidade='painel_contratos'`), então vale para todo mundo.
+Para incluir alguém, use **"👤 Quem está na equipe"** no topo da aba — ou o botão **"+ Incluir mais pessoas na equipe de consultoria"** no fim da página, que abre a mesma lista e leva a tela até ela (o topo fica longe de quem está lendo os painéis de empresas lá embaixo). Marque quem já existe no HUB Comercial, ou cadastre um nome novo pelo botão do fim da lista. A lista fica no banco (`entity_vendors` com `entidade='painel_contratos'`), então vale para todo mundo.
 
 > Quem está nessa lista **não entra no ranking de vendas** e não aparece nos cartões do dashboard — o ranking mede quem vende, e essas pessoas são medidas por outra coisa. As duas listas são independentes: a mesma pessoa pode estar nas duas, se fizer sentido.
 
@@ -444,14 +444,14 @@ Nem toda conta da carteira renova pelo mesmo valor. Às vezes o cliente **não r
 
 Por isso a situação tem um terceiro botão, **Upgrade**, que se comporta diferente dos outros dois:
 
-1. Ao clicar, o sistema **pergunta o valor do plano novo** — mostra o valor da carteira ao lado e calcula na hora quanto a conta subiu (*"a conta sobe R$ 39.564,00 — de R$ 8.388,00 para R$ 47.952,00"*). Se o valor digitado for **menor** que o da carteira, ele avisa: plano que diminuiu não é upgrade.
+1. Ao clicar, o HUB Comercial **pergunta o valor do plano novo** — mostra o valor da carteira ao lado e calcula na hora quanto a conta subiu (*"a conta sobe R$ 39.564,00 — de R$ 8.388,00 para R$ 47.952,00"*). Se o valor digitado for **menor** que o da carteira, ele avisa: plano que diminuiu não é upgrade.
 2. O valor da carteira **não é apagado**. A linha guarda os dois — o antigo em `valor`, o novo em `valor_upgrade` —, e a tabela mostra o novo logo abaixo do antigo, na etiqueta âmbar **⬆ R$ 47.952,00** (clicar nela corrige o valor).
 3. Na **taxa de renovação**, upgrade conta como renovação: o cliente ficou.
 4. Um cartão **"Upgrades"** aparece no topo com **quanto a carteira cresceu no total** — a soma de todas as diferenças. É o número para levar para a diretoria.
 5. Ao ir para a aba Sistema, a venda nasce com a etiqueta **⬆️ Upgrade** (não ♻️ Renovação), pelo **valor novo**, com a observação *"Upgrade de plano"* — e, por isso, é a única linha vinda das renovações que **conta no ranking da equipe**.
 6. Na **carteira do ano seguinte**, a empresa é copiada já com o **valor novo**: é por ele que ela vai renovar no ano que vem.
 
-Enquanto a linha ainda não foi lançada no Sistema, clicar de novo em **Upgrade** desfaz tudo e volta para *em aberto*. Depois de lançada, o sistema pede que a venda seja excluída na aba Sistema primeiro — comissão já lançada não some sozinha.
+Enquanto a linha ainda não foi lançada no Sistema, clicar de novo em **Upgrade** desfaz tudo e volta para *em aberto*. Depois de lançada, o HUB Comercial pede que a venda seja excluída na aba Sistema primeiro — comissão já lançada não some sozinha.
 
 ### Da renovação para a aba Sistema
 
@@ -466,8 +466,8 @@ As vendas nascem com a observação **"Renovação"** — ou **"Upgrade de plano
 
 - **Nunca lança duas vezes.** A renovação guarda o id da venda que gerou, então some da fila e ganha a etiqueta **"no Sistema"**, que ao ser clicada leva direto à venda correspondente. Isso vale mesmo depois de recarregar a página.
 - **Só entram as marcadas como Renovado ou Upgrade** que ainda não foram lançadas, respeitando o filtro de mês.
-- **Mês fechado é pulado**, e o sistema avisa quais ficaram de fora.
-- **Desmarcar depois não apaga a venda.** O sistema avisa: mexer na situação aqui não desfaz nada na aba Sistema; se a venda não valer mais, exclua também por lá. Comissão já lançada não some sozinha.
+- **Mês fechado é pulado**, e o HUB Comercial avisa quais ficaram de fora.
+- **Desmarcar depois não apaga a venda.** O HUB Comercial avisa: mexer na situação aqui não desfaz nada na aba Sistema; se a venda não valer mais, exclua também por lá. Comissão já lançada não some sozinha.
 
 ### Renovação não conta no ranking
 
@@ -513,7 +513,7 @@ Nos dois casos a cópia mantém **empresa, valor e mês**, e zera o que é do an
 
 ### O lembrete de virada de ano
 
-Depender de alguém lembrar disso em janeiro é depender de esquecer. Por isso, **ao abrir a aba num ano, o sistema mostra sozinho o que ficou para trás**:
+Depender de alguém lembrar disso em janeiro é depender de esquecer. Por isso, **ao abrir a aba num ano, o HUB Comercial mostra sozinho o que ficou para trás**:
 
 > 🔔 Faltam na carteira de **2027**: **12** contratos novos de 2026 e **187** renovações de 2026. O que foi contrato novo num ano vence no seguinte — é renovação de 2027. **[Trazer para 2027]**
 
@@ -521,7 +521,7 @@ O aviso só aparece quando há algo faltando, e some assim que a carteira fica c
 
 ### Importar a planilha de renovações
 
-São muitas empresas, e elas já viviam numa planilha. O botão **"📄 Importar planilha"** lê o arquivo — ler é trabalho do sistema, não de quem digita.
+São muitas empresas, e elas já viviam numa planilha. O botão **"📄 Importar planilha"** lê o arquivo — ler é trabalho do HUB Comercial, não de quem digita.
 
 Três caminhos, todos no mesmo lugar:
 
@@ -531,13 +531,13 @@ Três caminhos, todos no mesmo lugar:
 
 As colunas esperadas são **empresa · valor · mês de renovação**, nessa ordem. Se a primeira linha for cabeçalho, ele é reconhecido pelos nomes (*empresa/cliente/razão*, *valor/preço/mensalidade*, *mês/renovação/vencimento*) e a ordem deixa de importar.
 
-O sistema entende o mês escrito de várias formas — `Agosto`, `ago`, `08`, `8`, `09/2026`, `2026-08-15` e a data do Excel (aquele número serial) —, e o valor tanto como número quanto como `R$ 1.234,56`. Quando o mês traz o ano e ele ainda não existe no sistema, o ano é criado junto, para a linha não ficar gravada e invisível.
+O HUB Comercial entende o mês escrito de várias formas — `Agosto`, `ago`, `08`, `8`, `09/2026`, `2026-08-15` e a data do Excel (aquele número serial) —, e o valor tanto como número quanto como `R$ 1.234,56`. Quando o mês traz o ano e ele ainda não existe no HUB Comercial, o ano é criado junto, para a linha não ficar gravada e invisível.
 
 Antes de gravar aparece uma **prévia** com tudo o que foi lido, linha a linha, e um seletor para atribuir um responsável a todas de uma vez (pode ficar em branco). Duas coisas ficam de fora, sinalizadas em âmbar: **empresas já cadastradas** no mesmo mês e ano, e **linhas cujo mês não foi reconhecido** — nada é importado pela metade sem você ver.
 
-> Nenhuma biblioteca externa é usada para isso: a política de segurança da página bloqueia scripts de fora, então o `.xlsx` (que é um ZIP de XMLs) é aberto com o `DecompressionStream` do próprio navegador. Se algum navegador não tiver esse recurso, o sistema avisa e sugere o CSV ou o colar.
+> Nenhuma biblioteca externa é usada para isso: a política de segurança da página bloqueia scripts de fora, então o `.xlsx` (que é um ZIP de XMLs) é aberto com o `DecompressionStream` do próprio navegador. Se algum navegador não tiver esse recurso, o HUB Comercial avisa e sugere o CSV ou o colar.
 
-Para mudar quem cuida, use **"👤 Quem cuida das renovações"** no topo da aba (`entity_vendors` com `entidade='renovacoes'`). Como no resto do sistema, admin vê e edita tudo; uma conta restrita veria apenas as renovações no nome dela, sem editar (`renovacoes`, migração 14).
+Para mudar quem cuida, use **"👤 Quem cuida das renovações"** no topo da aba (`entity_vendors` com `entidade='renovacoes'`). Como no resto do HUB Comercial, admin vê e edita tudo; uma conta restrita veria apenas as renovações no nome dela, sem editar (`renovacoes`, migração 14).
 
 #### Empresas com contrato assinado
 
@@ -554,15 +554,15 @@ Só entram empresas com **contrato já assinado**. A avaliação de rentabilidad
 
 O CNPJ é conferido pelos dois dígitos verificadores. Quando não fecha, aparece um **"CNPJ incompleto"** discreto embaixo do campo — é só um aviso, nunca impede de salvar.
 
-> **Conferência com o número digitado.** O campo *"contratos assinados"* continua sendo digitado à mão e **não** é calculado a partir desta lista — mudar isso apagaria o histórico já lançado. O que o sistema faz é mostrar os dois lado a lado: quando o número do mês não bate com a quantidade de empresas cadastradas, aparece um aviso âmbar dizendo exatamente qual mês e quais os dois números. Corrigir (ou não) é decisão de quem administra.
+> **Conferência com o número digitado.** O campo *"contratos assinados"* continua sendo digitado à mão e **não** é calculado a partir desta lista — mudar isso apagaria o histórico já lançado. O que o HUB Comercial faz é mostrar os dois lado a lado: quando o número do mês não bate com a quantidade de empresas cadastradas, aparece um aviso âmbar dizendo exatamente qual mês e quais os dois números. Corrigir (ou não) é decisão de quem administra.
 
 As empresas do mês também saem no **relatório mensal em PDF**, numa seção própria com empresa, CNPJ, quem trouxe e a avaliação.
 
-Como no resto do sistema, quem administra vê e edita tudo; uma conta restrita só enxergaria as empresas que ela mesma trouxe, e sem editar (`contratos_consultoria`, migração 10).
+Como no resto do HUB Comercial, quem administra vê e edita tudo; uma conta restrita só enxergaria as empresas que ela mesma trouxe, e sem editar (`contratos_consultoria`, migração 10).
 
 ## Importar a planilha de Consultoria
 
-Notas de antes do sistema existir não precisam ser digitadas uma por uma. O botão **"📄 Importar planilha"**, na aba Consultoria, lê o arquivo — mesmo mecanismo já usado pela planilha de renovações (`linhasDoXlsx`, `linhasDeTexto`, leitura de `.xlsx` sem biblioteca externa), só que reconhecendo as colunas do lançamento de consultoria em vez de empresa/valor/mês.
+Notas de antes do HUB Comercial existir não precisam ser digitadas uma por uma. O botão **"📄 Importar planilha"**, na aba Consultoria, lê o arquivo — mesmo mecanismo já usado pela planilha de renovações (`linhasDoXlsx`, `linhasDeTexto`, leitura de `.xlsx` sem biblioteca externa), só que reconhecendo as colunas do lançamento de consultoria em vez de empresa/valor/mês.
 
 Três caminhos, todos no mesmo lugar: **arquivo `.xlsx`**, **arquivo `.csv`** (inclusive o que o Excel do Windows salva em latin-1) ou **colar** as células copiadas do Excel.
 
@@ -574,7 +574,7 @@ Por enquanto é só para a aba **Consultoria**; as outras abas de lançamento co
 
 ## Relatório mensal em PDF
 
-O botão **"📄 Relatório do mês"**, no topo de qualquer aba, gera um documento único com **tudo o que aconteceu num mês**. Ele abre com a **mesma faixa do sistema** — marca, degradê marinho, globo d'água e o filete azul —, então o papel sai com a cara da empresa. Escolhe-se o mês e o sistema monta o relatório e abre a janela de impressão do navegador — para salvar em PDF, basta escolher **"Salvar como PDF"** no destino.
+O botão **"📄 Relatório do mês"**, no topo de qualquer aba, gera um documento único com **tudo o que aconteceu num mês**. Ele abre com a **mesma faixa do HUB Comercial** — marca, degradê marinho, globo d'água e o filete azul —, então o papel sai com a cara da empresa. Escolhe-se o mês e o HUB Comercial monta o relatório e abre a janela de impressão do navegador — para salvar em PDF, basta escolher **"Salvar como PDF"** no destino.
 
 O que entra:
 
@@ -600,7 +600,7 @@ O relatório usa o **ano selecionado** no topo da página. É exclusivo de admin
 
 O documento **não força quebra de página**: as seções correm uma atrás da outra e só evitam ser cortadas no meio de um bloco pequeno (um gráfico, o quadro da campeã, uma linha de tabela). Tabela que atravessa a página repete o cabeçalho.
 
-> Não usa nenhuma biblioteca externa: o PDF sai pela impressão do próprio navegador. É de propósito — o sistema bloqueia carregar script de fora, por segurança.
+> Não usa nenhuma biblioteca externa: o PDF sai pela impressão do próprio navegador. É de propósito — o HUB Comercial bloqueia carregar script de fora, por segurança.
 
 ## Metas e bônus
 
@@ -642,13 +642,13 @@ Nem todo mundo é pago por comissão. Quem recebe **salário fixo** é lançado 
 | Campo | O que é |
 |---|---|
 | Mês | o mês de competência |
-| Colaborador | qualquer pessoa conhecida do sistema — inclui quem não é vendedora, como a equipe de consultoria |
+| Colaborador | qualquer pessoa conhecida do HUB Comercial — inclui quem não é vendedora, como a equipe de consultoria |
 | Cargo / observação | texto livre (ex.: *Consultor comercial*) |
 | Salário | o valor do mês |
 
 O botão **🔁** repete o salário nos meses seguintes até dezembro, pulando meses fechados e meses que já tenham um salário lançado para a mesma pessoa — assim não é preciso digitar doze vezes.
 
-> **O salário nunca entra nas somas de comissão.** Ele fica de fora do total em bônus/metas, da coluna "Bônus" do Resumo Geral e do gráfico de faturamento do ano. É despesa fixa da empresa, não prêmio por desempenho nem venda — misturar distorceria justamente o número que o sistema existe para medir. O total aparece num cartão próprio, **"Salários fixos"**, e numa seção própria do relatório mensal em PDF.
+> **O salário nunca entra nas somas de comissão.** Ele fica de fora do total em bônus/metas, da coluna "Bônus" do Resumo Geral e do gráfico de faturamento do ano. É despesa fixa da empresa, não prêmio por desempenho nem venda — misturar distorceria justamente o número que o HUB Comercial existe para medir. O total aparece num cartão próprio, **"Salários fixos"**, e numa seção própria do relatório mensal em PDF.
 
 O acesso segue a mesma regra do resto: quem administra vê e lança tudo; uma conta restrita vê apenas o próprio salário, porque a linha leva o nome da pessoa (`bonus`, migração 11).
 
@@ -673,9 +673,9 @@ A lista **não é só das vendedoras**: quem só recebe salário fixo — a equi
 
 O botão **"📊 Baixar CSV"** gera o arquivo do período, uma linha por pessoa e o total no fim, pronto para mandar. O mesmo fechamento sai também no **relatório mensal em PDF**, em seção própria.
 
-**Quem entra na folha** — o botão **"👥 Quem entra"** abre a lista de todas as pessoas que o sistema conhece, com uma caixa marcada para cada uma. Desmarcar alguém tira essa pessoa da tabela, do total, do CSV e do PDF. Não apaga lançamento nenhum: é só o que vai para a contabilidade, e o cabeçalho do painel avisa quantas estão de fora.
+**Quem entra na folha** — o botão **"👥 Quem entra"** abre a lista de todas as pessoas que o HUB Comercial conhece, com uma caixa marcada para cada uma. Desmarcar alguém tira essa pessoa da tabela, do total, do CSV e do PDF. Não apaga lançamento nenhum: é só o que vai para a contabilidade, e o cabeçalho do painel avisa quantas estão de fora.
 
-> O sistema guarda **quem fica de fora**, não quem fica dentro. É de propósito: assim uma pessoa cadastrada depois aparece na folha sozinha, em vez de sumir calada. Esquecer alguém num relatório de pagamento é bem pior do que ter uma linha a mais para tirar. A lista fica no banco (`entity_vendors` com `entidade='fechamento_fora'`), então vale para todo mundo, e só admin edita.
+> O HUB Comercial guarda **quem fica de fora**, não quem fica dentro. É de propósito: assim uma pessoa cadastrada depois aparece na folha sozinha, em vez de sumir calada. Esquecer alguém num relatório de pagamento é bem pior do que ter uma linha a mais para tirar. A lista fica no banco (`entity_vendors` com `entidade='fechamento_fora'`), então vale para todo mundo, e só admin edita.
 
 ## Marketing
 
@@ -707,7 +707,7 @@ Cada indicador numérico vira um **cartão por conta**, com o valor do mês e a 
 
 **Gráfico de evolução mensal** — abaixo dos cartões, mostra o ano inteiro em barras (sempre os 12 meses de `yearFilter`, não muda com o filtro de mês) de um indicador escolhido no seletor "Indicador", uma barra por conta lado a lado em cada mês (Open e Foco Tributário, cada uma numa cor). Era gráfico de linha, mas com só 1 ou 2 meses lançados a linha virava um traço fino sem contexto — barra lê melhor um ano ainda incompleto. Mês sem lançamento simplesmente não tem barra ali, não é barra de altura zero.
 
-Um filtro de mês (Todos + os 12 meses) recorta a tabela de lançamentos e os cartões ao mesmo tempo, igual ao resto do sistema. A tabela também segue os indicadores da rede: as colunas mudam sozinhas quando um indicador é incluído ou retirado.
+Um filtro de mês (Todos + os 12 meses) recorta a tabela de lançamentos e os cartões ao mesmo tempo, igual ao resto do HUB Comercial. A tabela também segue os indicadores da rede: as colunas mudam sozinhas quando um indicador é incluído ou retirado.
 
 ### Tráfego pago
 
@@ -744,7 +744,7 @@ Denominador zero ou vazio dá **"—"**, nunca um erro ou um zero enganoso. Um f
 
 O PostgREST devolve no máximo **1.000 linhas por chamada** — é o "Max rows" do projeto no Supabase. Passar disso **não dá erro**: ele simplesmente corta o resultado e devolve o que coube.
 
-Foi o que aconteceu quando `vendas_comissoes` passou de 1.200 linhas (174 vendas × 7 vendedoras). O sistema recebia parte das comissões, os totais na tela ficavam **menores que a realidade**, e — pior — a gravação seguinte devolvia ao banco como vazio aquilo que não tinha sido lido.
+Foi o que aconteceu quando `vendas_comissoes` passou de 1.200 linhas (174 vendas × 7 vendedoras). O HUB Comercial recebia parte das comissões, os totais na tela ficavam **menores que a realidade**, e — pior — a gravação seguinte devolvia ao banco como vazio aquilo que não tinha sido lido.
 
 Por isso **toda coleção que cresce é lida em páginas**, por `sbSelectTudo()`, até vir uma página incompleta. Duas regras ao mexer nisso:
 
@@ -753,7 +753,7 @@ Por isso **toda coleção que cresce é lida em páginas**, por `sbSelectTudo()`
 
 ## Backup manual
 
-Dentro do próprio sistema, o botão **"⬇ Exportar dados"** (no topo da tela) gera um backup completo em texto — útil pra guardar uma cópia de segurança de vez em quando, independente do banco de dados.
+Dentro do próprio HUB Comercial, o botão **"⬇ Exportar dados"** (no topo da tela) gera um backup completo em texto — útil pra guardar uma cópia de segurança de vez em quando, independente do banco de dados.
 
 ## Segurança — revisão feita neste projeto
 
@@ -766,5 +766,5 @@ Dentro do próprio sistema, o botão **"⬇ Exportar dados"** (no topo da tela) 
 - **Mascaramento por coluna**: filtrar linhas não bastava, porque um contrato dividido guarda até 3 vendedores + colaborador na mesma linha — quem participava enxergava a % dos colegas daquele contrato. A leitura passou a ser feita por views `_safe`, que zeram coluna a coluna o que não é da pessoa, e a leitura direta das tabelas base ficou restrita a admin, pra que o mascaramento não seja contornável pela API.
 - **Falha de XSS corrigida**: os nomes de vendedoras (aba Sistema) e de vendedores por aba eram inseridos em alguns lugares da tela sem escapar caracteres especiais, permitindo que um nome malicioso injetasse HTML/JavaScript na tela de outras pessoas da equipe. Todos os pontos foram corrigidos para escapar esse texto (ou usar atributos `data-*` em vez de montar o JavaScript do botão como texto).
 - **Content-Security-Policy**: foi adicionada uma política restritiva (`script-src`, `connect-src` limitado ao domínio do Supabase, sem `object-src`, sem `form-action`) como camada extra de proteção contra XSS futuro.
-- **Sessão com renovação automática**: o token de login é renovado sozinho antes de expirar; se a renovação falhar (ex: sessão revogada), a pessoa volta pra tela de login em vez de o sistema travar ou salvar dados sem permissão.
+- **Sessão com renovação automática**: o token de login é renovado sozinho antes de expirar; se a renovação falhar (ex: sessão revogada), a pessoa volta pra tela de login em vez de o HUB Comercial travar ou salvar dados sem permissão.
 - **Recuperação de senha**: a tela de login tem "Esqueci minha senha", que usa o fluxo de recuperação por e-mail do Supabase — ninguém depende de admin pra trocar senha esquecida.
