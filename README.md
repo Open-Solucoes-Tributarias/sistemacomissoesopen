@@ -753,6 +753,28 @@ Por isso **toda coleção que cresce é lida em páginas**, por `sbSelectTudo()`
 - a consulta **precisa ter `order`**, senão o `offset` embaralha as páginas e linhas se repetem ou somem;
 - ao criar uma coleção nova que possa passar de mil linhas, use `sbSelectTudo` (ou `sbSelectOpcional`, que já pagina), nunca `sbSelect` direto.
 
+## O id de venda que era reaproveitado (e trocava a venda da renovação)
+
+Este é o estrago maior, e ele se esconde atrás do anterior.
+
+O id de uma venda nova é calculado **no navegador**, como `max(ids) + 1`. O banco tem uma sequence (`vendas_id_seq`), mas o app manda o `id` junto no upsert, então ela nunca avança — nos dados reais a sequence estava em **40** enquanto o maior id era **275**.
+
+Consequência: **excluir a venda de maior id devolvia aquele número para a fila**, e a próxima venda criada nascia com o id da que foi excluída. Quando a venda excluída era a de uma renovação, o `venda_id` guardado nela passava a apontar para uma venda **nova e sem relação nenhuma** — outra empresa, outro mês, outro valor. Aconteceu duas vezes:
+
+| Renovação | Passou a apontar para |
+|---|---|
+| INPI · Jan/2026 · R$ 14.388 | venda 76 = **PRODAP** · Abr/2026 · R$ 8.663,97 |
+| MP RR · Out/2026 · R$ 14.388 | venda 268 = **TRE PA** · Set/**2027** · R$ 40.680 |
+
+E cada uma dessas vendas ficou **reivindicada por duas renovações** — a dona legítima e a antiga, cujo ponteiro foi herdado. Foi o que fez a renovação do MP RR recusar virar upgrade sem ter saída: a trava perguntava "essa venda existe?", e existia — só não era dela.
+
+Duas correções:
+
+- **`reservarNextIdVendas()`** — o próximo id fica acima do maior id de venda existente **e** do maior id ainda referenciado por alguma renovação, e só cresce, nunca diminui (por isso é seguro chamar de vários pontos de carga, em qualquer ordem).
+- **`supabase_renovacoes_venda_fk_migration.sql`** — `renovacoes.venda_id` era um bigint solto, sem referência nenhuma. A migração cria a foreign key com `on delete set null` (excluir a venda solta a renovação, sem depender de o app lembrar) e um índice único parcial, para que uma venda nunca mais possa ser reivindicada por duas renovações sem o banco reclamar.
+
+> A lição: **id de linha calculado no cliente não pode ser reaproveitado se alguém guarda referência a ele.** O `max+1` parece inofensivo até a primeira exclusão do topo. Onde houver referência entre tabelas, ou o banco gera o id, ou o cliente nunca reemite um id referenciado.
+
 ## A renovação presa numa venda que não existe mais
 
 Marcar uma renovação como **Upgrade** respondia *"já foi lançada como venda na aba Sistema — exclua a venda por lá primeiro"*. Excluía a venda, tentava de novo, e a mesma resposta voltava. Sem saída pela tela.

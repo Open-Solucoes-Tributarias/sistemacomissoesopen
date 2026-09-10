@@ -2192,6 +2192,7 @@ async function tryLoadFromStorageAsync(){
       });
       migrateYear(rows, 2026);
       nextId = rows.length ? Math.max.apply(null, rows.map(function(r){ return r.id||0; })) + 1 : 1;
+      reservarNextIdVendas();   // não reaproveitar id que alguma renovação aponta
       render();
     }
   } catch(e){
@@ -7644,6 +7645,7 @@ async function tryLoadRenovacoesAsync(){
       });
       renovacoesNextId = renovacoes.length
         ? Math.max.apply(null, renovacoes.map(function(r){ return r.id||0; })) + 1 : 1;
+      reservarNextIdVendas();   // as renovações acabaram de chegar: reserva os ids que elas apontam
       render();
     }
   }catch(e){ console.error(e); }
@@ -8531,6 +8533,30 @@ function irParaVendaDaRenovacao(id){
    As duas travas de `carregouDoBanco` é o que torna isso seguro: antes de
    ter lido vendas E renovações do banco, `rows` pode estar vazio só porque
    a leitura não voltou ainda — e aí isso apagaria todo vínculo legítimo. */
+/* ---------- Nunca reaproveitar id de venda que alguém aponta ----------
+   O id de uma venda nova é calculado no navegador como `max(ids) + 1` (o
+   banco tem sequence, mas o app manda o id junto no upsert, então ela nunca
+   avança). Consequência: excluir a venda de MAIOR id devolvia aquele número
+   para a fila, e a venda seguinte nascia com o id da que foi excluída.
+
+   Quando a venda excluída era a de uma renovação, o `venda_id` guardado na
+   renovação passava a apontar para uma venda **nova e sem relação nenhuma**
+   com ela — outra empresa, outro mês, outro valor. Foi assim que a renovação
+   do MP RR (Out/2026) acabou amarrada a uma venda do TRE PA de Set/2027, e a
+   do INPI a uma do PRODAP: cada id ficou sendo reivindicado por duas
+   renovações, e a antiga passou a mostrar dados da nova.
+
+   A regra aqui: o próximo id fica acima do maior id de venda existente E do
+   maior id ainda referenciado por alguma renovação. E só cresce — nunca
+   diminui —, o que deixa a função segura de chamar de vários pontos de
+   carga, em qualquer ordem. */
+function reservarNextIdVendas(){
+  const maiorVenda = rows.reduce(function(a, r){ return Math.max(a, r.id || 0); }, 0);
+  const maiorReferenciado = renovacoes.reduce(function(a, r){ return Math.max(a, r.vendaId || 0); }, 0);
+  const minimo = Math.max(maiorVenda, maiorReferenciado) + 1;
+  if(nextId < minimo) nextId = minimo;
+}
+
 /* A renovação só está de fato presa se a venda que ela aponta continuar
    existindo. As travas de upgrade e de situação perguntavam apenas "tem
    vendaId?", e por isso barravam para sempre quem já tinha excluído a venda.
@@ -10962,8 +10988,10 @@ function boot(){
   Promise.allSettled(loaders).then(function(){
     initialDataLoaded = true;
     // Com tudo lido, solta as renovações que ficaram apontando para vendas
-    // já excluídas (inclusive as que travaram antes desta correção existir).
+    // já excluídas (inclusive as que travaram antes desta correção existir)
+    // e garante que nenhum id de venda referenciado volte a ser distribuído.
     soltarRenovacoesOrfas();
+    reservarNextIdVendas();
     render();
   });
   render();
