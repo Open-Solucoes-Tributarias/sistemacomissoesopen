@@ -1,4 +1,5 @@
--- Migração 28: renovacoes.venda_id vira referência de verdade
+-- Migração 28: renovacoes.venda_id ganha índice único (e por que NÃO ganha
+-- foreign key)
 --
 -- A renovação guarda o id da venda que gerou (renovacoes.venda_id), mas essa
 -- coluna era um bigint solto: nenhuma referência, nenhuma regra. Dois
@@ -16,57 +17,65 @@
 --    outro mês, outro valor. Aconteceu duas vezes nos dados reais:
 --      renovacoes 143 (MP RR, Out/2026)  -> venda 268 (TRE PA,  Set/2027)
 --      renovacoes 6   (INPI,  Jan/2026)  -> venda 76  (PRODAP,  Abr/2026)
---    e em cada caso a venda ficou reivindicada por duas renovações.
+--    e em cada caso a venda ficou reivindicada por duas renovações. Foi o
+--    que fez a renovação do MP RR recusar virar upgrade sem ter saída: a
+--    trava perguntava "essa venda existe?", e existia — só não era dela.
 --
--- A foreign key com ON DELETE SET NULL resolve o item 1 de forma definitiva e
--- no lugar certo: quem exclui a venda solta a renovação, sem depender de o
--- código do app lembrar de fazer isso. O item 2 é corrigido no app
--- (reservarNextIdVendas), porque o banco não tem como saber que um id
--- reaproveitado é "outra" venda.
+-- ---------------------------------------------------------------------------
+-- POR QUE NÃO HÁ FOREIGN KEY AQUI
+--
+-- A primeira versão desta migração criava
+--     foreign key (venda_id) references vendas(id) on delete set null
+-- que resolveria o item 1 no lugar certo. Ela foi aplicada, testada e
+-- REVERTIDA, porque quebra a gravação:
+--
+-- O app grava vendas e renovações em DUAS requisições independentes, cada uma
+-- com seu próprio debounce de 450ms e sem transação em comum. No lançamento
+-- (confirmarLancarNoSistema), a renovação já sai apontando para a venda nova,
+-- e as duas gravações partem quase juntas — mas a de renovações é uma única
+-- chamada, enquanto a de vendas escreve ~275 vendas MAIS ~1.900 linhas de
+-- vendas_comissoes. A das renovações chega primeiro, a venda ainda não existe
+-- no banco, e a FK rejeita: "erro ao salvar" em todo lançamento de renovação,
+-- com o vínculo perdido. Pior que o bug que ela evitava.
+--
+-- Constraint DEFERRABLE não ajuda: cada requisição é sua própria transação, e
+-- o check adiado acontece no commit dela.
+--
+-- Para voltar a FK é preciso primeiro tornar a gravação sequencial — venda
+-- confirmada no banco e só então a renovação. Enquanto isso, a garantia de
+-- "venda excluída solta a renovação" mora no app (soltarRenovacoesOrfas,
+-- chamado em deleteRow e ao terminar a carga), que tem teste.
+-- ---------------------------------------------------------------------------
 --
 -- Idempotente: pode rodar mais de uma vez.
 
--- ---------------------------------------------------------------------------
--- 1. Limpa ponteiros mortos. A FK não é criada enquanto existir venda_id
---    apontando para venda que não existe.
--- ---------------------------------------------------------------------------
+-- 1. Limpa ponteiros mortos deixados antes de a correção existir.
 update renovacoes r
    set venda_id = null
  where r.venda_id is not null
    and not exists (select 1 from vendas v where v.id = r.venda_id);
 
--- ---------------------------------------------------------------------------
--- 2. A referência em si.
--- ---------------------------------------------------------------------------
-alter table renovacoes drop constraint if exists renovacoes_venda_id_fkey;
-alter table renovacoes
-  add constraint renovacoes_venda_id_fkey
-  foreign key (venda_id) references vendas(id) on delete set null;
-
--- Busca por venda_id acontece a cada exclusão de venda (a FK precisa varrer
--- renovacoes) e ao montar a fila de lançamento.
-create index if not exists renovacoes_venda_id_idx on renovacoes(venda_id);
-
--- ---------------------------------------------------------------------------
--- 3. Uma venda pertence a no máximo uma renovação.
---    O reuso de id fazia duas renovações reivindicarem a mesma venda, e nada
---    no banco reclamava. Agora reclama — o índice único deixa o estrago
---    aparecer na hora em que for criado, em vez de semanas depois.
---
---    ATENÇÃO: este índice só é criado se os dados já estiverem limpos. Rode
---    a consulta de conferência no fim do arquivo antes; se ela devolver
---    linhas, corrija-as primeiro (ou comente este bloco).
--- ---------------------------------------------------------------------------
+-- 2. Uma venda pertence a no máximo uma renovação.
+--    Diferente da FK, este índice não depende de ordem de gravação: ele só
+--    proíbe duas renovações compartilharem a mesma venda, o que é verdade em
+--    qualquer ordem. É a trava que faz o estrago do reuso de id aparecer na
+--    hora em que for criado, em vez de semanas depois.
 create unique index if not exists renovacoes_venda_id_unico
   on renovacoes(venda_id) where venda_id is not null;
 
+-- 3. Busca por venda_id acontece ao montar a fila de lançamento.
+create index if not exists renovacoes_venda_id_idx on renovacoes(venda_id);
+
 -- ---------------------------------------------------------------------------
--- Conferência: renovação cuja venda é de outra empresa, e venda reivindicada
--- por mais de uma renovação. As duas devem voltar vazias.
+-- Conferência: as duas devem voltar vazias.
 -- ---------------------------------------------------------------------------
--- select r.id, r.empresa, r.mes, r.ano, v.cliente, v.mes, v.ano
---   from renovacoes r join vendas v on v.id = r.venda_id
---  where upper(trim(v.cliente)) <> upper(trim(r.empresa));
+-- -- ponteiro morto
+-- select r.id, r.empresa, r.venda_id from renovacoes r
+--  where r.venda_id is not null
+--    and not exists (select 1 from vendas v where v.id = r.venda_id);
 --
--- select venda_id, count(*) from renovacoes
---  where venda_id is not null group by venda_id having count(*) > 1;
+-- -- renovação cuja venda é de outra empresa (ignorando acento e pontuação)
+-- select r.id, r.empresa, r.mes, r.ano, v.id, v.cliente, v.mes, v.ano
+--   from renovacoes r join vendas v on v.id = r.venda_id
+--  where regexp_replace(upper(translate(r.empresa,'ÁÀÃÂÉÊÍÓÕÔÚÇ','AAAAEEIOOOUC')),'[^A-Z0-9]','','g')
+--     <> regexp_replace(upper(translate(v.cliente,'ÁÀÃÂÉÊÍÓÕÔÚÇ','AAAAEEIOOOUC')),'[^A-Z0-9]','','g');

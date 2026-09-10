@@ -771,9 +771,17 @@ E cada uma dessas vendas ficou **reivindicada por duas renovações** — a dona
 Duas correções:
 
 - **`reservarNextIdVendas()`** — o próximo id fica acima do maior id de venda existente **e** do maior id ainda referenciado por alguma renovação, e só cresce, nunca diminui (por isso é seguro chamar de vários pontos de carga, em qualquer ordem).
-- **`supabase_renovacoes_venda_fk_migration.sql`** — `renovacoes.venda_id` era um bigint solto, sem referência nenhuma. A migração cria a foreign key com `on delete set null` (excluir a venda solta a renovação, sem depender de o app lembrar) e um índice único parcial, para que uma venda nunca mais possa ser reivindicada por duas renovações sem o banco reclamar.
+- **`supabase_renovacoes_venda_fk_migration.sql`** — cria um **índice único parcial** em `renovacoes(venda_id)`, para que uma venda nunca mais possa ser reivindicada por duas renovações sem o banco reclamar.
 
-> A lição: **id de linha calculado no cliente não pode ser reaproveitado se alguém guarda referência a ele.** O `max+1` parece inofensivo até a primeira exclusão do topo. Onde houver referência entre tabelas, ou o banco gera o id, ou o cliente nunca reemite um id referenciado.
+### A foreign key que não deu para manter
+
+A primeira versão dessa migração criava também `foreign key (venda_id) references vendas(id) on delete set null` — a solução certa no lugar certo, que dispensaria o app lembrar de soltar a renovação. **Ela foi aplicada, testada e revertida.**
+
+O app grava vendas e renovações em **duas requisições independentes**, cada uma com seu debounce de 450ms e sem transação em comum. No lançamento (`confirmarLancarNoSistema`) a renovação já sai apontando para a venda nova, e as duas gravações partem quase juntas — mas a de renovações é **uma** chamada, enquanto a de vendas escreve ~275 vendas **mais** ~1.900 linhas de `vendas_comissoes`. A das renovações chega primeiro, a venda ainda não existe no banco, e a FK rejeita: **"erro ao salvar" em todo lançamento de renovação**, com o vínculo perdido. Pior que o bug que ela evitava.
+
+`DEFERRABLE` não resolve: cada requisição é sua própria transação, e o check adiado acontece no commit dela. Para voltar a FK é preciso antes tornar a gravação **sequencial** — venda confirmada no banco, e só então a renovação.
+
+> Duas lições. **Id de linha calculado no cliente não pode ser reaproveitado se alguém guarda referência a ele** — o `max+1` parece inofensivo até a primeira exclusão do topo. E **integridade referencial no banco pressupõe escrita transacional**: num app que salva tabela por tabela, com debounce e sem transação, uma FK entre elas vira uma corrida — a restrição correta no modelo errado. Onde não houver transação, prefira a trava que não depende de ordem (aqui, o índice único).
 
 ## A renovação presa numa venda que não existe mais
 
