@@ -753,6 +753,19 @@ Por isso **toda coleção que cresce é lida em páginas**, por `sbSelectTudo()`
 - a consulta **precisa ter `order`**, senão o `offset` embaralha as páginas e linhas se repetem ou somem;
 - ao criar uma coleção nova que possa passar de mil linhas, use `sbSelectTudo` (ou `sbSelectOpcional`, que já pagina), nunca `sbSelect` direto.
 
+## O campo que morria no meio da digitação
+
+Digitar o nome de um curso (ou o nome do cliente no HUB Comercial), parar um instante para pensar e voltar a escrever: o resto do texto não entrava mais. Não era o teclado — era o campo, que tinha perdido o foco sozinho.
+
+A cadeia: cada tecla agenda a gravação (`persistEntityRows`, com 450ms de espera); ao gravar, as duas abas que alimentam o Relatório de Desempenho — **Cursos** e **HUB Comercial** — chamam `agendarRefreshPainel()`, que 700ms depois relê os totais e chamava `render()`. E `render()` troca o `innerHTML` **inteiro**: o campo em que a pessoa estava digitando era destruído e recriado, sem foco. Ou seja: cerca de **1,2s depois da última tecla**, o campo morria. Consultoria e Órgãos Públicos não sofriam disso, porque não alimentam o painel — o que fazia o bug parecer intermitente.
+
+A correção tem duas camadas:
+
+- **A causa** — o refresh dos totais só redesenha a tela **se o painel estiver aberto** (`activeTab === 'painel'`). Fora dele basta guardar os números na memória: o Relatório de Desempenho e o relatório em PDF leem de lá na hora em que são montados.
+- **A rede de segurança** — `render()` agora **anota o campo em foco antes e devolve o foco depois**, com a posição do cursor (`focoParaRestaurar` / `devolverFoco`). O campo é reencontrado pelos mesmos atributos com que foi montado (`data-entity`, `data-id`, `data-field`). Se um modal estiver aberto, nada é devolvido — o foco é dele. Isso protege qualquer campo de qualquer render assíncrono, não só desses dois.
+
+> Ao mexer em `render()`, lembre que **todo render é uma troca completa de DOM**. Qualquer coisa que redesenhe a tela sozinha (resposta do banco, timer, refresh) pode cair no meio de alguém digitando. A pergunta certa antes de chamar `render()` num caminho assíncrono é: *esse dado está na tela agora?* Se não estiver, guardar na memória basta.
+
 ## Backup manual
 
 Dentro do próprio HUB Comercial, o botão **"⬇ Exportar dados"** (no topo da tela) gera um backup completo em texto — útil pra guardar uma cópia de segurança de vez em quando, independente do banco de dados.

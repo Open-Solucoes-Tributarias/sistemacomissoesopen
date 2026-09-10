@@ -3337,7 +3337,13 @@ async function tryLoadPainelTotaisAsync(){
         METRICAS_TODAS.forEach(function(m){ r[m.key] = Number(d[m.col]) || 0; });
         return r;
       });
-      render();
+      /* Só redesenha se esses números estiverem na tela. Salvar em Cursos
+         ou no HUB Comercial agenda este refresh, e ele caía no meio da
+         digitação: o render trocava a tabela inteira e o campo em que a
+         pessoa estava escrevendo morria. Fora da aba do painel basta
+         guardar na memória — o Relatório de Desempenho e o relatório em
+         PDF leem daqui na hora em que são montados. */
+      if(activeTab === 'painel') render();
     }
   } catch(e){ console.error(e); }
 }
@@ -10713,6 +10719,54 @@ function setTab(t){
   render();
 }
 
+/* ---------- Foco por cima do render() ----------
+   render() troca o innerHTML inteiro: o campo em que a pessoa está
+   digitando é destruído e recriado, e o cursor vai embora. Quando o render
+   nasce de algo assíncrono — o refresh dos totais do painel depois de
+   salvar, a resposta de uma leitura do banco — isso cai no meio da
+   digitação e o campo simplesmente "morre".
+
+   Aqui o campo é anotado antes (pelos mesmos atributos com que é montado) e
+   reencontrado depois, com a posição do cursor de volta. Se um modal
+   estiver aberto, não devolvemos nada: o foco é dele. */
+function focoParaRestaurar(){
+  const el = document.activeElement;
+  if(!el) return null;
+  const tag = el.tagName;
+  if(tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') return null;
+
+  let seletor = null;
+  if(el.id){
+    seletor = '#' + (window.CSS && CSS.escape ? CSS.escape(el.id) : el.id);
+  } else {
+    const chaves = ['data-entity','data-id','data-field','data-vendor','data-key'];
+    const presentes = chaves.filter(function(a){ return el.hasAttribute(a); });
+    if(presentes.length){
+      seletor = tag.toLowerCase() + presentes.map(function(a){
+        const v = String(el.getAttribute(a)).replace(/["\\]/g, '\\$&');
+        return '[' + a + '="' + v + '"]';
+      }).join('');
+    }
+  }
+  if(!seletor) return null;
+
+  const guardado = { seletor: seletor, inicio: null, fim: null };
+  // input[type=number] não deixa ler seleção em alguns navegadores
+  try{ guardado.inicio = el.selectionStart; guardado.fim = el.selectionEnd; }catch(e){}
+  return guardado;
+}
+
+function devolverFoco(guardado){
+  if(!guardado || modalState) return;
+  let el = null;
+  try{ el = document.querySelector(guardado.seletor); }catch(e){ return; }
+  if(!el || el === document.activeElement) return;
+  try{ el.focus({ preventScroll:true }); }catch(e){ el.focus(); }
+  if(guardado.inicio !== null && guardado.inicio !== undefined){
+    try{ el.setSelectionRange(guardado.inicio, guardado.fim); }catch(e){}
+  }
+}
+
 function render(){
   const root = document.getElementById('root');
   if(!authSession){ renderAuthScreen(); return; }
@@ -10720,6 +10774,7 @@ function render(){
     root.innerHTML = `<div class="app-loading"><div class="spinner"></div><div>Carregando seus dados...</div></div>`;
     return;
   }
+  const focoGuardado = focoParaRestaurar();
   ensurePartnersIncludeCurrent();
   if(isFinanceiro && ABAS_FINANCEIRO.indexOf(activeTab) === -1) activeTab = 'parceiros';
   const sectionHtml = activeTab === "vendas" ? renderVendasSection()
@@ -10821,6 +10876,7 @@ function render(){
   if(!isAdmin){
     root.querySelectorAll('tbody td input, tbody td select, .meta-input-wrap input').forEach(function(el){ el.disabled = true; });
   }
+  devolverFoco(focoGuardado);
   animarEntrada = false;   // a animação vale só pra este render
 }
 
