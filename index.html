@@ -6191,6 +6191,10 @@ function deleteRow(id){
   showConfirm("Excluir esta venda?", () => {
     rows = rows.filter(r => r.id !== id);
     persist();
+    // Se essa venda tinha nascido de uma renovação, a renovação volta a
+    // ficar livre — senão ela ficaria presa pedindo para excluir uma venda
+    // que acabou de deixar de existir.
+    soltarRenovacoesOrfas();
   });
 }
 
@@ -7753,7 +7757,7 @@ function setRenovacaoStatus(id, valor){
   const novo = (r.renovado === valor && !r.upgrade) ? null : valor;
   // Deixar de ser "Renovado" depois de virar venda mexeria em comissão já
   // lançada, então o sistema avisa e não apaga nada sozinho.
-  if(r.vendaId && r.renovado === true && novo !== true){
+  if(renovacaoPresaNaVenda(r) && r.renovado === true && novo !== true){
     showConfirm(
       'Esta renovação já foi lançada como venda na aba Sistema. Mudar a situação aqui NÃO apaga a venda de lá — se ela não valer mais, exclua também na aba Sistema. Continuar?',
       function(){
@@ -7781,7 +7785,7 @@ function abrirUpgradeRenovacao(id){
   const r = renovacoes.find(function(x){ return x.id === id; });
   if(!r) return;
   if(r.upgrade){    // clicar de novo no botão aceso desfaz o upgrade
-    if(r.vendaId){
+    if(renovacaoPresaNaVenda(r)){
       showAlert('Este upgrade já foi lançado como venda na aba Sistema. Para desfazer, exclua a venda por lá primeiro.');
       return;
     }
@@ -7789,7 +7793,7 @@ function abrirUpgradeRenovacao(id){
     persistRenovacoes(); render();
     return;
   }
-  if(r.vendaId){
+  if(renovacaoPresaNaVenda(r)){
     showAlert('Esta renovação já foi lançada como venda na aba Sistema pelo valor antigo. Para transformá-la em upgrade, exclua a venda por lá primeiro.');
     return;
   }
@@ -8499,7 +8503,10 @@ function irParaVendaDaRenovacao(id){
   if(!r || !r.vendaId) return;
   const v = rows.find(function(x){ return x.id === r.vendaId; });
   if(!v){
-    showAlert('A venda desta renovação não está mais na aba Sistema — ela deve ter sido excluída por lá.');
+    // É exatamente aqui que o sistema descobre que a venda sumiu — então é
+    // aqui que ele solta a marca, em vez de só avisar e deixar presa.
+    soltarRenovacoesOrfas();
+    showAlert('A venda desta renovação não está mais na aba Sistema — ela deve ter sido excluída por lá. Soltei a marca: a renovação voltou para a fila de lançamento.');
     return;
   }
   activeTab = 'vendas';
@@ -8507,6 +8514,49 @@ function irParaVendaDaRenovacao(id){
   sellerFilter = 'Todas';
   searchCliente = v.cliente || '';
   render();
+}
+
+/* ---------- Renovação presa numa venda que não existe mais ----------
+   A renovação guarda o id da venda que gerou (`vendaId`). Excluir essa venda
+   na aba Sistema não limpava a marca, e a renovação ficava órfã — sem saída
+   pela tela: continuava com o selo "no Sistema", não voltava para a fila de
+   "Lançar no Sistema" (que exige `!vendaId`), e recusava virar upgrade
+   pedindo justamente para excluir a venda — que já tinha sido excluída.
+
+   Aqui a marca é soltada quando a venda apontada não está mais em `rows`. A
+   situação (Renovado / Upgrade) é escolha de quem lançou e não se mexe: o
+   que está velho é só o vínculo com a venda. Solta o vínculo, a renovação
+   volta para a fila e aceita virar upgrade de novo.
+
+   As duas travas de `carregouDoBanco` é o que torna isso seguro: antes de
+   ter lido vendas E renovações do banco, `rows` pode estar vazio só porque
+   a leitura não voltou ainda — e aí isso apagaria todo vínculo legítimo. */
+/* A renovação só está de fato presa se a venda que ela aponta continuar
+   existindo. As travas de upgrade e de situação perguntavam apenas "tem
+   vendaId?", e por isso barravam para sempre quem já tinha excluído a venda.
+   Se o vínculo estiver morto, solta na hora e libera a ação. */
+function renovacaoPresaNaVenda(r){
+  if(!r || !r.vendaId) return false;
+  if(rows.some(function(v){ return v.id === r.vendaId; })) return true;
+  // Não achou a venda. Só é seguro concluir que ela foi excluída se as
+  // vendas já vieram do banco; antes disso, `rows` pode estar vazio apenas
+  // porque a leitura não voltou — e aí o seguro é seguir tratando como presa.
+  if(!carregouDoBanco.vendas) return true;
+  soltarRenovacoesOrfas();
+  return false;
+}
+
+function soltarRenovacoesOrfas(){
+  if(!carregouDoBanco.vendas || !carregouDoBanco['renovacoes']) return false;
+  let mudou = false;
+  renovacoes.forEach(function(r){
+    if(!r.vendaId) return;
+    if(rows.some(function(v){ return v.id === r.vendaId; })) return;
+    r.vendaId = null;
+    mudou = true;
+  });
+  if(mudou) persistRenovacoes();
+  return mudou;
 }
 
 function setRenovacaoFiltro(f){ renovacaoFiltro = f; render(); }
@@ -10911,6 +10961,9 @@ function boot(){
   ];
   Promise.allSettled(loaders).then(function(){
     initialDataLoaded = true;
+    // Com tudo lido, solta as renovações que ficaram apontando para vendas
+    // já excluídas (inclusive as que travaram antes desta correção existir).
+    soltarRenovacoesOrfas();
     render();
   });
   render();

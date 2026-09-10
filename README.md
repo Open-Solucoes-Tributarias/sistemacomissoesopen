@@ -753,6 +753,26 @@ Por isso **toda coleção que cresce é lida em páginas**, por `sbSelectTudo()`
 - a consulta **precisa ter `order`**, senão o `offset` embaralha as páginas e linhas se repetem ou somem;
 - ao criar uma coleção nova que possa passar de mil linhas, use `sbSelectTudo` (ou `sbSelectOpcional`, que já pagina), nunca `sbSelect` direto.
 
+## A renovação presa numa venda que não existe mais
+
+Marcar uma renovação como **Upgrade** respondia *"já foi lançada como venda na aba Sistema — exclua a venda por lá primeiro"*. Excluía a venda, tentava de novo, e a mesma resposta voltava. Sem saída pela tela.
+
+A renovação guarda o id da venda que gerou (`renovacoes.venda_id`), e `deleteRow` — que exclui a venda na aba HUB Comercial — **nunca limpava essa marca**. A renovação ficava órfã, apontando para uma venda que já não existia, e nesse estado:
+
+- continuava com a etiqueta **"no Sistema"**;
+- ficava **fora** da fila de "Lançar no Sistema", que exige `!vendaId`;
+- **recusava virar upgrade**, pedindo para excluir uma venda já excluída.
+
+Pior: o sistema **já detectava** o problema — clicar na etiqueta avisava *"a venda desta renovação não está mais na aba Sistema"* — e mesmo assim não fazia nada com essa informação.
+
+A correção tem três frentes:
+
+- **Na origem** — excluir a venda solta a renovação que apontava para ela (`soltarRenovacoesOrfas` dentro de `deleteRow`). Excluir a venda é justamente o que deveria liberar a renovação.
+- **Na trava** — as travas de upgrade e de situação perguntavam só *"tem `vendaId`?"*. Agora perguntam *"a venda ainda existe?"* (`renovacaoPresaNaVenda`), e um vínculo morto é soltado na hora em vez de barrar para sempre.
+- **No que já quebrou** — ao terminar de carregar, o sistema solta as renovações que ficaram apontando para vendas excluídas antes desta correção existir. Quem estava travado é destravado só de recarregar a página.
+
+> **A trava que torna isso seguro** é `carregouDoBanco.vendas`. Antes de as vendas voltarem do banco, `rows` está vazio — e sem essa checagem *todo* vínculo legítimo pareceria morto e seria apagado. A regra vale para qualquer limpeza de dado derivado: **nunca concluir que algo não existe antes de ter lido**. É a mesma regra que já protege `persistEntityVendors` ("nunca apagar sem ter lido antes").
+
 ## O campo que morria no meio da digitação
 
 Digitar o nome de um curso (ou o nome do cliente no HUB Comercial), parar um instante para pensar e voltar a escrever: o resto do texto não entrava mais. Não era o teclado — era o campo, que tinha perdido o foco sozinho.
