@@ -558,6 +558,10 @@ O CNPJ é conferido pelos dois dígitos verificadores. Quando não fecha, aparec
 
 > **Conferência com o número digitado.** O campo *"contratos assinados"* continua sendo digitado à mão e **não** é calculado a partir desta lista — mudar isso apagaria o histórico já lançado. O que o HUB Comercial faz é mostrar os dois lado a lado: quando o número do mês não bate com a quantidade de empresas cadastradas, aparece um aviso âmbar dizendo exatamente qual mês e quais os dois números. Corrigir (ou não) é decisão de quem administra.
 
+**O aviso é acionável.** Quando **faltam** empresas (lançado > cadastradas), cada mês divergente ganha um **"+ cadastrar N que faltam"**: cria as N linhas em branco já no mês certo e com o cursor no campo *Empresa* da primeira — resta digitar os nomes. Antes era preciso clicar em "+ Empresa", trocar o mês na linha, e repetir a cada uma.
+
+O atalho **só aparece quando faltam**. Quando há mais empresas cadastradas do que o número lançado, o aviso continua, mas sem botão: ali o errado é o número digitado ou uma linha sobrando, e adivinhar qual dos dois seria pior do que avisar. Acima de 6 linhas o sistema pergunta antes, e cria no máximo 50 de uma vez — "contratos assinados" é campo digitado à mão, e um `500` por engano não pode despejar 500 linhas em branco na tela.
+
 No cabeçalho do painel, o botão **"📊 Baixar lista (CSV)"** baixa a relação daquela pessoa no ano aberto — mês, empresa, CNPJ (com máscara) e a avaliação —, para abrir no Excel ou colar em outro lugar. Um arquivo por pessoa, como o painel mostra (`empresas-contrato-<pessoa>-<ano>.csv`). O botão só aparece quando há empresa cadastrada, para não oferecer arquivo vazio.
 
 > O separador do CSV é `;` e nome de empresa é texto livre — pode ter ponto e vírgula, aspas ou quebra de linha. Por isso o texto passa por `csvTexto()`, que põe aspas quando precisa; sem isso a coluna escorregaria no Excel. E o arquivo sai com BOM (`﻿`), senão o Excel abre em UTF-8 sem saber e o acento vira caractere estranho.

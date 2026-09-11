@@ -461,7 +461,8 @@
     /* Tabela que atravessa a página repete o cabeçalho */
     body.imprimindo-relatorio .rel-tabela thead{ display:table-header-group; }
     @page{ margin:10mm; }
-    .topbar-actions, .tabs-nav, .filters-row, .toolbar, .kpi-toggle-row, .row-actions, .del-cell, .search-row, .year-row{
+    .topbar-actions, .tabs-nav, .filters-row, .toolbar, .kpi-toggle-row, .row-actions, .del-cell, .search-row, .year-row,
+    .contrato-nota-btn, .contrato-add{
       display:none !important;
     }
     body, #root{ background:#fff; }
@@ -1353,6 +1354,18 @@
   .contrato-tag.nao{background:var(--danger-soft);color:#B91C1C;}
   .contrato-tag.aval{background:var(--border-soft);color:var(--ink-soft);}
   .contrato-nota{padding:10px 16px 0;font-size:12px;color:#B45309;font-weight:600;line-height:1.5;}
+  .contrato-nota-lista{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:5px;}
+  .contrato-nota-lista li{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+  /* O atalho vive dentro do aviso âmbar, então herda a cor dele em vez de
+     usar o azul de ação — senão briga com o tom do alerta. */
+  .contrato-nota-btn{
+    font-family:var(--font);font-size:11.5px;font-weight:800;cursor:pointer;
+    background:#FEF3C7;border:1px solid #FCD34D;color:#92400E;
+    padding:4px 11px;border-radius:999px;white-space:nowrap;
+    transition:background .15s, border-color .15s, transform .15s var(--ease);
+  }
+  .contrato-nota-btn:hover{background:#FDE68A;border-color:#F59E0B;transform:translateY(-1px);}
+  .contrato-nota-btn:active{transform:none;}
   .contrato-add{padding:14px 16px;}
   .painel-equipe-lista{display:flex;flex-wrap:wrap;gap:8px;}
   .painel-equipe-item{
@@ -8814,6 +8827,56 @@ function addContratoNovo(pessoa){
   }, 40);
 }
 
+/* ---------- O aviso de divergência vira ação ----------
+   Quando o número digitado em "contratos assinados" é maior que a
+   quantidade de empresas cadastradas, o painel só avisava e parava ali —
+   quem conferia tinha que clicar em "+ Empresa", trocar o mês, repetir.
+   Aqui o próprio aviso cria as linhas que faltam, já no mês certo, e põe o
+   cursor na primeira: resta digitar os nomes.
+
+   Só aparece quando FALTAM empresas. Quando há mais cadastradas do que
+   lançado, o errado é o número digitado (ou uma linha sobrando), e
+   adivinhar qual dos dois seria pior do que avisar. */
+function cadastrarContratosFaltantes(pessoa, mes, quantas){
+  if(!isAdmin) return;
+  const faltam = Math.floor(Number(quantas) || 0);
+  if(faltam < 1) return;
+  // "Contratos assinados" é digitado à mão: um 500 por engano não pode
+  // despejar 500 linhas em branco na tela.
+  const criar = Math.min(faltam, 50);
+  if(criar > 6){
+    showConfirm(
+      'Criar ' + criar + ' linhas em branco em ' + mes + ' para ' + pessoa + '? Os nomes e CNPJs você preenche depois.',
+      function(){ criarContratosEmBranco(pessoa, mes, criar); },
+      'Criar ' + criar
+    );
+    return;
+  }
+  criarContratosEmBranco(pessoa, mes, criar);
+}
+
+function criarContratosEmBranco(pessoa, mes, quantas){
+  let primeiro = null;
+  for(let i = 0; i < quantas; i++){
+    const novo = {
+      id: contratosNovosNextId++, ano: yearFilter,
+      mes: mes, pessoa: pessoa,
+      empresa: '', cnpj: '', rentavel: null,
+    };
+    contratosNovos.push(novo);
+    if(!primeiro) primeiro = novo;
+  }
+  persistContratosNovos();
+  render();
+  setTimeout(function(){
+    const el = document.getElementById('contrato-emp-' + primeiro.id);
+    if(el){
+      el.focus();
+      try{ el.scrollIntoView({block:'center', behavior:'smooth'}); }catch(e){ el.scrollIntoView(); }
+    }
+  }, 40);
+}
+
 /* Sem render: re-desenhar a cada tecla tiraria o foco do campo. */
 function onContratoNovoTexto(el, id, campo){
   const c = contratosNovos.find(function(x){ return x.id === id; });
@@ -10043,9 +10106,25 @@ function painelEmpresasNovas(pessoa, slugPessoa){
       return { mes:m, lancado:lancado, cadastradas:cadastradas };
     }).filter(function(d){ return (d.lancado || d.cadastradas) && d.lancado !== d.cadastradas; });
     if(divergentes.length){
-      nota = `<div class="contrato-nota">⚖️ Confira: o número de <b>contratos assinados</b> não bate com as empresas cadastradas — ${
-        divergentes.map(function(d){ return `<b>${esc(d.mes)}</b>: ${d.lancado} lançado${d.lancado===1?'':'s'}, ${d.cadastradas} cadastrada${d.cadastradas===1?'':'s'}`; }).join(' · ')
-      }.</div>`;
+      const itens = divergentes.map(function(d){
+        const faltam = d.lancado - d.cadastradas;
+        // Num só <span>: o li é flex, e deixar o <b> solto abriria o gap
+        // entre o nome do mês e os dois-pontos ("Julho  : 2 lançados").
+        const texto = `<span><b>${esc(d.mes)}</b>: ${d.lancado} lançado${d.lancado===1?'':'s'}, ${d.cadastradas} cadastrada${d.cadastradas===1?'':'s'}</span>`;
+        // Faltando empresa, o aviso oferece o atalho. Sobrando, não há o
+        // que oferecer: ou o número digitado está errado, ou há linha a mais.
+        const acao = faltam > 0
+          ? `<button type="button" class="contrato-nota-btn"
+                     title="Cria ${faltam} linha${faltam===1?'':'s'} em branco em ${esc(d.mes)} para você preencher os nomes"
+                     onclick="cadastrarContratosFaltantes('${escJs(pessoa)}','${escJs(d.mes)}',${faltam})"
+             >+ cadastrar ${faltam} que falta${faltam===1?'':'m'}</button>`
+          : '';
+        return `<li>${texto}${acao}</li>`;
+      }).join('');
+      nota = `<div class="contrato-nota">
+        <div>⚖️ Confira: o número de <b>contratos assinados</b> não bate com as empresas cadastradas.</div>
+        <ul class="contrato-nota-lista">${itens}</ul>
+      </div>`;
     }
   }
 
