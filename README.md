@@ -558,6 +558,10 @@ O CNPJ é conferido pelos dois dígitos verificadores. Quando não fecha, aparec
 
 > **Conferência com o número digitado.** O campo *"contratos assinados"* continua sendo digitado à mão e **não** é calculado a partir desta lista — mudar isso apagaria o histórico já lançado. O que o HUB Comercial faz é mostrar os dois lado a lado: quando o número do mês não bate com a quantidade de empresas cadastradas, aparece um aviso âmbar dizendo exatamente qual mês e quais os dois números. Corrigir (ou não) é decisão de quem administra.
 
+No cabeçalho do painel, o botão **"📊 Baixar lista (CSV)"** baixa a relação daquela pessoa no ano aberto — mês, empresa, CNPJ (com máscara) e a avaliação —, para abrir no Excel ou colar em outro lugar. Um arquivo por pessoa, como o painel mostra (`empresas-contrato-<pessoa>-<ano>.csv`). O botão só aparece quando há empresa cadastrada, para não oferecer arquivo vazio.
+
+> O separador do CSV é `;` e nome de empresa é texto livre — pode ter ponto e vírgula, aspas ou quebra de linha. Por isso o texto passa por `csvTexto()`, que põe aspas quando precisa; sem isso a coluna escorregaria no Excel. E o arquivo sai com BOM (`﻿`), senão o Excel abre em UTF-8 sem saber e o acento vira caractere estranho.
+
 As empresas do mês também saem no **relatório mensal em PDF**, numa seção própria com empresa, CNPJ, quem trouxe e a avaliação.
 
 Como no resto do HUB Comercial, quem administra vê e edita tudo; uma conta restrita só enxergaria as empresas que ela mesma trouxe, e sem editar (`contratos_consultoria`, migração 10).

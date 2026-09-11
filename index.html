@@ -4130,6 +4130,29 @@ function renderModal(){
 
 function csvNum(v){ return (Number(v)||0).toFixed(2).replace('.', ','); }
 
+/* Texto digitado por gente entra no CSV com aspas quando precisa: o
+   separador é ";" e um nome de empresa pode ter ponto e vírgula, aspas ou
+   quebra de linha — sem isso a coluna escorregaria no Excel. */
+function csvTexto(s){
+  const t = (s === null || s === undefined) ? '' : String(s);
+  return /[;"\r\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+}
+
+/* Entrega um arquivo de texto pro navegador baixar. O '﻿' na frente é
+   o BOM: sem ele o Excel abre o CSV em UTF-8 sem saber, e acento vira
+   caractere estranho. */
+function baixarTexto(nomeArquivo, conteudo){
+  const blob = new Blob(['﻿' + conteudo], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nomeArquivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function exportResumoCSV(){
   try{
     const sellerBreakdown = getSellerBreakdown();
@@ -8710,6 +8733,36 @@ function persistContratosNovos(){
    verificadores. A conferência avisa, mas nunca bloqueia — o contrato
    pode ser cadastrado antes de alguém achar o número certo. */
 function cnpjDigitos(v){ return String(v===null||v===undefined?'':v).replace(/\D/g,'').slice(0,14); }
+/* A lista de empresas com contrato assinado sai em CSV, para abrir no Excel
+   ou colar em outro lugar — é dela que saem os nomes e CNPJs quando alguém
+   pede a relação de clientes novos do ano. Uma pessoa por arquivo, que é
+   como o painel mostra. */
+function exportarEmpresasContratoCSV(pessoa){
+  try{
+    const lista = contratosNovosDe(pessoa);
+    if(!lista.length){
+      showAlert('Não há empresa cadastrada para ' + pessoa + ' em ' + yearFilter + '.');
+      return;
+    }
+    const avaliacao = function(r){
+      return r === true ? 'Rentável' : (r === false ? 'Não rentável' : 'Sem avaliação');
+    };
+    let csv = 'Mes;Empresa;CNPJ;O negocio foi\n';
+    lista.forEach(function(c){
+      csv += [
+        csvTexto(c.mes),
+        csvTexto(c.empresa),
+        csvTexto(formatCnpj(c.cnpj)),
+        csvTexto(avaliacao(c.rentavel)),
+      ].join(';') + '\n';
+    });
+    baixarTexto('empresas-contrato-' + slug(pessoa) + '-' + yearFilter + '.csv', csv);
+  } catch(e){
+    console.error('Falha ao exportar as empresas com contrato assinado', e);
+    showAlert('Não foi possível gerar o arquivo. Tente novamente.');
+  }
+}
+
 function formatCnpj(v){
   const d = cnpjDigitos(v);
   if(!d) return '';
@@ -10000,9 +10053,17 @@ function painelEmpresasNovas(pessoa, slugPessoa){
     <button class="modal-btn modal-btn-ghost" style="width:100%;" onclick="addContratoNovo('${escJs(pessoa)}')">+ Empresa com contrato assinado</button>
   </div>` : '';
 
+  // Baixar a relação (nome + CNPJ) é pedido o tempo todo — some quando não
+  // há nada para baixar, pra não oferecer um arquivo vazio.
+  const baixar = lista.length
+    ? `<button type="button" class="eye-toggle" title="Baixa a lista de empresas com nome, CNPJ e avaliação, para abrir no Excel"
+               onclick="exportarEmpresasContratoCSV('${escJs(pessoa)}')">📊 Baixar lista (CSV)</button>`
+    : '';
+
   return panel('painel-empresas-' + slugPessoa, 'Empresas com contrato assinado — ' + esc(pessoa),
     tabela + nota + botao, {
       meta: `<b>${lista.length}</b> empresa${lista.length===1?'':'s'} · <b>${rent}</b> rentáve${rent===1?'l':'is'}`,
+      actions: baixar,
       flush: true,
     });
 }
