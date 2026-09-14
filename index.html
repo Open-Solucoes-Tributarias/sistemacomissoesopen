@@ -1355,9 +1355,24 @@
   .contrato-tag.aval{background:var(--border-soft);color:var(--ink-soft);}
   /* Colunas da lista de leads: nome e empresa precisam de largura pra não
      cortar razão social; cargo é o que mais varia de tamanho. */
-  .col-lead-nome{min-width:190px;}
+  .col-lead-nome{min-width:170px;}
   .col-lead-cargo{min-width:180px;}
-  .col-lead-empresa{min-width:210px;}
+  .col-lead-empresa{min-width:200px;}
+  .col-lead-fone{min-width:145px;}
+  .col-lead-email{min-width:200px;}
+  /* Telefone e e-mail viram link pra conta que só lê: um toque liga ou
+     abre o e-mail, que é o que se faz com um lead. */
+  .lead-link{color:var(--primary);text-decoration:none;font-weight:600;}
+  .lead-link:hover{text-decoration:underline;}
+  /* A caixa de "substituir a lista inteira" é destrutiva: fundo âmbar pra
+     não ser marcada sem querer no meio da conferência. */
+  .leads-substituir{
+    display:flex;align-items:flex-start;gap:9px;margin-top:12px;
+    background:#FEF3C7;border:1px solid #FCD34D;border-radius:var(--radius-sm);
+    padding:10px 12px;font-size:12.5px;font-weight:600;color:#92400E;
+    line-height:1.45;cursor:pointer;
+  }
+  .leads-substituir input{width:16px;height:16px;flex:none;margin:1px 0 0;accent-color:#B45309;cursor:pointer;}
   .contrato-nota{padding:10px 16px 0;font-size:12px;color:#B45309;font-weight:600;line-height:1.5;}
   .contrato-nota-lista{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:5px;}
   .contrato-nota-lista li{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
@@ -2691,6 +2706,7 @@ function persistMarketingLeads(){
           return {
             id: r.id, ano: r.ano||2026, mes: r.mes, rede: r.rede || 'linkedin',
             nome: r.nome || '', cargo: r.cargo || '', empresa: r.empresa || '',
+            telefone: r.telefone || '', email: r.email || '',
             orgao_publico: (r.orgaoPublico === null || r.orgaoPublico === undefined) ? null : !!r.orgaoPublico,
           };
         });
@@ -2717,6 +2733,7 @@ async function tryLoadMarketingLeadsAsync(){
         return {
           id: d.id, ano: d.ano, mes: d.mes, rede: d.rede || 'linkedin',
           nome: d.nome || '', cargo: d.cargo || '', empresa: d.empresa || '',
+          telefone: d.telefone || '', email: d.email || '',
           orgaoPublico: (d.orgao_publico === null || d.orgao_publico === undefined) ? null : !!d.orgao_publico,
         };
       });
@@ -2741,8 +2758,8 @@ function setLeadsFiltroTipo(t){ leadsFiltroTipo = t; render(); }
 function addLeadRow(){
   if(!isAdmin) return;
   const mes = marketingFilter === 'Todos' ? MONTHS[new Date().getMonth()] : marketingFilter;
-  const novo = { id: marketingLeadsNextId++, ano: yearFilter, mes: mes,
-                 rede: marketingRede, nome: '', cargo: '', empresa: '', orgaoPublico: null };
+  const novo = { id: marketingLeadsNextId++, ano: yearFilter, mes: mes, rede: marketingRede,
+                 nome: '', cargo: '', empresa: '', telefone: '', email: '', orgaoPublico: null };
   marketingLeads.push(novo);
   persistMarketingLeads();
   render();
@@ -2800,10 +2817,10 @@ function exportarLeadsCSV(rede){
       return;
     }
     const tipo = function(v){ return v === true ? 'Órgão público' : (v === false ? 'Não é órgão público' : 'Sem classificação'); };
-    let csv = 'Mes;Nome;Cargo;Empresa;Tipo\n';
+    let csv = 'Mes;Nome;Cargo;Empresa;Telefone;E-mail;Tipo\n';
     lista.forEach(function(l){
-      csv += [csvTexto(l.mes), csvTexto(l.nome), csvTexto(l.cargo),
-              csvTexto(l.empresa), csvTexto(tipo(l.orgaoPublico))].join(';') + '\n';
+      csv += [csvTexto(l.mes), csvTexto(l.nome), csvTexto(l.cargo), csvTexto(l.empresa),
+              csvTexto(l.telefone), csvTexto(l.email), csvTexto(tipo(l.orgaoPublico))].join(';') + '\n';
     });
     baixarTexto('leads-' + rede + '-' + yearFilter + '.csv', csv);
   } catch(e){
@@ -2858,6 +2875,16 @@ function painelLeadsHtml(rede){
         ? `<input class="contrato-linha-input" type="text" placeholder="Empresa"
                   value="${esc(l.empresa)}" data-id="${l.id}" data-campo="empresa" oninput="onLeadTexto(this)" />`
         : esc(l.empresa || '—')}</td>
+      <td class="col-lead-fone">${editavel
+        ? `<input class="contrato-linha-input" type="text" inputmode="tel" placeholder="(00) 00000-0000"
+                  value="${esc(l.telefone)}" data-id="${l.id}" data-campo="telefone" oninput="onLeadTexto(this)" />`
+        : (l.telefone
+            ? `<a class="lead-link" href="tel:${esc(String(l.telefone).replace(/[^\d+]/g,''))}">${esc(l.telefone)}</a>`
+            : '—')}</td>
+      <td class="col-lead-email">${editavel
+        ? `<input class="contrato-linha-input" type="text" inputmode="email" placeholder="nome@empresa.com"
+                  value="${esc(l.email)}" data-id="${l.id}" data-campo="email" oninput="onLeadTexto(this)" />`
+        : (l.email ? `<a class="lead-link" href="mailto:${esc(l.email)}">${esc(l.email)}</a>` : '—')}</td>
       <td class="col-rent">
         <div class="rent-toggle">
           <button type="button" class="rent-btn sim${l.orgaoPublico===true?' on':''}" ${editavel?'':'disabled'}
@@ -2880,6 +2907,8 @@ function painelLeadsHtml(rede){
           <th class="col-lead-nome">Nome</th>
           <th class="col-lead-cargo">Cargo</th>
           <th class="col-lead-empresa">Empresa</th>
+          <th class="col-lead-fone">Telefone</th>
+          <th class="col-lead-email">E-mail</th>
           <th class="col-rent">É órgão público?</th>
           ${editavel ? '<th></th>' : ''}
         </tr></thead>
@@ -2925,15 +2954,21 @@ function mapearColunasLeads(linhas){
   const nome = acha(/^nome$|nome do lead|lead|contato|pessoa|^first|full name/);
   const cargo = acha(/cargo|^titulo$|title|position|funcao|role|headline/);
   const empresa = acha(/empresa|company|organiza|razao/);
+  // "fone" pega telefone e fone; "whats" pega whatsapp escrito de toda forma.
+  const telefone = acha(/telefone|fone|celular|whats|phone|mobile|tel\b/);
+  const email = acha(/e-?mail/);
   // Se a planilha já trouxer a classificação, aproveitamos.
   const tipo = acha(/orgao|publico|setor|^tipo$/);
   const mes = acha(/^mes$|mes de|data|month/);
-  if(nome >= 0 || empresa >= 0){
-    return { temCabecalho: true, nome: nome, cargo: cargo, empresa: empresa, tipo: tipo, mes: mes };
+  if(nome >= 0 || empresa >= 0 || email >= 0){
+    return { temCabecalho: true, nome: nome, cargo: cargo, empresa: empresa,
+             telefone: telefone, email: email, tipo: tipo, mes: mes };
   }
-  // Sem cabeçalho reconhecido: assume nome, cargo, empresa — a ordem em que
-  // o LinkedIn exporta e em que as pessoas escrevem na mão.
-  return { temCabecalho: false, nome: 0, cargo: 1, empresa: 2, tipo: -1, mes: -1 };
+  // Sem cabeçalho reconhecido: assume nome, cargo, empresa, telefone,
+  // e-mail — a ordem em que o LinkedIn exporta e em que as pessoas
+  // escrevem na mão.
+  return { temCabecalho: false, nome: 0, cargo: 1, empresa: 2, telefone: 3, email: 4,
+           tipo: -1, mes: -1 };
 }
 
 /* "Sim", "Público", "Órgão público", "Publico" → true; "Não", "Privado",
@@ -2948,6 +2983,9 @@ function leadTipoDaPlanilha(txt){
   return null;
 }
 
+function emailNormalizado(v){ return semAcento(String(v || '')).trim(); }
+function chaveNomeEmpresa(nome, empresa){ return semAcento(nome) + '|' + semAcento(empresa); }
+
 function prepararImportacaoLeads(linhas){
   if(!linhas.length) throw new Error('A planilha veio vazia.');
   const cols = mapearColunasLeads(linhas);
@@ -2957,34 +2995,70 @@ function prepararImportacaoLeads(linhas){
   };
   const mesPadrao = marketingFilter === 'Todos' ? MONTHS[new Date().getMonth()] : marketingFilter;
 
-  // Duplicado = mesmo nome e mesma empresa já na lista do ano. Sem isso,
-  // reimportar a planilha dobraria a lista inteira.
-  const existentes = {};
-  leadsDaRede(marketingRede).forEach(function(l){
-    existentes[semAcento(l.nome) + '|' + semAcento(l.empresa)] = true;
+  /* Lead que já está na lista NÃO é descartado: é atualizado com o que a
+     planilha nova trouxer. É o caso de subir a lista de novo já com os
+     telefones e e-mails preenchidos.
+
+     O reconhecimento olha DOIS caminhos, e é isso que faz o caso real
+     funcionar: os leads já cadastrados costumam não ter e-mail (a primeira
+     planilha não trazia), e a planilha nova traz. Se a identidade fosse só
+     o e-mail, nada casaria e a lista dobraria; se fosse só nome+empresa,
+     um lead que mudou de empresa viraria outro. Então: casa por e-mail se
+     houver, senão por nome + empresa. */
+  const lista = leadsDaRede(marketingRede);
+  const porEmail = {}, porNomeEmpresa = {};
+  lista.forEach(function(l){
+    const e = emailNormalizado(l.email);
+    if(e && !porEmail[e]) porEmail[e] = l;
+    const k = chaveNomeEmpresa(l.nome, l.empresa);
+    if(!porNomeEmpresa[k]) porNomeEmpresa[k] = l;
   });
 
+  const idsUsados = {};      // lead já reivindicado por uma linha anterior
+  const novosVistos = {};    // identidade das linhas novas já lidas
   const itens = [];
   corpo.forEach(function(l){
     const nome = celula(l, cols.nome);
     const cargo = celula(l, cols.cargo);
     const empresa = celula(l, cols.empresa);
-    if(!nome && !empresa) return;             // linha vazia
+    const telefone = celula(l, cols.telefone);
+    const email = celula(l, cols.email);
+    if(!nome && !empresa && !email) return;             // linha vazia
     const m = cols.mes >= 0 ? mesDaPlanilha(l[cols.mes]) : null;
-    const chave = semAcento(nome) + '|' + semAcento(empresa);
-    const duplicada = !!existentes[chave];
-    if(!duplicada) existentes[chave] = true;
+
+    const e = emailNormalizado(email);
+    const kNome = chaveNomeEmpresa(nome, empresa);
+    let alvo = (e && porEmail[e]) || porNomeEmpresa[kNome] || null;
+
+    // Linha repetida DENTRO da própria planilha: a primeira vale, as
+    // seguintes ficam de fora — senão a segunda sobrescreveria a primeira.
+    let repetida = false;
+    if(alvo){
+      if(idsUsados[alvo.id]){ repetida = true; alvo = null; }
+      else idsUsados[alvo.id] = true;
+    } else {
+      const kNovo = e ? 'e:' + e : 'n:' + kNome;
+      if(novosVistos[kNovo]) repetida = true;
+      else novosVistos[kNovo] = true;
+    }
+
     itens.push({
-      nome: nome, cargo: cargo, empresa: empresa,
+      nome: nome, cargo: cargo, empresa: empresa, telefone: telefone, email: email,
       mes: (m && m.mes) ? m.mes : mesPadrao,
       ano: (m && m.ano) ? m.ano : yearFilter,
       orgaoPublico: cols.tipo >= 0 ? leadTipoDaPlanilha(l[cols.tipo]) : null,
-      duplicada: duplicada,
-      aviso: duplicada ? 'já está na lista' : '',
+      atualizaId: alvo ? alvo.id : null,      // null = lead novo
+      repetida: repetida,
+      aviso: repetida ? 'repetida na planilha' : (alvo ? 'atualiza o que já está na lista' : ''),
     });
   });
-  if(!itens.length) throw new Error('Não achei nenhum lead na planilha. Confira se há uma coluna de nome ou de empresa com dado.');
-  return { itens: itens, cols: cols };
+  if(!itens.length) throw new Error('Não achei nenhum lead na planilha. Confira se há uma coluna de nome, empresa ou e-mail com dado.');
+
+  // Quais leads da lista NÃO aparecem nesta planilha — só interessa quando
+  // a pessoa pede pra substituir a lista inteira.
+  const ausentes = lista.filter(function(l){ return !idsUsados[l.id]; });
+
+  return { itens: itens, cols: cols, ausentes: ausentes };
 }
 
 function abrirImportarLeads(){
@@ -3032,20 +3106,61 @@ function onColarLeads(el){
   render();
 }
 
+function setLeadsSubstituirLista(el){
+  if(!modalState) return;
+  modalState.substituir = !!el.checked;
+  render();
+}
+
 function confirmarImportacaoLeads(){
   const m = modalState;
   if(!m || !m.dados) return;
-  const novos = m.dados.itens.filter(function(i){ return !i.duplicada; });
-  if(!novos.length){ showAlert('Não há nada novo para importar.'); return; }
-  novos.forEach(function(i){
-    marketingLeads.push({
-      id: marketingLeadsNextId++, ano: i.ano, mes: i.mes, rede: marketingRede,
-      nome: i.nome, cargo: i.cargo, empresa: i.empresa, orgaoPublico: i.orgaoPublico,
-    });
+  const uteis = m.dados.itens.filter(function(i){ return !i.repetida; });
+  const novos = uteis.filter(function(i){ return !i.atualizaId; });
+  const atualizar = uteis.filter(function(i){ return i.atualizaId; });
+  const remover = m.substituir ? (m.dados.ausentes || []) : [];
+  if(!uteis.length && !remover.length){ showAlert('Não há nada para importar.'); return; }
+
+  /* Só sobrescreve o campo que a planilha realmente trouxe. Se a planilha
+     não tem coluna de telefone, o telefone que já estava lá fica; se não
+     tem coluna de órgão público, a classificação feita à mão na tela não é
+     apagada. Reimportar completa o cadastro, não zera o que já existe. */
+  const aplicar = function(alvo, i){
+    if(i.nome)     alvo.nome = i.nome;
+    if(i.cargo)    alvo.cargo = i.cargo;
+    if(i.empresa)  alvo.empresa = i.empresa;
+    if(i.telefone) alvo.telefone = i.telefone;
+    if(i.email)    alvo.email = i.email;
+    if(i.orgaoPublico !== null && i.orgaoPublico !== undefined) alvo.orgaoPublico = i.orgaoPublico;
+    if(m.dados.cols.mes >= 0) alvo.mes = i.mes;   // só mexe no mês se a planilha disser o mês
+  };
+
+  atualizar.forEach(function(i){
+    const alvo = marketingLeads.find(function(l){ return l.id === i.atualizaId; });
+    if(alvo) aplicar(alvo, i);
   });
+
+  novos.forEach(function(i){
+    const novo = { id: marketingLeadsNextId++, ano: i.ano, mes: i.mes, rede: marketingRede,
+                   nome: '', cargo: '', empresa: '', telefone: '', email: '', orgaoPublico: null };
+    aplicar(novo, i);
+    novo.mes = i.mes;   // lead novo sempre nasce com o mês resolvido
+    marketingLeads.push(novo);
+  });
+
+  if(remover.length){
+    const fora = {};
+    remover.forEach(function(l){ fora[l.id] = true; });
+    marketingLeads = marketingLeads.filter(function(l){ return !fora[l.id]; });
+  }
+
   persistMarketingLeads();
   closeModal();
-  showAlert(novos.length + (novos.length === 1 ? ' lead importado.' : ' leads importados.'));
+  const partes = [];
+  if(novos.length)     partes.push(novos.length + (novos.length===1 ? ' lead novo' : ' leads novos'));
+  if(atualizar.length) partes.push(atualizar.length + (atualizar.length===1 ? ' atualizado' : ' atualizados'));
+  if(remover.length)   partes.push(remover.length + (remover.length===1 ? ' removido' : ' removidos'));
+  showAlert(partes.join(' · ') + '.');
 }
 
 function setTrafegoFilter(m){ trafegoFilter = m; render(); }
@@ -4430,9 +4545,13 @@ function renderModal(){
   }
   if(m.type === 'import-leads'){
     const d = m.dados;
-    const novos = d ? d.itens.filter(function(i){ return !i.duplicada; }) : [];
-    const problemas = d ? d.itens.filter(function(i){ return i.aviso; }) : [];
+    const uteis = d ? d.itens.filter(function(i){ return !i.repetida; }) : [];
+    const novos = uteis.filter(function(i){ return !i.atualizaId; });
+    const atualiza = uteis.filter(function(i){ return i.atualizaId; });
+    const repetidas = d ? d.itens.filter(function(i){ return i.repetida; }) : [];
+    const ausentes = d ? (d.ausentes || []) : [];
     const previa = d ? d.itens.slice(0, 40) : [];
+    const temAlgo = uteis.length || (m.substituir && ausentes.length);
     const rotuloTipo = function(v){ return v === true ? 'Órgão público' : (v === false ? 'Privado' : '—'); };
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
@@ -4440,11 +4559,15 @@ function renderModal(){
           <div class="modal-msg">Importar lista de leads</div>
           <div class="painel-equipe-nota">
             Reconheço colunas com estes nomes (com ou sem acento, em qualquer ordem):
-            <b>Nome</b>, <b>Cargo</b>, <b>Empresa</b>, <b>Órgão público</b> e <b>Mês</b>. Sem
-            cabeçalho reconhecido, uso a ordem <b>nome, cargo, empresa</b>. Aceito <b>.xlsx</b> e <b>.csv</b>;
+            <b>Nome</b>, <b>Cargo</b>, <b>Empresa</b>, <b>Telefone</b>, <b>E-mail</b>,
+            <b>Órgão público</b> e <b>Mês</b>. Sem cabeçalho reconhecido, uso a ordem
+            <b>nome, cargo, empresa, telefone, e-mail</b>. Aceito <b>.xlsx</b> e <b>.csv</b>;
             se preferir, selecione as células no Excel, copie com Ctrl+C e cole no campo de
-            baixo. Sem mês na planilha, entra em
+            baixo. Sem mês na planilha, o lead novo entra em
             <b>${esc(marketingFilter === 'Todos' ? MONTHS[new Date().getMonth()] : marketingFilter)}</b>.
+            <br><b>Lead que já está na lista é atualizado</b>, não duplicado — subir a planilha
+            de novo com telefone e e-mail preenchidos completa o cadastro. Campo que a planilha
+            não trouxer fica como está.
           </div>
           <label class="import-arquivo">
             <input type="file" accept=".xlsx,.csv,.txt,.tsv" onchange="onArquivoLeads(this)" />
@@ -4456,33 +4579,50 @@ function renderModal(){
           ${m.erro ? `<div class="modal-error">${esc(m.erro)}</div>` : ''}
           ${d ? `
             <div class="import-resumo">
-              <b>${novos.length}</b> lead${novos.length===1?'':'s'} novo${novos.length===1?'':'s'} de <b>${d.itens.length}</b> linha${d.itens.length===1?'':'s'} lida${d.itens.length===1?'':'s'}
-              ${problemas.length ? ` · <span class="import-alerta">${problemas.length} já na lista</span>` : ''}
-              ${d.cols.temCabecalho ? ' · cabeçalho reconhecido' : ' · sem cabeçalho, usei a ordem nome / cargo / empresa'}
+              <b>${novos.length}</b> novo${novos.length===1?'':'s'}
+              ${atualiza.length ? ` · <b>${atualiza.length}</b> atualizado${atualiza.length===1?'':'s'}` : ''}
+              de <b>${d.itens.length}</b> linha${d.itens.length===1?'':'s'} lida${d.itens.length===1?'':'s'}
+              ${repetidas.length ? ` · <span class="import-alerta">${repetidas.length} repetida${repetidas.length===1?'':'s'} na planilha</span>` : ''}
+              ${d.cols.temCabecalho ? ' · cabeçalho reconhecido' : ' · sem cabeçalho, usei a ordem nome / cargo / empresa / telefone / e-mail'}
             </div>
             <div class="table-scroll import-previa">
               <table class="table-plain">
-                <thead><tr><th>Nome</th><th>Cargo</th><th>Empresa</th><th>Mês</th><th>Órgão público</th><th></th></tr></thead>
+                <thead><tr><th>Nome</th><th>Cargo</th><th>Empresa</th><th>Telefone</th><th>E-mail</th><th>Mês</th><th>Órgão público</th><th></th></tr></thead>
                 <tbody>${previa.map(function(i){
-                  return `<tr class="${i.aviso ? 'row-pending' : ''}">
+                  return `<tr class="${i.repetida ? 'row-pending' : ''}">
                     <td>${esc(i.nome) || '—'}</td>
                     <td>${esc(i.cargo) || '—'}</td>
                     <td>${esc(i.empresa) || '—'}</td>
+                    <td>${esc(i.telefone) || '—'}</td>
+                    <td>${esc(i.email) || '—'}</td>
                     <td>${esc(i.mes)}</td>
                     <td>${rotuloTipo(i.orgaoPublico)}</td>
-                    <td>${i.aviso ? `<span class="import-alerta">${esc(i.aviso)}</span>` : '✓'}</td>
+                    <td>${i.repetida
+                          ? `<span class="import-alerta">${esc(i.aviso)}</span>`
+                          : (i.atualizaId ? '↻ atualiza' : '✓ novo')}</td>
                   </tr>`;
                 }).join('')}</tbody>
               </table>
             </div>
             ${d.itens.length > previa.length ? `<div class="import-resumo">…e mais ${d.itens.length - previa.length} linha${d.itens.length - previa.length === 1 ? '' : 's'}.</div>` : ''}
-            ${problemas.length ? `<div class="import-resumo import-alerta">Leads já na lista (mesmo nome e mesma empresa) não são importados de novo.</div>` : ''}
-            ${d.cols.tipo < 0 ? `<div class="import-resumo">Sem coluna de órgão público na planilha, os leads entram <b>sem classificação</b> — você marca na tabela depois.</div>` : ''}
+            ${repetidas.length ? `<div class="import-resumo import-alerta">Linha repetida dentro da própria planilha (mesmo e-mail, ou mesmo nome e empresa): vale a primeira, as seguintes ficam de fora.</div>` : ''}
+            ${d.cols.telefone < 0 && d.cols.email < 0 ? `<div class="import-resumo import-alerta">Não achei coluna de <b>telefone</b> nem de <b>e-mail</b> nesta planilha — confira o cabeçalho, senão esses campos vão ficar vazios.</div>` : ''}
+            ${d.cols.tipo < 0 ? `<div class="import-resumo">Sem coluna de órgão público na planilha, o lead novo entra <b>sem classificação</b> (e quem já estava classificado continua como está).</div>` : ''}
+            ${ausentes.length ? `
+              <label class="leads-substituir">
+                <input type="checkbox" ${m.substituir ? 'checked' : ''} onchange="setLeadsSubstituirLista(this)" />
+                <span>Substituir a lista inteira: <b>excluir os ${ausentes.length} lead${ausentes.length===1?'':'s'}</b> que não estão nesta planilha</span>
+              </label>
+              ${m.substituir ? `<div class="import-resumo import-alerta">Os ${ausentes.length} lead${ausentes.length===1?'':'s'} que não aparecem na planilha serão <b>excluídos</b>, com a classificação que tiverem. Sem marcar, eles ficam onde estão.</div>` : ''}
+            ` : ''}
           ` : ''}
           <div class="modal-actions">
             <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
-            <button class="modal-btn modal-btn-primary" ${novos.length ? '' : 'disabled'} onclick="confirmarImportacaoLeads()">
-              ${novos.length ? 'Importar ' + novos.length + (novos.length===1?' lead':' leads') : 'Importar'}
+            <button class="modal-btn modal-btn-primary" ${temAlgo ? '' : 'disabled'} onclick="confirmarImportacaoLeads()">
+              ${temAlgo
+                ? 'Importar' + (novos.length ? ' ' + novos.length + ' novo' + (novos.length===1?'':'s') : '')
+                             + (atualiza.length ? (novos.length ? ' e ' : ' ') + atualiza.length + ' atualizado' + (atualiza.length===1?'':'s') : '')
+                : 'Importar'}
             </button>
           </div>
         </div>

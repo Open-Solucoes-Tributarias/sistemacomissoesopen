@@ -58,6 +58,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_marketing_trafego_pago_migration.sql → migração 27: Tráfego pago — campanhas de anúncio (aba Marketing)
 ├── supabase_renovacoes_venda_fk_migration.sql → migração 28: índice único em renovacoes.venda_id (e por que não há foreign key)
 ├── supabase_marketing_leads_migration.sql → migração 29: lista de leads do LinkedIn (nome, cargo, empresa, órgão público)
+├── supabase_marketing_leads_contato_migration.sql → migração 30: telefone e e-mail no lead
 └── .gitignore
 ```
 
@@ -232,7 +233,7 @@ Se você já tem esse HUB Comercial rodando com o banco antigo (liberado por lin
 | `marketing_metricas` | Crescimento das redes sociais: mês, conta (Open/Foco Tributário), rede, e `valores` — um jsonb com um número (ou texto) por indicador daquela rede (migração 24, virou jsonb na migração 26) |
 | `marketing_indicadores` | Catálogo de quais indicadores cada rede tem — chave, rótulo, se é número ou texto, se é moeda. É nela que o botão "Editar indicadores" mexe (migração 26) |
 | `marketing_campanhas` | Tráfego pago: uma linha por campanha de anúncio, com os números brutos (gasto, alcance, impressões, cliques, leads...). CPC, CPL, CTR, CPM, Connect rate e Custo/MQL não são colunas — são calculados na tela (migração 27) |
-| `marketing_leads` | Lista de leads: uma pessoa por linha, com nome, cargo, empresa e se a empresa é órgão público (`orgao_publico` é boolean NULL — três estados). `rede` permite leads de outra origem sem migração nova (migração 29) |
+| `marketing_leads` | Lista de leads: uma pessoa por linha, com nome, cargo, empresa, telefone, e-mail (migração 30) e se a empresa é órgão público (`orgao_publico` é boolean NULL — três estados). `rede` permite leads de outra origem sem migração nova (migração 29) |
 
 As colunas `nota_emitida` e `nota_emitida_em` de `vendas` e `lancamentos` guardam o visto do financeiro (migração 23); só a função `marcar_nota_emitida` escreve nelas.
 
@@ -732,19 +733,34 @@ As redes guardam "um número por mês". **Lead é outra natureza**: uma pessoa p
 | Nome | o nome da pessoa |
 | Cargo | o cargo dela — é o que diz o poder de decisão |
 | Empresa | onde ela trabalha |
+| Telefone | como falar com ela (texto livre: DDD, `+55`, ramal, dois números na mesma célula — nada é recusado por formato) |
+| E-mail | idem, e é também a **identidade** do lead na reimportação |
 | É órgão público? | **Órgão público** ou **Privado** — um clique escolhe, clicar de novo desmarca |
+
+Para quem só lê, telefone e e-mail viram link (`tel:` e `mailto:`): um toque liga ou abre o e-mail, que é o que se faz com um lead.
 
 **Por que "órgão público" tem coluna própria:** a carteira da Open é cheia de MP, TRE, TRT, INPI. Órgão público compra por licitação, com ciclo e interlocutor diferentes de empresa privada — saber isso na origem muda como o lead é trabalhado. Pills no topo do painel filtram por **Órgão público / Privado / Sem classificar**, e o rodapé conta os três.
 
 Como `rentavel` em contratos e `renovado` em renovações, a classificação tem **três estados**: `null` é "ainda não classificado" — é assim que o lead nasce na importação. Sem o `null`, "não classificado" e "não é órgão público" virariam a mesma coisa.
 
-**Importar a lista** — o botão **"📄 Importar lista de leads"** lê `.xlsx` e `.csv`, ou aceita as células coladas do Excel (mesmo mecanismo das planilhas de renovações e de consultoria: `linhasDoXlsx`, `linhasDeTexto`, leitura de `.xlsx` sem biblioteca externa). Reconhece as colunas **Nome**, **Cargo**, **Empresa**, **Órgão público** e **Mês**, com ou sem acento, em qualquer ordem; sem cabeçalho reconhecido usa a ordem *nome, cargo, empresa* — que é como o LinkedIn exporta.
+**Importar a lista** — o botão **"📄 Importar lista de leads"** lê `.xlsx` e `.csv`, ou aceita as células coladas do Excel (mesmo mecanismo das planilhas de renovações e de consultoria: `linhasDoXlsx`, `linhasDeTexto`, leitura de `.xlsx` sem biblioteca externa). Reconhece as colunas **Nome**, **Cargo**, **Empresa**, **Telefone**, **E-mail**, **Órgão público** e **Mês**, com ou sem acento, em qualquer ordem; sem cabeçalho reconhecido usa a ordem *nome, cargo, empresa, telefone, e-mail* — que é como o LinkedIn exporta.
 
 - Se a planilha traz a classificação, ela é aproveitada: `Sim`/`Público`/`Governo` → órgão público, `Não`/`Privado`/`Empresa` → privado. **Texto que não dá para interpretar não vira palpite** — fica em branco para a pessoa decidir.
-- **Não importa duas vezes**: mesmo nome e mesma empresa já na lista do ano entra como *"já está na lista"* e fica de fora. Reimportar a planilha não dobra a lista.
-- Sem mês na planilha, o lead entra no mês selecionado nas pills (ou no mês corrente, se o filtro está em "Todos").
+- Sem mês na planilha, o **lead novo** entra no mês selecionado nas pills (ou no mês corrente, se o filtro está em "Todos"); quem já está na lista **não muda de mês**.
 
-O botão **"📊 Baixar lista (CSV)"** devolve a lista com mês, nome, cargo, empresa e a classificação.
+### Reimportar completa o cadastro, não duplica
+
+Subir a planilha de novo **atualiza** quem já está na lista, em vez de recusar como duplicado — é o caso de importar primeiro só nome/cargo/empresa e depois a mesma lista já com telefone e e-mail.
+
+**Como um lead é reconhecido** — e este é o detalhe que faz a coisa funcionar de verdade: casa **por e-mail** se houver, senão **por nome + empresa**. Os dois caminhos são necessários, e a primeira versão errou justamente aqui. Os leads já cadastrados costumam **não** ter e-mail (a primeira planilha não trazia) e a planilha nova traz: se a identidade fosse só o e-mail, nada casaria e a lista dobraria. Se fosse só nome + empresa, um lead que mudou de empresa viraria outro.
+
+**Campo que a planilha não trouxer fica como está.** Sem coluna de telefone, o telefone que já existia continua; sem coluna de órgão público, a classificação feita à mão na tela **não** é apagada. Reimportar completa, não zera.
+
+Linha repetida **dentro da própria planilha** (mesmo e-mail, ou mesmo nome e empresa) entra como *"repetida na planilha"*: vale a primeira, as seguintes ficam de fora — senão a segunda sobrescreveria a primeira.
+
+**Substituir a lista inteira** é opt-in: quando há leads na lista que **não** aparecem na planilha, o modal oferece uma caixa âmbar para **excluí-los**. Desmarcada (o padrão), eles ficam onde estão. É a única operação destrutiva do painel, e por isso pede um clique explícito e diz quantos leads seriam excluídos.
+
+O botão **"📊 Baixar lista (CSV)"** devolve mês, nome, cargo, empresa, telefone, e-mail e a classificação.
 
 `rede` está na tabela mesmo a tela só oferecendo LinkedIn hoje: lead de outra origem cabe sem migração nova — é trocar a condição em `renderMarketingSection`.
 
