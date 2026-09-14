@@ -56,6 +56,8 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_curso_in_company_migration.sql → migração 25: curso In Company como indicador próprio do ranking
 ├── supabase_marketing_indicadores_migration.sql → migração 26: indicadores configuráveis por rede + RD Station (aba Marketing)
 ├── supabase_marketing_trafego_pago_migration.sql → migração 27: Tráfego pago — campanhas de anúncio (aba Marketing)
+├── supabase_renovacoes_venda_fk_migration.sql → migração 28: índice único em renovacoes.venda_id (e por que não há foreign key)
+├── supabase_marketing_leads_migration.sql → migração 29: lista de leads do LinkedIn (nome, cargo, empresa, órgão público)
 └── .gitignore
 ```
 
@@ -230,6 +232,7 @@ Se você já tem esse HUB Comercial rodando com o banco antigo (liberado por lin
 | `marketing_metricas` | Crescimento das redes sociais: mês, conta (Open/Foco Tributário), rede, e `valores` — um jsonb com um número (ou texto) por indicador daquela rede (migração 24, virou jsonb na migração 26) |
 | `marketing_indicadores` | Catálogo de quais indicadores cada rede tem — chave, rótulo, se é número ou texto, se é moeda. É nela que o botão "Editar indicadores" mexe (migração 26) |
 | `marketing_campanhas` | Tráfego pago: uma linha por campanha de anúncio, com os números brutos (gasto, alcance, impressões, cliques, leads...). CPC, CPL, CTR, CPM, Connect rate e Custo/MQL não são colunas — são calculados na tela (migração 27) |
+| `marketing_leads` | Lista de leads: uma pessoa por linha, com nome, cargo, empresa e se a empresa é órgão público (`orgao_publico` é boolean NULL — três estados). `rede` permite leads de outra origem sem migração nova (migração 29) |
 
 As colunas `nota_emitida` e `nota_emitida_em` de `vendas` e `lancamentos` guardam o visto do financeiro (migração 23); só a função `marcar_nota_emitida` escreve nelas.
 
@@ -718,6 +721,32 @@ Cada indicador numérico vira um **cartão por conta**, com o valor do mês e a 
 **Gráfico de evolução mensal** — abaixo dos cartões, mostra o ano inteiro em barras (sempre os 12 meses de `yearFilter`, não muda com o filtro de mês) de um indicador escolhido no seletor "Indicador", uma barra por conta lado a lado em cada mês (Open e Foco Tributário, cada uma numa cor). Era gráfico de linha, mas com só 1 ou 2 meses lançados a linha virava um traço fino sem contexto — barra lê melhor um ano ainda incompleto. Mês sem lançamento simplesmente não tem barra ali, não é barra de altura zero.
 
 Um filtro de mês (Todos + os 12 meses) recorta a tabela de lançamentos e os cartões ao mesmo tempo, igual ao resto do HUB Comercial. A tabela também segue os indicadores da rede: as colunas mudam sozinhas quando um indicador é incluído ou retirado.
+
+### Leads do LinkedIn
+
+As redes guardam "um número por mês". **Lead é outra natureza**: uma pessoa por linha. Por isso a pill do **LinkedIn** tem um painel próprio, **"Leads — LinkedIn"**, com tabela própria (`marketing_leads`, migração 29):
+
+| Campo | O que é |
+|---|---|
+| Mês | em que mês o lead entrou |
+| Nome | o nome da pessoa |
+| Cargo | o cargo dela — é o que diz o poder de decisão |
+| Empresa | onde ela trabalha |
+| É órgão público? | **Órgão público** ou **Privado** — um clique escolhe, clicar de novo desmarca |
+
+**Por que "órgão público" tem coluna própria:** a carteira da Open é cheia de MP, TRE, TRT, INPI. Órgão público compra por licitação, com ciclo e interlocutor diferentes de empresa privada — saber isso na origem muda como o lead é trabalhado. Pills no topo do painel filtram por **Órgão público / Privado / Sem classificar**, e o rodapé conta os três.
+
+Como `rentavel` em contratos e `renovado` em renovações, a classificação tem **três estados**: `null` é "ainda não classificado" — é assim que o lead nasce na importação. Sem o `null`, "não classificado" e "não é órgão público" virariam a mesma coisa.
+
+**Importar a lista** — o botão **"📄 Importar lista de leads"** lê `.xlsx` e `.csv`, ou aceita as células coladas do Excel (mesmo mecanismo das planilhas de renovações e de consultoria: `linhasDoXlsx`, `linhasDeTexto`, leitura de `.xlsx` sem biblioteca externa). Reconhece as colunas **Nome**, **Cargo**, **Empresa**, **Órgão público** e **Mês**, com ou sem acento, em qualquer ordem; sem cabeçalho reconhecido usa a ordem *nome, cargo, empresa* — que é como o LinkedIn exporta.
+
+- Se a planilha traz a classificação, ela é aproveitada: `Sim`/`Público`/`Governo` → órgão público, `Não`/`Privado`/`Empresa` → privado. **Texto que não dá para interpretar não vira palpite** — fica em branco para a pessoa decidir.
+- **Não importa duas vezes**: mesmo nome e mesma empresa já na lista do ano entra como *"já está na lista"* e fica de fora. Reimportar a planilha não dobra a lista.
+- Sem mês na planilha, o lead entra no mês selecionado nas pills (ou no mês corrente, se o filtro está em "Todos").
+
+O botão **"📊 Baixar lista (CSV)"** devolve a lista com mês, nome, cargo, empresa e a classificação.
+
+`rede` está na tabela mesmo a tela só oferecendo LinkedIn hoje: lead de outra origem cabe sem migração nova — é trocar a condição em `renderMarketingSection`.
 
 ### Tráfego pago
 

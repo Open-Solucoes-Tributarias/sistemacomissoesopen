@@ -1353,6 +1353,11 @@
   .contrato-tag.sim{background:#DCFCE7;color:#15803D;}
   .contrato-tag.nao{background:var(--danger-soft);color:#B91C1C;}
   .contrato-tag.aval{background:var(--border-soft);color:var(--ink-soft);}
+  /* Colunas da lista de leads: nome e empresa precisam de largura pra não
+     cortar razão social; cargo é o que mais varia de tamanho. */
+  .col-lead-nome{min-width:190px;}
+  .col-lead-cargo{min-width:180px;}
+  .col-lead-empresa{min-width:210px;}
   .contrato-nota{padding:10px 16px 0;font-size:12px;color:#B45309;font-weight:600;line-height:1.5;}
   .contrato-nota-lista{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:5px;}
   .contrato-nota-lista li{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
@@ -2657,6 +2662,392 @@ async function tryLoadTrafegoAsync(){
   } catch(e){ console.error(e); }
 }
 
+/* ================= Lista de leads (LinkedIn) =================
+   As redes guardam "um número por mês". Lead é outra natureza: uma pessoa
+   por linha, com o nome, a empresa dela e se essa empresa é órgão público.
+   Por isso tabela própria (marketing_leads, migração 29).
+
+   Por que "órgão público" merece uma coluna: a carteira da Open é cheia de
+   MP, TRE, TRT, INPI — órgão público compra por licitação, com ciclo e
+   interlocutor diferentes de empresa privada. Saber disso na origem muda
+   como o lead é trabalhado.
+
+   `orgaoPublico` tem três estados, como `rentavel` em contratos: null =
+   ainda não classificado (é como o lead nasce na importação), true = é
+   órgão público, false = não é. Sem o null, "não classificado" e "não é"
+   virariam a mesma coisa. */
+let marketingLeads = [];
+let marketingLeadsNextId = 1;
+let marketingLeadsTimer = null;
+let leadsFiltroTipo = 'Todos';    // Todos | publicos | privados | sem
+
+function persistMarketingLeads(){
+  saving = true; updateSaveStatus();
+  if(marketingLeadsTimer) clearTimeout(marketingLeadsTimer);
+  marketingLeadsTimer = setTimeout(function(){
+    (async function(){
+      try{
+        const dbRows = marketingLeads.map(function(r){
+          return {
+            id: r.id, ano: r.ano||2026, mes: r.mes, rede: r.rede || 'linkedin',
+            nome: r.nome || '', cargo: r.cargo || '', empresa: r.empresa || '',
+            orgao_publico: (r.orgaoPublico === null || r.orgaoPublico === undefined) ? null : !!r.orgaoPublico,
+          };
+        });
+        if(dbRows.length) await sbUpsert('marketing_leads', dbRows, 'id');
+        // nunca apagar sem ter lido antes
+        const existing = carregouDoBanco['marketing-leads']
+          ? ((await sbSelectTudo('marketing_leads','select=id&order=id.asc')) || []) : [];
+        const localIds = marketingLeads.map(function(r){ return r.id; });
+        const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
+        if(toDelete.length) await sbDeleteIn('marketing_leads','id', toDelete);
+        saveError = false;
+      } catch(e){ console.error('Falha ao salvar leads', e); saveError = true; }
+      finally { saving = false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+
+async function tryLoadMarketingLeadsAsync(){
+  try{
+    const dbRows = await sbSelectTudo('marketing_leads','select=*&order=id.asc');
+    carregouDoBanco['marketing-leads'] = true;
+    if(dbRows){
+      marketingLeads = dbRows.map(function(d){
+        return {
+          id: d.id, ano: d.ano, mes: d.mes, rede: d.rede || 'linkedin',
+          nome: d.nome || '', cargo: d.cargo || '', empresa: d.empresa || '',
+          orgaoPublico: (d.orgao_publico === null || d.orgao_publico === undefined) ? null : !!d.orgao_publico,
+        };
+      });
+      marketingLeadsNextId = marketingLeads.length
+        ? Math.max.apply(null, marketingLeads.map(function(r){ return r.id||0; })) + 1 : 1;
+      render();
+    }
+  } catch(e){ console.error(e); falhaAoCarregar.leads = true; }
+}
+
+function leadsDaRede(rede){
+  return marketingLeads.filter(function(l){
+    return (l.ano||2026) === yearFilter && (l.rede||'linkedin') === rede;
+  }).sort(function(a, b){
+    const d = MONTHS.indexOf(a.mes) - MONTHS.indexOf(b.mes);
+    return d !== 0 ? d : ((a.id||0) - (b.id||0));
+  });
+}
+
+function setLeadsFiltroTipo(t){ leadsFiltroTipo = t; render(); }
+
+function addLeadRow(){
+  if(!isAdmin) return;
+  const mes = marketingFilter === 'Todos' ? MONTHS[new Date().getMonth()] : marketingFilter;
+  const novo = { id: marketingLeadsNextId++, ano: yearFilter, mes: mes,
+                 rede: marketingRede, nome: '', cargo: '', empresa: '', orgaoPublico: null };
+  marketingLeads.push(novo);
+  persistMarketingLeads();
+  render();
+  setTimeout(function(){
+    const el = document.getElementById('lead-nome-' + novo.id);
+    if(el) el.focus();
+  }, 40);
+}
+
+function deleteLeadRow(id){
+  if(!isAdmin) return;
+  const l = marketingLeads.find(function(x){ return x.id === id; });
+  const quem = (l && (l.nome || l.empresa)) ? (l.nome || l.empresa) : 'este lead';
+  showConfirm('Excluir ' + quem + '?', function(){
+    marketingLeads = marketingLeads.filter(function(x){ return x.id !== id; });
+    persistMarketingLeads();
+    render();
+  }, 'Excluir');
+}
+
+/* Clicar de novo no botão aceso desmarca — volta pra "sem classificação",
+   como os botões de Rentável e de situação da renovação. */
+function setLeadOrgaoPublico(id, valor){
+  if(!isAdmin) return;
+  const l = marketingLeads.find(function(x){ return x.id === id; });
+  if(!l) return;
+  l.orgaoPublico = (l.orgaoPublico === valor) ? null : valor;
+  persistMarketingLeads();
+  render();
+}
+
+function onLeadMesSelect(el){
+  if(!isAdmin) return;
+  const l = marketingLeads.find(function(x){ return x.id === Number(el.dataset.id); });
+  if(!l) return;
+  l.mes = el.value;
+  persistMarketingLeads();
+  render();   // a linha pode mudar de lugar na ordem por mês
+}
+
+/* Sem render() a cada tecla: redesenhar tiraria o foco do campo. */
+function onLeadTexto(el){
+  if(!isAdmin) return;
+  const l = marketingLeads.find(function(x){ return x.id === Number(el.dataset.id); });
+  if(!l) return;
+  l[el.dataset.campo] = el.value;
+  persistMarketingLeads();
+}
+
+function exportarLeadsCSV(rede){
+  try{
+    const lista = leadsDaRede(rede);
+    if(!lista.length){
+      showAlert('Não há lead cadastrado em ' + yearFilter + '.');
+      return;
+    }
+    const tipo = function(v){ return v === true ? 'Órgão público' : (v === false ? 'Não é órgão público' : 'Sem classificação'); };
+    let csv = 'Mes;Nome;Cargo;Empresa;Tipo\n';
+    lista.forEach(function(l){
+      csv += [csvTexto(l.mes), csvTexto(l.nome), csvTexto(l.cargo),
+              csvTexto(l.empresa), csvTexto(tipo(l.orgaoPublico))].join(';') + '\n';
+    });
+    baixarTexto('leads-' + rede + '-' + yearFilter + '.csv', csv);
+  } catch(e){
+    console.error('Falha ao exportar leads', e);
+    showAlert('Não foi possível gerar o arquivo. Tente novamente.');
+  }
+}
+
+/* Painel da lista de leads. Fica na rede que os trouxe (hoje só LinkedIn
+   oferece), embaixo dos lançamentos de indicadores. */
+function painelLeadsHtml(rede){
+  const editavel = isAdmin;
+  const todos = leadsDaRede(rede);
+  const publicos = todos.filter(function(l){ return l.orgaoPublico === true;  }).length;
+  const privados = todos.filter(function(l){ return l.orgaoPublico === false; }).length;
+  const semClass = todos.length - publicos - privados;
+
+  const lista = todos.filter(function(l){
+    if(leadsFiltroTipo === 'publicos') return l.orgaoPublico === true;
+    if(leadsFiltroTipo === 'privados') return l.orgaoPublico === false;
+    if(leadsFiltroTipo === 'sem')      return l.orgaoPublico === null;
+    return true;
+  }).filter(function(l){
+    return marketingFilter === 'Todos' || l.mes === marketingFilter;
+  });
+
+  const filtros = [
+    {key:'Todos',    rotulo:'Todos · ' + todos.length},
+    {key:'publicos', rotulo:'Órgão público · ' + publicos},
+    {key:'privados', rotulo:'Privado · ' + privados},
+    {key:'sem',      rotulo:'Sem classificar · ' + semClass},
+  ].map(function(f){
+    return `<button class="pill seller-pill${leadsFiltroTipo===f.key?' active':''}" onclick="setLeadsFiltroTipo('${f.key}')">${esc(f.rotulo)}</button>`;
+  }).join('');
+
+  const linhas = lista.map(function(l){
+    return `<tr>
+      <td class="col-mes">${editavel
+        ? `<select class="contrato-linha-select" data-id="${l.id}" onchange="onLeadMesSelect(this)">${
+            MONTHS.map(function(m){ return `<option value="${m}" ${l.mes===m?'selected':''}>${monthShort(m)}</option>`; }).join('')
+          }</select>`
+        : esc(monthShort(l.mes))}</td>
+      <td class="col-lead-nome">${editavel
+        ? `<input class="contrato-linha-input" id="lead-nome-${l.id}" type="text" placeholder="Nome do lead"
+                  value="${esc(l.nome)}" data-id="${l.id}" data-campo="nome" oninput="onLeadTexto(this)" />`
+        : esc(l.nome || '—')}</td>
+      <td class="col-lead-cargo">${editavel
+        ? `<input class="contrato-linha-input" type="text" placeholder="Cargo"
+                  value="${esc(l.cargo)}" data-id="${l.id}" data-campo="cargo" oninput="onLeadTexto(this)" />`
+        : esc(l.cargo || '—')}</td>
+      <td class="col-lead-empresa">${editavel
+        ? `<input class="contrato-linha-input" type="text" placeholder="Empresa"
+                  value="${esc(l.empresa)}" data-id="${l.id}" data-campo="empresa" oninput="onLeadTexto(this)" />`
+        : esc(l.empresa || '—')}</td>
+      <td class="col-rent">
+        <div class="rent-toggle">
+          <button type="button" class="rent-btn sim${l.orgaoPublico===true?' on':''}" ${editavel?'':'disabled'}
+                  title="A empresa é órgão público" onclick="setLeadOrgaoPublico(${l.id},true)">Órgão público</button>
+          <button type="button" class="rent-btn nao${l.orgaoPublico===false?' on':''}" ${editavel?'':'disabled'}
+                  title="A empresa não é órgão público" onclick="setLeadOrgaoPublico(${l.id},false)">Privado</button>
+        </div>
+      </td>
+      ${editavel ? `<td class="del-cell"><div class="row-actions">
+        <button class="action-btn danger" title="Excluir este lead" onclick="deleteLeadRow(${l.id})">✕</button>
+      </div></td>` : ''}
+    </tr>`;
+  }).join('');
+
+  const tabela = lista.length ? `
+    <div class="table-scroll">
+      <table class="table-plain">
+        <thead><tr>
+          <th class="col-mes">Mês</th>
+          <th class="col-lead-nome">Nome</th>
+          <th class="col-lead-cargo">Cargo</th>
+          <th class="col-lead-empresa">Empresa</th>
+          <th class="col-rent">É órgão público?</th>
+          ${editavel ? '<th></th>' : ''}
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    </div>
+    <div class="contrato-resumo">
+      <span>${lista.length} lead${lista.length===1?'':'s'}${leadsFiltroTipo!=='Todos' || marketingFilter!=='Todos' ? ' neste filtro' : ' em '+yearFilter}:</span>
+      <span class="contrato-tag sim">${publicos} órgão${publicos===1?'':'s'} público${publicos===1?'':'s'}</span>
+      <span class="contrato-tag nao">${privados} privado${privados===1?'':'s'}</span>
+      ${semClass ? `<span class="contrato-tag aval">${semClass} sem classificar</span>` : ''}
+    </div>`
+    : `<div class="meta-empty" style="padding:22px 16px;">${
+        todos.length
+          ? 'Nenhum lead neste filtro.'
+          : 'Nenhum lead em ' + yearFilter + '. Use <b>“📄 Importar lista de leads”</b> para subir sua planilha.'
+      }</div>`;
+
+  const acoes = editavel
+    ? `<button class="eye-toggle" onclick="abrirImportarLeads()" title="Sobe uma planilha .xlsx/.csv (ou cola do Excel) com nome, cargo e empresa">📄 Importar lista de leads</button>
+       ${todos.length ? `<button class="eye-toggle" onclick="exportarLeadsCSV('${rede}')" title="Baixa a lista com nome, cargo, empresa e a classificação">📊 Baixar lista (CSV)</button>` : ''}
+       <button class="btn-add" onclick="addLeadRow()">+ Novo lead</button>`
+    : (todos.length ? `<button class="eye-toggle" onclick="exportarLeadsCSV('${rede}')">📊 Baixar lista (CSV)</button>` : '');
+
+  const barraFiltro = todos.length ? `<div class="filters-row" style="padding:12px 16px 0;margin:0;"><div class="months">${filtros}</div></div>` : '';
+
+  return panel('marketing-leads', 'Leads — ' + esc(marketingRedeInfo(rede).label),
+    barraFiltro + tabela, {
+      meta: `<b>${todos.length}</b> lead${todos.length===1?'':'s'} · <b>${publicos}</b> órgão${publicos===1?'':'s'} público${publicos===1?'':'s'}`,
+      actions: acoes,
+      flush: true,
+    });
+}
+
+/* ---------- Importar a lista de leads ----------
+   Mesmo mecanismo das outras planilhas do app (`linhasDoXlsx`,
+   `linhasDeTexto`, leitura de .xlsx sem biblioteca externa), só
+   reconhecendo as colunas de lead. */
+function mapearColunasLeads(linhas){
+  const cab = linhas[0] || [];
+  const rotulos = cab.map(semAcento);
+  const acha = function(re){ return rotulos.findIndex(function(r){ return re.test(r); }); };
+  const nome = acha(/^nome$|nome do lead|lead|contato|pessoa|^first|full name/);
+  const cargo = acha(/cargo|^titulo$|title|position|funcao|role|headline/);
+  const empresa = acha(/empresa|company|organiza|razao/);
+  // Se a planilha já trouxer a classificação, aproveitamos.
+  const tipo = acha(/orgao|publico|setor|^tipo$/);
+  const mes = acha(/^mes$|mes de|data|month/);
+  if(nome >= 0 || empresa >= 0){
+    return { temCabecalho: true, nome: nome, cargo: cargo, empresa: empresa, tipo: tipo, mes: mes };
+  }
+  // Sem cabeçalho reconhecido: assume nome, cargo, empresa — a ordem em que
+  // o LinkedIn exporta e em que as pessoas escrevem na mão.
+  return { temCabecalho: false, nome: 0, cargo: 1, empresa: 2, tipo: -1, mes: -1 };
+}
+
+/* "Sim", "Público", "Órgão público", "Publico" → true; "Não", "Privado",
+   "Empresa" → false; vazio ou desconhecido → null (sem classificar). Um
+   texto que não dá para interpretar NÃO virá um palpite: fica em branco
+   pra pessoa decidir. */
+function leadTipoDaPlanilha(txt){
+  const t = semAcento(String(txt || '')).trim();
+  if(!t) return null;
+  if(/^(s|sim|true|1|publico|orgao|orgao publico|governo|gov|setor publico)$/.test(t)) return true;
+  if(/^(n|nao|false|0|privado|privada|empresa|setor privado|pj)$/.test(t)) return false;
+  return null;
+}
+
+function prepararImportacaoLeads(linhas){
+  if(!linhas.length) throw new Error('A planilha veio vazia.');
+  const cols = mapearColunasLeads(linhas);
+  const corpo = cols.temCabecalho ? linhas.slice(1) : linhas;
+  const celula = function(l, idx){
+    return idx >= 0 && l[idx] !== null && l[idx] !== undefined ? String(l[idx]).trim() : '';
+  };
+  const mesPadrao = marketingFilter === 'Todos' ? MONTHS[new Date().getMonth()] : marketingFilter;
+
+  // Duplicado = mesmo nome e mesma empresa já na lista do ano. Sem isso,
+  // reimportar a planilha dobraria a lista inteira.
+  const existentes = {};
+  leadsDaRede(marketingRede).forEach(function(l){
+    existentes[semAcento(l.nome) + '|' + semAcento(l.empresa)] = true;
+  });
+
+  const itens = [];
+  corpo.forEach(function(l){
+    const nome = celula(l, cols.nome);
+    const cargo = celula(l, cols.cargo);
+    const empresa = celula(l, cols.empresa);
+    if(!nome && !empresa) return;             // linha vazia
+    const m = cols.mes >= 0 ? mesDaPlanilha(l[cols.mes]) : null;
+    const chave = semAcento(nome) + '|' + semAcento(empresa);
+    const duplicada = !!existentes[chave];
+    if(!duplicada) existentes[chave] = true;
+    itens.push({
+      nome: nome, cargo: cargo, empresa: empresa,
+      mes: (m && m.mes) ? m.mes : mesPadrao,
+      ano: (m && m.ano) ? m.ano : yearFilter,
+      orgaoPublico: cols.tipo >= 0 ? leadTipoDaPlanilha(l[cols.tipo]) : null,
+      duplicada: duplicada,
+      aviso: duplicada ? 'já está na lista' : '',
+    });
+  });
+  if(!itens.length) throw new Error('Não achei nenhum lead na planilha. Confira se há uma coluna de nome ou de empresa com dado.');
+  return { itens: itens, cols: cols };
+}
+
+function abrirImportarLeads(){
+  if(!isAdmin) return;
+  modalState = { type:'import-leads', dados:null, erro:'', lendo:false };
+  render();
+}
+
+async function onArquivoLeads(input){
+  const arq = input.files && input.files[0];
+  if(!arq) return;
+  modalState.lendo = true; modalState.erro = ''; render();
+  try{
+    let linhas;
+    if(/\.(csv|txt|tsv)$/i.test(arq.name)){
+      let texto = await arq.text();
+      if(texto.indexOf('�') >= 0){
+        texto = new TextDecoder('iso-8859-1').decode(await arq.arrayBuffer());
+      }
+      linhas = linhasDeTexto(texto);
+    } else {
+      linhas = await linhasDoXlsx(await arq.arrayBuffer());
+    }
+    modalState.dados = prepararImportacaoLeads(linhas);
+    modalState.erro = '';
+  }catch(e){
+    console.error(e);
+    modalState.dados = null;
+    modalState.erro = e && e.message ? e.message : 'Não consegui ler esse arquivo.';
+  }
+  modalState.lendo = false;
+  render();
+}
+
+function onColarLeads(el){
+  const texto = el.value;
+  if(!String(texto).trim()){ modalState.dados = null; modalState.erro = ''; render(); return; }
+  try{
+    modalState.dados = prepararImportacaoLeads(linhasDeTexto(texto));
+    modalState.erro = '';
+  }catch(e){
+    modalState.dados = null;
+    modalState.erro = e && e.message ? e.message : 'Não consegui ler o que foi colado.';
+  }
+  render();
+}
+
+function confirmarImportacaoLeads(){
+  const m = modalState;
+  if(!m || !m.dados) return;
+  const novos = m.dados.itens.filter(function(i){ return !i.duplicada; });
+  if(!novos.length){ showAlert('Não há nada novo para importar.'); return; }
+  novos.forEach(function(i){
+    marketingLeads.push({
+      id: marketingLeadsNextId++, ano: i.ano, mes: i.mes, rede: marketingRede,
+      nome: i.nome, cargo: i.cargo, empresa: i.empresa, orgaoPublico: i.orgaoPublico,
+    });
+  });
+  persistMarketingLeads();
+  closeModal();
+  showAlert(novos.length + (novos.length === 1 ? ' lead importado.' : ' leads importados.'));
+}
+
 function setTrafegoFilter(m){ trafegoFilter = m; render(); }
 function addTrafegoRow(){
   const mes = trafegoFilter === 'Todos' ? MONTHS[new Date().getMonth()] : trafegoFilter;
@@ -3129,6 +3520,10 @@ function renderMarketingSection(){
     actions: editavel ? `<button class="btn-add" onclick="addMarketingRow()">+ Novo lançamento</button>` : '',
   });
 
+  // Lead é coisa de rede B2B: só o LinkedIn oferece a lista hoje. A tabela
+  // guarda `rede`, então estender pra outra é trocar esta condição.
+  const leads = marketingRede === 'linkedin' ? painelLeadsHtml(marketingRede) : '';
+
   return `
     <div class="filters-row"><div class="months">${redesPillsHtml}</div></div>
     ${painelIndicadores}
@@ -3136,6 +3531,7 @@ function renderMarketingSection(){
     ${grafico}
     <div class="filters-row" style="padding-top:0;"><div class="months">${mesesPillsHtml}</div></div>
     ${tabela}
+    ${leads}
     <div class="totais-nota">
       Os cartões e o gráfico comparam o mês com o mês anterior <b>que tiver lançamento</b> — não precisam ser
       seguidos. Cada rede tem seus próprios indicadores; quem administra inclui e retira pelo botão
@@ -4032,6 +4428,67 @@ function renderModal(){
         </div>
       </div>`;
   }
+  if(m.type === 'import-leads'){
+    const d = m.dados;
+    const novos = d ? d.itens.filter(function(i){ return !i.duplicada; }) : [];
+    const problemas = d ? d.itens.filter(function(i){ return i.aviso; }) : [];
+    const previa = d ? d.itens.slice(0, 40) : [];
+    const rotuloTipo = function(v){ return v === true ? 'Órgão público' : (v === false ? 'Privado' : '—'); };
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-wide">
+          <div class="modal-msg">Importar lista de leads</div>
+          <div class="painel-equipe-nota">
+            Reconheço colunas com estes nomes (com ou sem acento, em qualquer ordem):
+            <b>Nome</b>, <b>Cargo</b>, <b>Empresa</b>, <b>Órgão público</b> e <b>Mês</b>. Sem
+            cabeçalho reconhecido, uso a ordem <b>nome, cargo, empresa</b>. Aceito <b>.xlsx</b> e <b>.csv</b>;
+            se preferir, selecione as células no Excel, copie com Ctrl+C e cole no campo de
+            baixo. Sem mês na planilha, entra em
+            <b>${esc(marketingFilter === 'Todos' ? MONTHS[new Date().getMonth()] : marketingFilter)}</b>.
+          </div>
+          <label class="import-arquivo">
+            <input type="file" accept=".xlsx,.csv,.txt,.tsv" onchange="onArquivoLeads(this)" />
+            <span>📄 Escolher arquivo da planilha</span>
+          </label>
+          <textarea class="modal-textarea" style="min-height:90px;" placeholder="…ou cole aqui as células copiadas do Excel"
+                    oninput="onColarLeads(this)"></textarea>
+          ${m.lendo ? `<div class="modal-msg" style="margin:10px 0 0;">Lendo a planilha…</div>` : ''}
+          ${m.erro ? `<div class="modal-error">${esc(m.erro)}</div>` : ''}
+          ${d ? `
+            <div class="import-resumo">
+              <b>${novos.length}</b> lead${novos.length===1?'':'s'} novo${novos.length===1?'':'s'} de <b>${d.itens.length}</b> linha${d.itens.length===1?'':'s'} lida${d.itens.length===1?'':'s'}
+              ${problemas.length ? ` · <span class="import-alerta">${problemas.length} já na lista</span>` : ''}
+              ${d.cols.temCabecalho ? ' · cabeçalho reconhecido' : ' · sem cabeçalho, usei a ordem nome / cargo / empresa'}
+            </div>
+            <div class="table-scroll import-previa">
+              <table class="table-plain">
+                <thead><tr><th>Nome</th><th>Cargo</th><th>Empresa</th><th>Mês</th><th>Órgão público</th><th></th></tr></thead>
+                <tbody>${previa.map(function(i){
+                  return `<tr class="${i.aviso ? 'row-pending' : ''}">
+                    <td>${esc(i.nome) || '—'}</td>
+                    <td>${esc(i.cargo) || '—'}</td>
+                    <td>${esc(i.empresa) || '—'}</td>
+                    <td>${esc(i.mes)}</td>
+                    <td>${rotuloTipo(i.orgaoPublico)}</td>
+                    <td>${i.aviso ? `<span class="import-alerta">${esc(i.aviso)}</span>` : '✓'}</td>
+                  </tr>`;
+                }).join('')}</tbody>
+              </table>
+            </div>
+            ${d.itens.length > previa.length ? `<div class="import-resumo">…e mais ${d.itens.length - previa.length} linha${d.itens.length - previa.length === 1 ? '' : 's'}.</div>` : ''}
+            ${problemas.length ? `<div class="import-resumo import-alerta">Leads já na lista (mesmo nome e mesma empresa) não são importados de novo.</div>` : ''}
+            ${d.cols.tipo < 0 ? `<div class="import-resumo">Sem coluna de órgão público na planilha, os leads entram <b>sem classificação</b> — você marca na tabela depois.</div>` : ''}
+          ` : ''}
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
+            <button class="modal-btn modal-btn-primary" ${novos.length ? '' : 'disabled'} onclick="confirmarImportacaoLeads()">
+              ${novos.length ? 'Importar ' + novos.length + (novos.length===1?' lead':' leads') : 'Importar'}
+            </button>
+          </div>
+        </div>
+      </div>`;
+  }
+
   if(m.type === 'import-consultoria'){
     const d = m.dados;
     const novos = d ? d.itens.filter(function(i){ return i.mes && !i.duplicada; }) : [];
@@ -11113,6 +11570,7 @@ function boot(){
     tryLoadMarketingAsync(),
     tryLoadMarketingIndicadoresAsync(),
     tryLoadTrafegoAsync(),
+    tryLoadMarketingLeadsAsync(),
     tryLoadClosedMonthsFromStorageAsync(),
     tryLoadMetasFromStorageAsync(),
     tryLoadRelatoriosFromStorageAsync(),
