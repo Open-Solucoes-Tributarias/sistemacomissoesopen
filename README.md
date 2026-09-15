@@ -79,7 +79,7 @@ O HUB Comercial exige login (e-mail e senha) antes de mostrar qualquer dado. Nã
 - **Chave pública (anon key)**: já está embutida no `index.html` (constante `SUPABASE_ANON_KEY`). Essa chave é **pública por padrão no Supabase** — sozinha, ela não abre porta nenhuma: quem decide o que pode ser lido/escrito são as políticas de RLS do banco.
 - **Modelo de acesso — três categorias de conta**:
   - **Admin** (Soraya, Deborah, Open): vê e edita todos os dados do HUB Comercial, em todas as abas.
-  - **Financeiro**: vê o **valor de contrato de todas as notas** que entraram — Sistema, Renovações, Consultoria, Consultoria Órgãos Públicos e Cursos — e **nenhuma comissão de ninguém**: nem valor, nem percentual, nem bônus, nem meta, nem salário, nem a divisão dos cursos. Marca cada nota como **emitida** conforme emite a nota fiscal, e isso é a **única coisa** que essa conta escreve. Não leva nome de pessoa, porque a conta não é de ninguém em particular. Veja "Nível financeiro" abaixo.
+  - **Financeiro**: vê o **valor de contrato de todas as notas** que entraram — Sistema, Renovações, Consultoria, Consultorias e site para Órgãos Públicos e Cursos — e **nenhuma comissão de ninguém**: nem valor, nem percentual, nem bônus, nem meta, nem salário, nem a divisão dos cursos. Marca cada nota como **emitida** conforme emite a nota fiscal, e isso é a **única coisa** que essa conta escreve. Não leva nome de pessoa, porque a conta não é de ninguém em particular. Veja "Nível financeiro" abaixo.
   - **Restrita** (Gustavo, Rios, Luciana, Angela): só **visualiza**, em modo somente leitura, os lançamentos onde o nome da pessoa aparece como vendedor(a) ou colaborador(a) — nunca vê nem edita o que é dos colegas. Isso existe pra ninguém comparar comissão de ninguém.
 
   Um mesmo contrato pode ter até 3 vendedores + colaborador na mesma linha. Nesses contratos divididos, a pessoa vê o lançamento e a **própria** comissão, mas o nome e a porcentagem dos colegas vêm em branco — o corte é feito coluna a coluna, pelas views `_safe` do banco (veja `supabase_column_masking_migration.sql`).
@@ -121,7 +121,7 @@ Existe quem precise conferir **faturamento** sem ter acesso a remuneração: alg
 
 **O que essa conta vê:**
 
-- as abas **Resumo Geral**, **Sistema**, **Renovações**, **Consultoria**, **Consultoria Órgãos Públicos** e **Cursos**;
+- as abas **Resumo Geral**, **Sistema**, **Renovações**, **Consultoria**, **Consultorias e site para Órgãos Públicos** e **Cursos**;
 - de cada lançamento: mês, cliente/empresa, produto ou contrato, **valor de contrato**, forma de pagamento, se está pago e o mês do pagamento;
 - o **nome de quem atendeu** a conta — saber de quem é a nota ajuda a resolvê-la, e nome não é remuneração;
 - no lugar do painel de parceiros, um **Resumo do financeiro**: faturamento por origem, faturamento mês a mês e a lista de todas as notas do ano;
@@ -214,7 +214,7 @@ Se você já tem esse HUB Comercial rodando com o banco antigo (liberado por lin
 |---|---|
 | `vendas` | Lançamentos da aba Sistema (inclui `vendedor_responsavel` — quem efetivamente fez a venda — e `renovacao`, que tira a venda do ranking) |
 | `vendas_comissoes` | Comissão de cada vendedor(a) por lançamento do Sistema (valor e, opcionalmente, a % que o gerou) |
-| `lancamentos` | Lançamentos de Consultoria, Consultoria Órgãos Públicos e Cursos (uma tabela só, filtrada pela coluna `entidade`) |
+| `lancamentos` | Lançamentos de Consultoria, Consultorias e site para Órgãos Públicos e Cursos (uma tabela só, filtrada pela coluna `entidade`) |
 | `lancamentos_extra_vendedores` | Vendedores extras (4º em diante) por lançamento |
 | `lancamento_vendas` | Divisão do faturamento de um curso entre quem vendeu (sem relação com comissão) |
 | `bonus` | Bônus, metas batidas e salário fixo dos colaboradores (separados pela coluna `tipo`) |

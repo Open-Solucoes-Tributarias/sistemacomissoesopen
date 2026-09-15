@@ -1469,7 +1469,7 @@ const ENTITIES = {
     hasPagamento: true,
   },
   publicos: {
-    tabLabel: "Consultoria Órgãos Públicos",
+    tabLabel: "Consultorias e site para Órgãos Públicos",
     itemLabel: "lançamento",
     fields: [
       {key:"orgao", label:"Órgão Público", type:"text"},
@@ -1590,7 +1590,7 @@ const TABS = [
   {key:"vendas", label:"Sistema"},
   {key:"renovacoes", label:"Renovações"},
   {key:"consultoria", label:"Consultoria"},
-  {key:"publicos", label:"Consultoria Órgãos Públicos"},
+  {key:"publicos", label:"Consultorias e site para Órgãos Públicos"},
   {key:"cursos", label:"Cursos"},
   {key:"bonus", label:"Bônus e Metas"},
   {key:"marketing", label:"Marketing"},
@@ -4216,7 +4216,7 @@ function renderModal(){
           <div class="modal-msg">⚠️ Zerar tudo</div>
           <div class="modal-error" style="position:static;">
             Isso vai apagar <b>todos os lançamentos</b> de todas as abas (Sistema, Consultoria,
-            Consultoria Órgãos Públicos, Cursos e Bônus e Metas), de <b>todos os anos</b> —
+            Consultorias e site para Órgãos Públicos, Cursos e Bônus e Metas), de <b>todos os anos</b> —
             não dá pra desfazer. Os produtos, vendedores e parceiros cadastrados continuam.
             Recomendo exportar os dados antes (botão ⬇ Exportar dados), caso precise deles depois.
           </div>
@@ -5399,7 +5399,7 @@ function renderPagamentosSection(){
   }).join('');
 
   const rowsHtml = entries.length === 0
-    ? `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhum pagamento marcado como realizado ainda neste filtro. Marque a caixinha "Pago" nas abas Sistema, Consultoria ou Consultoria Órgãos Públicos.</td></tr>`
+    ? `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhum pagamento marcado como realizado ainda neste filtro. Marque a caixinha "Pago" nas abas Sistema, Consultoria ou Consultorias e site para Órgãos Públicos.</td></tr>`
     : entries.map(e => `
       <tr>
         <td>${monthShort(e.mesPagamento)}</td>
@@ -5524,7 +5524,7 @@ const META_ORIGENS = [
   {key:'cursos',      label:'Cursos'},
   {key:'sistema',     label:'Sistema'},
   {key:'consultoria', label:'Consultoria'},
-  {key:'publicos',    label:'Consultoria Órgãos Públicos'},
+  {key:'publicos',    label:'Consultorias e site para Órgãos Públicos'},
   {key:'todas',       label:'Todas as abas somadas'},
 ];
 function origemLabel(key){
@@ -5709,7 +5709,7 @@ function getPartnerEntries(){
   const sources = [
     {origem:'Sistema', list: rows, valorField:'valor', labelFn: r => r.cliente || r.venda || ''},
     {origem:'Consultoria', list: state.consultoria.rows, valorField:'valorContrato', labelFn: r => r.empresa || ''},
-    {origem:'Consultoria Órgãos Públicos', list: state.publicos.rows, valorField:'valorContrato', labelFn: r => r.orgao || ''},
+    {origem:'Consultorias e site para Órgãos Públicos', list: state.publicos.rows, valorField:'valorContrato', labelFn: r => r.orgao || ''},
     {origem:'Cursos', list: state.cursos.rows, valorField:'valorContrato', labelFn: r => r.curso || ''},
   ];
   sources.forEach(src => {
@@ -9771,7 +9771,7 @@ function montarRelatorioMes(mes){
   const fatur = [
     {label:'Sistema',                  valor: faturamentoDaOrigem('sistema', ano, mes)},
     {label:'Consultoria',              valor: faturamentoDaOrigem('consultoria', ano, mes)},
-    {label:'Consultoria Órgãos Públicos', valor: faturamentoDaOrigem('publicos', ano, mes)},
+    {label:'Consultorias e site para Órgãos Públicos', valor: faturamentoDaOrigem('publicos', ano, mes)},
     {label:'Cursos',                   valor: faturamentoDaOrigem('cursos', ano, mes)},
   ];
   const faturTotal = fatur.reduce(function(a,x){ return a + x.valor; }, 0);
