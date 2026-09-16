@@ -1271,6 +1271,8 @@
   /* Colunas de apoio: estão ali para conferência, não para competir com o
      total. Ficam em cinza para o olho ir primeiro no número que importa. */
   table.table-plain td.col-apoio, thead th.col-apoio{color:var(--ink-faint);}
+  table.table-plain td.celula-clicavel{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;}
+  table.table-plain td.celula-clicavel:hover{background:var(--primary-soft);}
   .totais-nota{padding:12px 16px 16px;font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.55;}
   .col-rent{min-width:300px;}
   .col-resp{min-width:150px;}
@@ -4374,6 +4376,38 @@ function renderModal(){
       </div>
     `;
   }
+  if(m.type === 'detalhe-fechamento'){
+    const total = m.linhas.reduce(function(a,l){ return a + l.comissao; }, 0);
+    const linhasHtml = m.linhas.length ? m.linhas.map(function(l){
+      return `<tr>
+        <td>${esc(monthShort(l.mes))}</td>
+        <td>${esc(l.origemLabel)}</td>
+        <td>${esc(l.cliente)}</td>
+        <td class="num">${l.valorContrato===null||l.valorContrato===undefined?'—':fmtMoney(l.valorContrato)}</td>
+        <td class="num">${l.percent===null||l.percent===undefined?'—':esc(l.percent)+'%'}</td>
+        <td class="num" style="font-weight:800;">${fmtMoney(l.comissao)}</td>
+        <td>${l.pago===true?'✅ Pago'+(l.mesPagamento?' · '+esc(monthShort(l.mesPagamento)):''):(l.pago===false?'⏳ Pendente':'—')}</td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="7" style="text-align:center;color:var(--ink-faint);padding:20px;">Nada aqui neste período.</td></tr>`;
+
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-wide">
+          <div class="modal-msg">${esc(m.pessoa)} — ${esc(m.origemLabel)}${m.mes && m.mes!=='Todos' ? ' em ' + esc(m.mes) : ''}</div>
+          <div class="table-scroll">
+            <table class="table-plain">
+              <thead>
+                <tr><th>Mês</th><th>Origem</th><th>Cliente/Empresa</th><th class="num">Valor</th><th class="num">%</th><th class="num">Comissão</th><th>Situação</th></tr>
+              </thead>
+              <tbody>${linhasHtml}</tbody>
+            </table>
+          </div>
+          <div class="divisao-conferencia ok" style="margin-top:10px;">Total: <b>${fmtMoney(total)}</b></div>
+          <div class="modal-actions"><button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button></div>
+        </div>
+      </div>
+    `;
+  }
   if(m.type === 'meta-form'){
     const f = m.meta;
     const novo = f.id === null;
@@ -6119,12 +6153,12 @@ function renderBonusSection(){
   const fechamentoRowsHtml = fechamento.map(l => `
       <tr>
         <td><span class="th-dot" style="background:${esc(l.cor)}"></span>${esc(l.pessoa)}</td>
-        <td class="num">${dinheiro(l.sistema)}</td>
-        <td class="num">${dinheiro(l.publicos)}</td>
-        <td class="num">${dinheiro(l.cursos)}</td>
-        <td class="num">${dinheiro(l.bonus)}</td>
-        <td class="num">${dinheiro(l.salario)}</td>
-        <td class="num col-apoio">${dinheiro(l.consultoria)}</td>
+        ${celulaFechamento(l.pessoa, 'sistema', 'Sistema', l.sistema, bonusFilter, dinheiro(l.sistema), null, bonusValuesRevealed)}
+        ${celulaFechamento(l.pessoa, 'publicos', 'Órgãos Públicos', l.publicos, bonusFilter, dinheiro(l.publicos), null, bonusValuesRevealed)}
+        ${celulaFechamento(l.pessoa, 'cursos', 'Cursos', l.cursos, bonusFilter, dinheiro(l.cursos), null, bonusValuesRevealed)}
+        ${celulaFechamento(l.pessoa, 'bonus', 'Bônus', l.bonus, bonusFilter, dinheiro(l.bonus), null, bonusValuesRevealed)}
+        ${celulaFechamento(l.pessoa, 'salario', 'Salário fixo', l.salario, bonusFilter, dinheiro(l.salario), null, bonusValuesRevealed)}
+        ${celulaFechamento(l.pessoa, 'consultoria', 'Consultoria', l.consultoria, bonusFilter, dinheiro(l.consultoria), 'col-apoio', bonusValuesRevealed)}
         <td class="num" style="font-weight:800;">${dinheiro(l.aPagar)}</td>
         <td class="num col-apoio" title="Já ganhou, mas ainda espera o cliente pagar">${dinheiro(l.pendente)}</td>
       </tr>`).join('');
@@ -6376,6 +6410,94 @@ function getSellerReceivable(mes){
   });
 
   return by;
+}
+
+/* Detalhamento de uma célula do Fechamento: cada lançamento que compõe
+   aquele número, pra conferir sem precisar perguntar. Espelha a mesma
+   regra de elegibilidade de getSellerReceivable — muda ali, muda aqui
+   também. */
+function detalheFechamento(pessoa, origem, mes){
+  const linhas = [];
+  const noPeriodoLancamento = function(r){
+    return (r.ano||2026) === yearFilter && (mes === 'Todos' || !mes || r.mes === mes);
+  };
+  const deSistema = ehVendedorDeSistema(pessoa);
+
+  if(origem === 'sistema'){
+    rows.forEach(function(r){
+      SELLERS.forEach(function(s){
+        if(s.label !== pessoa) return;
+        const valor = Number(r[s.key])||0;
+        if(!valor) return;
+        const ok = deSistema ? noPeriodoLancamento(r) : elegivelNoFechamento(r, mes);
+        if(!ok) return;
+        linhas.push({ origemLabel: 'Sistema', mes: r.mes, cliente: r.cliente || r.venda || '—',
+          valorContrato: Number(r.valor)||0, percent: null, comissao: valor, pago: !!r.pago, mesPagamento: r.mesPagamento });
+      });
+    });
+    ENTITY_KEYS.forEach(function(key){
+      state[key].rows.forEach(function(r){
+        if((r.ano||2026) !== yearFilter) return;
+        const premium = key === 'publicos' && r.tipo === 'Plano Premium';
+        const contaComoSistema = premium || r.upgrade;
+        if(!contaComoSistema || !deSistema) return;
+        const mainField = ENTITIES[key].fields[0].key;
+        const base = entityRemainingAfterPartner(r);
+        getRowSellerAssignments(r).forEach(function(a){
+          if(a.vendedor !== pessoa) return;
+          const ok = (key !== 'consultoria') ? noPeriodoLancamento(r) : elegivelNoFechamento(r, mes);
+          if(!ok) return;
+          linhas.push({ origemLabel: ENTITIES[key].tabLabel + (premium ? ' · premium' : ' · upgrade'), mes: r.mes,
+            cliente: r[mainField] || '—', valorContrato: Number(r.valorContrato)||0,
+            percent: a.percent, comissao: base*(a.percent/100), pago: !!r.pago, mesPagamento: r.mesPagamento });
+        });
+      });
+    });
+  } else if(origem === 'bonus' || origem === 'salario'){
+    bonusRows.forEach(function(r){
+      if(isSalarioRow(r) !== (origem === 'salario')) return;
+      if(r.vendedor !== pessoa) return;
+      if(!noPeriodoLancamento(r)) return;
+      linhas.push({ origemLabel: origem === 'salario' ? 'Salário fixo' : 'Bônus', mes: r.mes,
+        cliente: r.descricao || '—', valorContrato: null, percent: null,
+        comissao: Number(r.valor)||0, pago: true, mesPagamento: null });
+    });
+  } else if(ENTITY_KEYS.indexOf(origem) !== -1){
+    const key = origem;
+    const mainField = ENTITIES[key].fields[0].key;
+    state[key].rows.forEach(function(r){
+      if((r.ano||2026) !== yearFilter) return;
+      const premium = key === 'publicos' && r.tipo === 'Plano Premium';
+      const contaComoSistema = premium || r.upgrade;
+      if(contaComoSistema && deSistema) return;   // esse foi pro total de Sistema, não conta aqui
+      const base = entityRemainingAfterPartner(r);
+      getRowSellerAssignments(r).forEach(function(a){
+        if(a.vendedor !== pessoa) return;
+        const liberaSemPagar = deSistema && key !== 'consultoria';
+        const ok = liberaSemPagar ? noPeriodoLancamento(r) : elegivelNoFechamento(r, mes);
+        if(!ok) return;
+        linhas.push({ origemLabel: ENTITIES[key].tabLabel, mes: r.mes, cliente: r[mainField] || '—',
+          valorContrato: Number(r.valorContrato)||0, percent: a.percent, comissao: base*(a.percent/100),
+          pago: !!r.pago, mesPagamento: r.mesPagamento });
+      });
+    });
+  }
+
+  return linhas.sort(function(a,b){ return MONTHS.indexOf(a.mes) - MONTHS.indexOf(b.mes); });
+}
+
+function abrirDetalheFechamento(pessoa, origem, origemLabel, mes){
+  const linhas = detalheFechamento(pessoa, origem, mes);
+  modalState = { type: 'detalhe-fechamento', pessoa: pessoa, origemLabel: origemLabel, mes: mes, linhas: linhas };
+  render();
+}
+/* Célula clicável do Fechamento: só vira link quando tem algo por trás
+   — clicar num R$ 0,00 não levaria a lugar nenhum — e só quando os
+   valores estão revelados, senão o clique furaria o "Ocultar valores". */
+function celulaFechamento(pessoa, origem, origemLabel, valorNum, mes, textoFormatado, classeExtra, revelado){
+  const classes = 'num' + (classeExtra ? ' ' + classeExtra : '');
+  if(!valorNum || !revelado) return `<td class="${classes}">${textoFormatado}</td>`;
+  return `<td class="${classes} celula-clicavel" title="Ver o que está contando aqui" onclick="abrirDetalheFechamento('${escJs(pessoa)}','${origem}','${escJs(origemLabel)}','${escJs(mes)}')">${textoFormatado}</td>`;
 }
 
 /* Trava no mês escolhido toda nota "espera pagamento" que caiu na janela
@@ -6730,12 +6852,12 @@ function renderParceirosSection(){
   const fechamentoRowsHtml = fechamento.map(l => `
       <tr>
         <td><span class="th-dot" style="background:${esc(l.cor)}"></span>${esc(l.pessoa)}</td>
-        <td class="num">${maskOr(l.sistema)}</td>
-        <td class="num">${maskOr(l.publicos)}</td>
-        <td class="num">${maskOr(l.cursos)}</td>
-        <td class="num">${maskOr(l.bonus)}</td>
-        <td class="num">${maskOr(l.salario)}</td>
-        <td class="num col-apoio">${maskOr(l.consultoria)}</td>
+        ${celulaFechamento(l.pessoa, 'sistema', 'Sistema', l.sistema, partnerMonthFilter, maskOr(l.sistema), null, partnersValuesRevealed)}
+        ${celulaFechamento(l.pessoa, 'publicos', 'Órgãos Públicos', l.publicos, partnerMonthFilter, maskOr(l.publicos), null, partnersValuesRevealed)}
+        ${celulaFechamento(l.pessoa, 'cursos', 'Cursos', l.cursos, partnerMonthFilter, maskOr(l.cursos), null, partnersValuesRevealed)}
+        ${celulaFechamento(l.pessoa, 'bonus', 'Bônus', l.bonus, partnerMonthFilter, maskOr(l.bonus), null, partnersValuesRevealed)}
+        ${celulaFechamento(l.pessoa, 'salario', 'Salário fixo', l.salario, partnerMonthFilter, maskOr(l.salario), null, partnersValuesRevealed)}
+        ${celulaFechamento(l.pessoa, 'consultoria', 'Consultoria', l.consultoria, partnerMonthFilter, maskOr(l.consultoria), 'col-apoio', partnersValuesRevealed)}
         <td class="num" style="font-weight:800;">${maskOr(l.aPagar)}</td>
         <td class="num col-apoio" title="Já ganhou, mas ainda espera o cliente pagar">${maskOr(l.pendente)}</td>
       </tr>`).join('');
