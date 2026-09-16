@@ -10674,6 +10674,8 @@ function montarRelatorioMes(mes){
     return `<tr><td>${esc(v)}</td>
       <td class="num">${fmtMoney(t.vendasSistemas||0)}</td>
       <td class="num">${(t.qtdSistemas||0).toLocaleString('pt-BR')}</td>
+      <td class="num">${fmtMoney(t.vendasPublicos||0)}</td>
+      <td class="num">${(t.qtdPublicos||0).toLocaleString('pt-BR')}</td>
       <td class="num">${fmtMoney(t.vendasCursos||0)}</td></tr>`;
   });
 
@@ -10877,7 +10879,7 @@ function montarRelatorioMes(mes){
       <section class="rel-sec">
         <h2>Totais do ano por vendedora <span class="rel-sub">volume vendido, não comissão</span></h2>
         ${relTabela(
-          [{label:'Vendedora'},{label:'Vendido em sistemas',num:true},{label:'Qtd. sistemas',num:true},{label:'Vendido em cursos',num:true}],
+          [{label:'Vendedora'},{label:'Vendido em sistemas',num:true},{label:'Qtd. sistemas',num:true},{label:'Vendido em órgãos públicos',num:true},{label:'Qtd. órgãos públicos',num:true},{label:'Vendido em cursos',num:true}],
           linhasTotaisAno, 'Nenhuma venda registrada em ' + ano + '.')}
       </section>
 
@@ -11820,6 +11822,10 @@ function renderPainelDashboard(vends){
             <div>
               <div class="painel-num">${fmtMoney(totais[v]?.vendasSistemas||0)}</div>
               <div class="painel-num-rot">em sistemas · ${(totais[v]?.qtdSistemas||0).toLocaleString('pt-BR')} venda${(totais[v]?.qtdSistemas||0)===1?'':'s'}</div>
+            </div>
+            <div>
+              <div class="painel-num">${fmtMoney(totais[v]?.vendasPublicos||0)}</div>
+              <div class="painel-num-rot">em órgãos públicos · ${(totais[v]?.qtdPublicos||0).toLocaleString('pt-BR')} venda${(totais[v]?.qtdPublicos||0)===1?'':'s'}</div>
             </div>
             <div>
               <div class="painel-num">${fmtMoney(totais[v]?.vendasCursos||0)}</div>
