@@ -59,6 +59,7 @@ Em telas estreitas (celular) a barra lateral vira uma faixa de atalhos que rola 
 ├── supabase_renovacoes_venda_fk_migration.sql → migração 28: índice único em renovacoes.venda_id (e por que não há foreign key)
 ├── supabase_marketing_leads_migration.sql → migração 29: lista de leads do LinkedIn (nome, cargo, empresa, órgão público)
 ├── supabase_marketing_leads_contato_migration.sql → migração 30: telefone e e-mail no lead
+├── supabase_move_premium_para_publicos.sql → migração 31: planos premium saem de Sistema para Órgãos Públicos (registro do que foi aplicado)
 └── .gitignore
 ```
 
