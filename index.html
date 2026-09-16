@@ -4860,16 +4860,17 @@ function exportFechamentoCSV(){
     const periodo = bonusFilter === 'Todos' ? ('Ano ' + yearFilter) : (bonusFilter + '/' + yearFilter);
     const linhas = fechamentoPagamentos(bonusFilter);
     let csv = 'Fechamento para a contabilidade - ' + periodo + '\n\n';
-    csv += 'Pessoa;Sistema;Orgaos Publicos;Cursos;Bonus;Salario fixo;Total a pagar;Consultoria (a receber);Com Consultoria\n';
-    const soma = {sistema:0, publicos:0, cursos:0, bonus:0, salario:0, aPagar:0, consultoria:0, comConsultoria:0};
+    csv += 'Pessoa;Sistema;Orgaos Publicos;Cursos;Bonus;Salario fixo;Consultoria (liberada);Total a pagar;Pendente (aguardando pagamento)\n';
+    const soma = {sistema:0, publicos:0, cursos:0, bonus:0, salario:0, aPagar:0, consultoria:0, pendente:0};
     linhas.forEach(function(l){
       Object.keys(soma).forEach(function(k){ soma[k] += l[k]; });
       csv += [l.pessoa, csvNum(l.sistema), csvNum(l.publicos), csvNum(l.cursos), csvNum(l.bonus),
-              csvNum(l.salario), csvNum(l.aPagar), csvNum(l.consultoria), csvNum(l.comConsultoria)].join(';') + '\n';
+              csvNum(l.salario), csvNum(l.consultoria), csvNum(l.aPagar), csvNum(l.pendente)].join(';') + '\n';
     });
     csv += ['TOTAL', csvNum(soma.sistema), csvNum(soma.publicos), csvNum(soma.cursos), csvNum(soma.bonus),
-            csvNum(soma.salario), csvNum(soma.aPagar), csvNum(soma.consultoria), csvNum(soma.comConsultoria)].join(';') + '\n';
-    csv += '\nA Consultoria nao entra no total a pagar: a comissao dela so se realiza quando o cliente paga.\n';
+            csvNum(soma.salario), csvNum(soma.consultoria), csvNum(soma.aPagar), csvNum(soma.pendente)].join(';') + '\n';
+    csv += '\nRios, Angela, Soraya, Luciana e Uilma: Sistema, Orgaos Publicos, Cursos e Bonus liberam na hora; so a Consultoria delas espera o cliente pagar.\n';
+    csv += 'Demais pessoas (Arick, Gustavo, Matheus Costa e outras): tudo espera o cliente pagar, qualquer produto.\n';
 
     const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
     const url = URL.createObjectURL(blob);
@@ -6069,7 +6070,7 @@ function renderBonusSection(){
   /* Fechamento do período: o que vai para a contabilidade, por pessoa. */
   const fechamento = fechamentoPagamentos(bonusFilter);
   const dinheiro = (v) => bonusValuesRevealed ? fmtMoney(v) : '••••';
-  const somaCols = {sistema:0, publicos:0, cursos:0, bonus:0, salario:0, aPagar:0, consultoria:0, comConsultoria:0};
+  const somaCols = {sistema:0, publicos:0, cursos:0, bonus:0, salario:0, aPagar:0, consultoria:0, pendente:0};
   fechamento.forEach(l => { Object.keys(somaCols).forEach(k => { somaCols[k] += l[k]; }); });
   const fechamentoRowsHtml = fechamento.map(l => `
       <tr>
@@ -6079,9 +6080,9 @@ function renderBonusSection(){
         <td class="num">${dinheiro(l.cursos)}</td>
         <td class="num">${dinheiro(l.bonus)}</td>
         <td class="num">${dinheiro(l.salario)}</td>
-        <td class="num" style="font-weight:800;">${dinheiro(l.aPagar)}</td>
         <td class="num col-apoio">${dinheiro(l.consultoria)}</td>
-        <td class="num col-apoio">${dinheiro(l.comConsultoria)}</td>
+        <td class="num" style="font-weight:800;">${dinheiro(l.aPagar)}</td>
+        <td class="num col-apoio" title="Já ganhou, mas ainda espera o cliente pagar">${dinheiro(l.pendente)}</td>
       </tr>`).join('');
 
   const editorFechamentoHtml = (isAdmin && fechamentoEditando) ? panel('bonus-fechamento-quem', 'Quem entra no fechamento', `
@@ -6141,9 +6142,9 @@ function renderBonusSection(){
               <th class="num">Cursos</th>
               <th class="num">Bônus</th>
               <th class="num">Salário fixo</th>
-              <th class="num">Total a pagar</th>
               <th class="num col-apoio">Consultoria</th>
-              <th class="num col-apoio">Com Consultoria</th>
+              <th class="num">Total a pagar</th>
+              <th class="num col-apoio">Pendente</th>
             </tr>
           </thead>
           <tbody>${fechamentoRowsHtml || `<tr class="empty-row"><td colspan="9"><span class="empty-icon">◌</span>Nada a pagar ${bonusFilter!=="Todos" ? 'em '+esc(bonusFilter) : 'em '+yearFilter} ainda.</td></tr>`}</tbody>
@@ -6154,17 +6155,18 @@ function renderBonusSection(){
             <td class="num">${dinheiro(somaCols.cursos)}</td>
             <td class="num">${dinheiro(somaCols.bonus)}</td>
             <td class="num">${dinheiro(somaCols.salario)}</td>
-            <td class="num">${dinheiro(somaCols.aPagar)}</td>
             <td class="num col-apoio">${dinheiro(somaCols.consultoria)}</td>
-            <td class="num col-apoio">${dinheiro(somaCols.comConsultoria)}</td>
+            <td class="num">${dinheiro(somaCols.aPagar)}</td>
+            <td class="num col-apoio">${dinheiro(somaCols.pendente)}</td>
           </tr></tfoot>` : ''}
         </table>
       </div>
       <div class="totais-nota">
-        <b>Total a pagar</b> = comissões de Sistema, Órgãos Públicos e Cursos + bônus e metas + salário fixo.
-        É o valor de cada pessoa para mandar à contabilidade.
-        A <b>Consultoria fica fora</b>: a comissão dela só se realiza quando o cliente paga, então entra
-        aqui apenas como referência, nas duas últimas colunas.
+        <b>Total a pagar</b> é a comissão já <b>liberada</b> de cada pessoa — some ao salário fixo e vai pra contabilidade.
+        A liberação depende de quem ganhou: pra Rios, Angela, Soraya, Luciana e Uilma, Sistema, Órgãos Públicos,
+        Cursos e Bônus liberam na hora, mesmo sem o cliente ter pago — só a Consultoria delas espera o pagamento.
+        Pra todo mundo fora dessa lista (Arick, Gustavo, Matheus Costa e outros), tudo espera o cliente pagar,
+        não importa o produto. O que ainda não liberou aparece em <b>Pendente</b>, só como referência do que está por vir.
       </div>
     `, {
       flush: true,
@@ -6243,6 +6245,63 @@ function getSellerBreakdown(){
   return by;
 }
 
+/* getSellerBreakdown soma TUDO que foi ganho, pago ou não — é o "ganhos
+   totais" do Resumo Geral. Pra fechamento (o que dá pra mandar pagar
+   agora), a liberação da comissão depende de QUEM ganhou e de QUE
+   ORIGEM, e recebe mês próprio (não o do Resumo Geral):
+   - Vendedoras de Sistema (Rios, Angela, Soraya, Luciana, Uilma): Sistema,
+     Órgãos Públicos, Cursos e Bônus liberam na hora, entram mesmo sem o
+     cliente ter pago a nota ainda. Só a comissão de Consultoria espera o
+     pagamento.
+   - Todo mundo fora dessa lista (Arick, Gustavo, Matheus Costa e quem
+     mais aparecer): tudo espera o cliente pagar, não importa o produto. */
+function getSellerReceivable(mes){
+  const by = {};
+  const ensure = (name) => { if(!by[name]) by[name] = {sistema:0, consultoria:0, publicos:0, cursos:0, bonus:0}; };
+  const noPeriodo = function(r){
+    return (r.ano||2026) === yearFilter && (mes === "Todos" || !mes || r.mes === mes);
+  };
+
+  rows.forEach(r => {
+    if(!noPeriodo(r)) return;
+    SELLERS.forEach(s => {
+      const valor = Number(r[s.key])||0;
+      if(!valor) return;
+      if(!ehVendedorDeSistema(s.label) && !r.pago) return;
+      ensure(s.label);
+      by[s.label].sistema += valor;
+    });
+  });
+
+  ENTITY_KEYS.forEach(key => {
+    state[key].rows.forEach(r => {
+      if(!noPeriodo(r)) return;
+      const base = entityRemainingAfterPartner(r);
+      const premium = key === 'publicos' && r.tipo === 'Plano Premium';
+      const contaComoSistema = premium || r.upgrade;
+      getRowSellerAssignments(r).forEach(a => {
+        const deSistema = ehVendedorDeSistema(a.vendedor);
+        const liberaSemPagar = deSistema && key !== 'consultoria';
+        if(!liberaSemPagar && !r.pago) return;     // ainda esperando o cliente pagar
+        ensure(a.vendedor);
+        const valor = base * (a.percent/100);
+        const destino = (contaComoSistema && deSistema) ? 'sistema' : key;
+        by[a.vendedor][destino] += valor;
+      });
+    });
+  });
+
+  bonusRows.forEach(r => {
+    if(!noPeriodo(r)) return;
+    if(isSalarioRow(r)) return;
+    if(!r.vendedor) return;
+    ensure(r.vendedor);
+    by[r.vendedor].bonus += Number(r.valor)||0;
+  });
+
+  return by;
+}
+
 /* getSellerBreakdown lê o filtro de mês do Resumo Geral. Para usar o
    mesmo cálculo com o filtro de outra aba, aponta o filtro pro mês pedido
    e devolve no fim — mesmo jeito que o relatório em PDF faz. */
@@ -6300,18 +6359,21 @@ function toggleFechamentoPessoa(nome){
 }
 function setFechamentoEditando(v){ fechamentoEditando = !!v; render(); }
 
-/* O que vai para a contabilidade no mês: por pessoa, a comissão de cada
-   origem + bônus + salário fixo. É o número que a Soraya manda pagar.
+/* O que vai para a contabilidade no mês: por pessoa, a comissão já
+   liberada de cada origem + bônus + salário fixo. É o número que a Soraya
+   manda pagar — ver getSellerReceivable pra regra de quem libera o quê
+   sem esperar o cliente pagar.
 
-   A Consultoria fica FORA do total a pagar porque a comissão dela só se
-   realiza quando o cliente paga — mandar pagar antes disso seria adiantar
-   dinheiro que pode não ter entrado. Ela vem em colunas de apoio.
+   "Pendente" é o resto: o que a pessoa já ganhou mas ainda não pode
+   receber, porque depende do cliente pagar. Fica de fora do total a
+   pagar, só como referência de quanto está por vir.
 
    A lista de pessoas não é só a das vendedoras do Sistema: quem só recebe
    salário (a equipe de consultoria, por exemplo) também precisa entrar,
    senão faltaria gente na folha. */
 function fechamentoPagamentos(mes, todos){
-  const bkd = sellerBreakdownDoMes(mes);
+  const bruto = sellerBreakdownDoMes(mes);
+  const realizado = getSellerReceivable(mes);
   const noPeriodo = function(r){
     return (r.ano||2026) === yearFilter && (mes === 'Todos' || !mes || r.mes === mes);
   };
@@ -6331,24 +6393,28 @@ function fechamentoPagamentos(mes, todos){
     nomes.push(t);
   };
   sellersForCurrentUser().forEach(function(sv){ juntar(sv.label); });
-  Object.keys(bkd).forEach(juntar);
+  Object.keys(bruto).forEach(juntar);
+  Object.keys(realizado).forEach(juntar);
   Object.keys(salarioPorPessoa).forEach(juntar);
 
   return nomes.map(function(nome){
-    const b = bkd[nome] || {sistema:0, consultoria:0, publicos:0, cursos:0, bonus:0};
+    const b = realizado[nome] || {sistema:0, consultoria:0, publicos:0, cursos:0, bonus:0};
+    const g = bruto[nome] || {sistema:0, consultoria:0, publicos:0, cursos:0, bonus:0};
     const chaveSal = Object.keys(salarioPorPessoa).find(function(k){ return name_matches_client(k, nome); });
     const salario = chaveSal ? salarioPorPessoa[chaveSal] : 0;
-    const aPagar = b.sistema + b.publicos + b.cursos + b.bonus + salario;
+    const aPagar = b.sistema + b.consultoria + b.publicos + b.cursos + b.bonus + salario;
+    const totalGanho = g.sistema + g.consultoria + g.publicos + g.cursos + g.bonus + salario;
+    const pendente = Math.max(0, totalGanho - aPagar);
     return {
       pessoa: nome, cor: corDoVendedor(nome),
       sistema: b.sistema, publicos: b.publicos, cursos: b.cursos,
       bonus: b.bonus, salario: salario, aPagar: aPagar,
-      consultoria: b.consultoria, comConsultoria: aPagar + b.consultoria,
+      consultoria: b.consultoria, pendente: pendente,
     };
   }).filter(function(l){
     if(todos) return true;
     if(!estaNoFechamento(l.pessoa)) return false;       // tirada da folha à mão
-    return l.aPagar !== 0 || l.consultoria !== 0;       // sem nada no período só polui
+    return l.aPagar !== 0 || l.pendente !== 0;          // sem nada no período só polui
   }).sort(function(a,b){ return b.aPagar - a.aPagar; });
 }
 
@@ -10160,12 +10226,13 @@ function montarRelatorioMes(mes){
   // faturamento — é despesa fixa da empresa, não prêmio nem venda.
   const salariosMes = bonusRows.filter(function(r){ return (r.ano||2026) === ano && r.mes === mes && isSalarioRow(r); });
   const totSalarios = salariosMes.reduce(function(a,r){ return a + (Number(r.valor)||0); }, 0);
-  // Fechamento do mês: o que cada pessoa recebe, somando comissão, bônus e
-  // salário. Sem a Consultoria, que depende do cliente ter pago.
+  // Fechamento do mês: o que cada pessoa recebe, somando comissão já
+  // liberada, bônus e salário — ver getSellerReceivable pra regra de
+  // quem libera o quê sem esperar o cliente pagar.
   const fechamentoMes = fechamentoPagamentos(mes);
   const totalAPagar = fechamentoMes.reduce(function(a,l){ return a + l.aPagar; }, 0);
   const linhasFechamento = fechamentoMes.map(function(l){
-    const comissoes = l.sistema + l.publicos + l.cursos;
+    const comissoes = l.sistema + l.publicos + l.cursos + l.consultoria;
     return `<tr><td>${esc(l.pessoa)}</td>
       <td class="num">${fmtMoney(comissoes)}</td>
       <td class="num">${fmtMoney(l.bonus)}</td>
