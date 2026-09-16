@@ -2205,7 +2205,7 @@ function checkStorageAvailability(){
 }
 
 /* ---------- Sistema (vendas + vendas_comissoes) ---------- */
-const VENDA_NON_SELLER_FIELDS = new Set(['id','ano','mes','cliente','venda','valor','parceiro','participacao','formaPagamento','colaborador','observacoes','vendedor2','vendedor3','vendedorResponsavel','pago','mesPagamento','parcelaLabel','comissaoPercents','renovacao','novoContrato','upgrade','notaEmitida','notaEmitidaEm']);
+const VENDA_NON_SELLER_FIELDS = new Set(['id','ano','mes','cliente','venda','valor','parceiro','participacao','formaPagamento','colaborador','observacoes','vendedor2','vendedor3','vendedorResponsavel','pago','mesPagamento','pagoEm','fechamentoMes','parcelaLabel','comissaoPercents','renovacao','novoContrato','upgrade','notaEmitida','notaEmitidaEm']);
 
 function persist(){
   saving = true; updateSaveStatus();
@@ -2220,6 +2220,7 @@ function persist(){
             forma_pagamento: r.formaPagamento||'', colaborador: r.colaborador||'', observacoes: r.observacoes||'',
             renovacao: !!r.renovacao, novo_contrato: !!r.novoContrato, upgrade: !!r.upgrade,
             vendedor2: r.vendedor2||'', vendedor3: r.vendedor3||'', pago: !!r.pago, mes_pagamento: r.mesPagamento||null,
+            pago_em: r.pagoEm || null, fechamento_mes: r.fechamentoMes || null,
             parcela_label: r.parcelaLabel || null,
             vendedor_responsavel: r.vendedorResponsavel || '',
             // vai junto de propósito: upsert que não manda a coluna a
@@ -2278,6 +2279,7 @@ async function tryLoadFromStorageAsync(){
           formaPagamento: d.forma_pagamento||'', colaborador: d.colaborador||'', observacoes: d.observacoes||'',
           renovacao: !!d.renovacao, novoContrato: !!d.novo_contrato, upgrade: !!d.upgrade,
           vendedor2: d.vendedor2||'', vendedor3: d.vendedor3||'', pago: d.pago, mesPagamento: d.mes_pagamento,
+          pagoEm: d.pago_em || null, fechamentoMes: d.fechamento_mes || null,
           parcelaLabel: d.parcela_label,
           vendedorResponsavel: d.vendedor_responsavel || '',
           notaEmitida: !!d.nota_emitida, notaEmitidaEm: d.nota_emitida_em || null,
@@ -2320,7 +2322,7 @@ function persistEntityRows(key){
             parcela_label: r.parcelaLabel || null,
             nome:'', valor_contrato:null, tipo:null, parceiro:'', participacao:null,
             forma_pagamento:'', colaborador:'', observacoes:'',
-            pago:false, mes_pagamento:null,
+            pago:false, mes_pagamento:null, pago_em: r.pagoEm || null, fechamento_mes: r.fechamentoMes || null,
             nota_emitida: !!r.notaEmitida, nota_emitida_em: r.notaEmitidaEm || null,
             in_company: !!r.inCompany, renovacao: !!r.renovacao, upgrade: !!r.upgrade,
           };
@@ -2452,7 +2454,7 @@ async function tryLoadEntityFromStorageAsync(key){
           inCompany: !!d.in_company, renovacao: !!d.renovacao, upgrade: !!d.upgrade,
         };
         if(cfg.hasVendasPorVendedor) r.vendasVendedoras = divisaoByLanc[d.id] || [];
-        if(cfg.hasPagamento){ r.pago = d.pago; r.mesPagamento = d.mes_pagamento; }
+        if(cfg.hasPagamento){ r.pago = d.pago; r.mesPagamento = d.mes_pagamento; r.pagoEm = d.pago_em || null; r.fechamentoMes = d.fechamento_mes || null; }
         cfg.fields.forEach(function(f){
           if(f.key === 'valorContrato') r.valorContrato = d.valor_contrato;
           else if(f.key === 'tipo') r.tipo = d.tipo;
@@ -5268,8 +5270,14 @@ function onPagamentoToggle(el, entityKey){
     return;
   }
   r.pago = el.checked;
-  if(r.pago && !r.mesPagamento) r.mesPagamento = mesPagamentoPadrao(r);
-  if(!r.pago) r.mesPagamento = null;
+  if(r.pago){
+    if(!r.mesPagamento) r.mesPagamento = mesPagamentoPadrao(r);
+    r.pagoEm = new Date().toISOString();   // marca AGORA — é a data que decide a janela de 01 do mês anterior a 16 do mês
+  } else {
+    r.mesPagamento = null;
+    r.pagoEm = null;
+    r.fechamentoMes = null;   // desmarcou pago: solta a trava, se tinha
+  }
   persistAfterPayment(entityKey);
   render();
 }
@@ -6166,12 +6174,14 @@ function renderBonusSection(){
         A liberação depende de quem ganhou: pra Rios, Angela, Soraya, Luciana e Uilma, Sistema, Órgãos Públicos,
         Cursos e Bônus liberam na hora, mesmo sem o cliente ter pago — só a Consultoria delas espera o pagamento.
         Pra todo mundo fora dessa lista (Arick, Gustavo, Matheus Costa e outros), tudo espera o cliente pagar,
-        não importa o produto. O que ainda não liberou aparece em <b>Pendente</b>, só como referência do que está por vir.
+        não importa o produto. Pra quem espera pagamento, a nota entra no fechamento de um mês se foi paga entre
+        01 do mês anterior e 16 dele. O que ainda não liberou aparece em <b>Pendente</b>. Depois de mandar pagar,
+        use <b>🔒 Travar fechamento</b> pra essa nota não contar de novo no mês seguinte.
       </div>
     `, {
       flush: true,
       meta: `${bonusFilter !== "Todos" ? "em <b>"+esc(bonusFilter)+"</b>" : "no ano de <b>"+yearFilter+"</b>"}${fechamento.length ? ' · a pagar <b>'+(bonusValuesRevealed ? fmtMoney(somaCols.aPagar) : '••••')+'</b>' : ''}${fechamentoFora.length ? ' · <span title="'+esc(fechamentoFora.join(', '))+'">'+fechamentoFora.length+' fora</span>' : ''}`,
-      actions: `${isAdmin ? `<button class="eye-toggle" onclick="setFechamentoEditando(${fechamentoEditando?'false':'true'})">${fechamentoEditando?'✕ Fechar':'👥 Quem entra'}</button>` : ''}<button class="eye-toggle" onclick="exportFechamentoCSV()">📊 Baixar CSV</button>`,
+      actions: `${(isAdmin && bonusFilter !== "Todos") ? `<button class="eye-toggle" onclick="travarFechamentoDoMes('${escJs(bonusFilter)}')">🔒 Travar fechamento de ${esc(bonusFilter)}</button>` : ''}${isAdmin ? `<button class="eye-toggle" onclick="setFechamentoEditando(${fechamentoEditando?'false':'true'})">${fechamentoEditando?'✕ Fechar':'👥 Quem entra'}</button>` : ''}<button class="eye-toggle" onclick="exportFechamentoCSV()">📊 Baixar CSV</button>`,
     })}
     ${editorFechamentoHtml}
 
@@ -6245,29 +6255,58 @@ function getSellerBreakdown(){
   return by;
 }
 
+/* Uma nota "espera pagamento" entra no fechamento de um mês M quando foi
+   paga entre o dia 1º do mês anterior a M e o dia 16 de M — a folga que a
+   Soraya pediu, pra pegar pagamentos confirmados só depois do fechamento
+   anterior já ter fechado. Essa janela se sobrepõe com a do mês seguinte
+   (os primeiros 16 dias de qualquer mês caem nas duas), então travarFechamentoDoMes
+   existe pra fixar em qual mês cada nota já entrou, e não contar de novo. */
+function dentroDaJanelaDePagamento(pagoEmIso, mes, ano){
+  if(!pagoEmIso) return false;
+  const idx = MONTHS.indexOf(mes);
+  if(idx === -1) return false;
+  const d = new Date(pagoEmIso);
+  if(isNaN(d.getTime())) return false;
+  const inicio = new Date(ano, idx - 1, 1, 0, 0, 0);
+  const fim = new Date(ano, idx, 16, 23, 59, 59);
+  return d >= inicio && d <= fim;
+}
+/* Só chega aqui quem já espera pagamento (Consultoria pra vendedora de
+   Sistema; tudo pra quem não é). Uma vez travada num mês, só conta
+   naquele — nunca mais entra em outro, mesmo caindo na janela dele
+   também. Sem trava ainda, vale a janela ao vivo. */
+function elegivelNoFechamento(r, mes){
+  if(!r.pago) return false;
+  if(mes === "Todos" || !mes) return true;
+  if(r.fechamentoMes) return r.fechamentoMes === mes;
+  if(r.pagoEm) return dentroDaJanelaDePagamento(r.pagoEm, mes, yearFilter);
+  return (r.mesPagamento || r.mes) === mes;   // pago sem data exata ainda: melhor esforço, como antes
+}
+
 /* getSellerBreakdown soma TUDO que foi ganho, pago ou não — é o "ganhos
    totais" do Resumo Geral. Pra fechamento (o que dá pra mandar pagar
    agora), a liberação da comissão depende de QUEM ganhou e de QUE
-   ORIGEM, e recebe mês próprio (não o do Resumo Geral):
+   ORIGEM:
    - Vendedoras de Sistema (Rios, Angela, Soraya, Luciana, Uilma): Sistema,
-     Órgãos Públicos, Cursos e Bônus liberam na hora, entram mesmo sem o
-     cliente ter pago a nota ainda. Só a comissão de Consultoria espera o
-     pagamento.
+     Órgãos Públicos, Cursos e Bônus liberam na hora, no mês do próprio
+     lançamento, entram mesmo sem o cliente ter pago a nota ainda. Só a
+     comissão de Consultoria espera o pagamento (regra abaixo).
    - Todo mundo fora dessa lista (Arick, Gustavo, Matheus Costa e quem
      mais aparecer): tudo espera o cliente pagar, não importa o produto. */
 function getSellerReceivable(mes){
   const by = {};
   const ensure = (name) => { if(!by[name]) by[name] = {sistema:0, consultoria:0, publicos:0, cursos:0, bonus:0}; };
-  const noPeriodo = function(r){
+  const noPeriodoLancamento = function(r){
     return (r.ano||2026) === yearFilter && (mes === "Todos" || !mes || r.mes === mes);
   };
 
   rows.forEach(r => {
-    if(!noPeriodo(r)) return;
+    if((r.ano||2026) !== yearFilter) return;
     SELLERS.forEach(s => {
       const valor = Number(r[s.key])||0;
       if(!valor) return;
-      if(!ehVendedorDeSistema(s.label) && !r.pago) return;
+      const ok = ehVendedorDeSistema(s.label) ? noPeriodoLancamento(r) : elegivelNoFechamento(r, mes);
+      if(!ok) return;
       ensure(s.label);
       by[s.label].sistema += valor;
     });
@@ -6275,14 +6314,15 @@ function getSellerReceivable(mes){
 
   ENTITY_KEYS.forEach(key => {
     state[key].rows.forEach(r => {
-      if(!noPeriodo(r)) return;
+      if((r.ano||2026) !== yearFilter) return;
       const base = entityRemainingAfterPartner(r);
       const premium = key === 'publicos' && r.tipo === 'Plano Premium';
       const contaComoSistema = premium || r.upgrade;
       getRowSellerAssignments(r).forEach(a => {
         const deSistema = ehVendedorDeSistema(a.vendedor);
         const liberaSemPagar = deSistema && key !== 'consultoria';
-        if(!liberaSemPagar && !r.pago) return;     // ainda esperando o cliente pagar
+        const ok = liberaSemPagar ? noPeriodoLancamento(r) : elegivelNoFechamento(r, mes);
+        if(!ok) return;
         ensure(a.vendedor);
         const valor = base * (a.percent/100);
         const destino = (contaComoSistema && deSistema) ? 'sistema' : key;
@@ -6292,7 +6332,7 @@ function getSellerReceivable(mes){
   });
 
   bonusRows.forEach(r => {
-    if(!noPeriodo(r)) return;
+    if(!noPeriodoLancamento(r)) return;
     if(isSalarioRow(r)) return;
     if(!r.vendedor) return;
     ensure(r.vendedor);
@@ -6300,6 +6340,34 @@ function getSellerReceivable(mes){
   });
 
   return by;
+}
+
+/* Trava no mês escolhido toda nota "espera pagamento" que caiu na janela
+   dele e ainda não tinha sido travada em nenhum outro mês. Depois disso
+   ela para de responder à janela ao vivo — fica só naquele mês, mesmo
+   que o mês seguinte também alcance a mesma data de pagamento. É o que
+   evita pagar a mesma comissão duas vezes por causa da sobreposição. */
+function travarFechamentoDoMes(mes){
+  if(!mes || mes === 'Todos'){ showAlert('Escolha um mês específico antes de travar o fechamento.'); return; }
+  showConfirm(
+    'Travar o fechamento de ' + mes + '? As notas pagas entre 01 do mês anterior e 16 de ' + mes
+      + ' que ainda não foram travadas por nenhum outro mês ficam marcadas como já incluídas aqui — não contam de novo em nenhum fechamento futuro.',
+    function(){
+      let travadas = 0;
+      const travar = function(r){
+        if(r.pago && !r.fechamentoMes && (r.ano||2026) === yearFilter && dentroDaJanelaDePagamento(r.pagoEm, mes, yearFilter)){
+          r.fechamentoMes = mes;
+          travadas++;
+        }
+      };
+      rows.forEach(travar);
+      persist();
+      ENTITY_KEYS.forEach(function(key){ state[key].rows.forEach(travar); persistEntityRows(key); });
+      closeModal();
+      showAlert(travadas ? (travadas + ' lançamento' + (travadas===1?'':'s') + ' travado' + (travadas===1?'':'s') + ' no fechamento de ' + mes + '.') : 'Nada novo pra travar em ' + mes + '.');
+    },
+    'Travar'
+  );
 }
 
 /* getSellerBreakdown lê o filtro de mês do Resumo Geral. Para usar o
@@ -6775,10 +6843,14 @@ function renderParceirosSection(){
         <b>Total a pagar</b> é a comissão já liberada, pronta pra mandar pra contabilidade. Rios, Angela, Soraya,
         Luciana e Uilma liberam Sistema, Órgãos Públicos, Cursos e Bônus na hora, mesmo sem o cliente ter pago —
         só a Consultoria delas espera o pagamento. Arick, Gustavo, Matheus Costa e quem mais aparecer fora dessa
-        lista: tudo espera o cliente pagar, não importa o produto. <b>Pendente</b> é o que já foi ganho mas ainda
-        aguarda esse pagamento.
+        lista: tudo espera o cliente pagar, não importa o produto. Pra quem espera pagamento, uma nota entra no
+        fechamento de um mês se foi paga entre o dia 01 do mês anterior e o dia 16 dele — dá folga pra pagamento
+        confirmado depois do fechamento passado já ter fechado. <b>Pendente</b> é o que já foi ganho mas ainda
+        aguarda esse pagamento. Use <b>🔒 Travar fechamento</b> depois de mandar pagar, pra essa nota não contar
+        de novo no mês seguinte (a janela se sobrepõe).
       </div>
-    `, {flush: true, meta: `${partnerMonthFilter !== "Todos" ? "em <b>"+esc(partnerMonthFilter)+"</b>" : "no ano de <b>"+yearFilter+"</b>"}${fechamento.length ? ' · a pagar <b>'+(partnersValuesRevealed ? fmtMoney(fechamentoSomaCols.aPagar) : '••••')+'</b>' : ''}`})}
+    `, {flush: true, meta: `${partnerMonthFilter !== "Todos" ? "em <b>"+esc(partnerMonthFilter)+"</b>" : "no ano de <b>"+yearFilter+"</b>"}${fechamento.length ? ' · a pagar <b>'+(partnersValuesRevealed ? fmtMoney(fechamentoSomaCols.aPagar) : '••••')+'</b>' : ''}`,
+      actions: (isAdmin && partnerMonthFilter !== "Todos") ? `<button class="eye-toggle" onclick="travarFechamentoDoMes('${escJs(partnerMonthFilter)}')">🔒 Travar fechamento de ${esc(partnerMonthFilter)}</button>` : ''})}
 
     ${panel('resumo-vendedoras', 'Vendedoras — ganhos totais', `
       <div class="kpis" style="margin:0 16px 14px;">${sellerKpiCardsHtml}</div>
