@@ -303,6 +303,16 @@ A equipe de consultoria só recebe quando o **cliente paga a nota** — contrato
 
 O que move um lançamento de um quadro para o outro é a caixinha **"Pago"** na aba de origem (Sistema, Consultoria ou Órgãos Públicos). Marcou como pago, a comissão sai de "a receber" e entra em "liberadas".
 
+### A comissão libera no mês em que o cliente pagou
+
+A nota de **agosto** que o cliente só pagou em **setembro** libera a comissão em **setembro** — é quando o dinheiro entrou. Por isso "mês de pagamento" é um campo próprio (`mes_pagamento`), separado do mês do lançamento, e é por ele que filtram os quadros de **Comissões liberadas**, **Pagamentos realizados** e a seção de liberadas do relatório em PDF.
+
+**Ao marcar "Pago", o padrão é o mês corrente** — não o mês da nota. Quem clica na caixinha está registrando um pagamento que acabou de acontecer. Antes o padrão era o mês do lançamento, e a nota de agosto paga em setembro caía em agosto a menos que alguém lembrasse de trocar no seletor ao lado — que é justamente o que ninguém lembra.
+
+O seletor continua ali para corrigir (pagou em outubro, escolhe outubro). Quando o mês de pagamento **difere** do mês da nota, ele fica **âmbar**, com a dica *"Nota de Agosto paga em Setembro — a comissão libera em Setembro"*: essa diferença decide em que mês a comissão entra, então não pode passar batida. Na tabela de "Pagamentos realizados" a coluna *mês da venda* mostra `—` quando os dois coincidem, e o mês quando não.
+
+> Para lançamento de **outro ano** o padrão continua sendo o mês da própria nota. `mes_pagamento` guarda só o nome do mês, sem ano próprio — ele vive dentro do `ano` da linha —, então o mês de hoje não diria nada ali.
+
 Cada quadro tem seu **próprio filtro de mês**, e eles filtram por coisas diferentes — o que é proposital:
 
 - **Liberadas** filtra pelo **mês em que o cliente pagou**, porque é quando o dinheiro entrou.
