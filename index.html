@@ -6617,6 +6617,25 @@ function renderParceirosSection(){
     <button class="eye-toggle" onclick="window.print()">🖨️ Imprimir / PDF</button>
   `;
 
+  /* O que já pode ir pra contabilidade, por pessoa — mesma regra do
+     fechamento da aba Bônus, só que na primeira página, pro filtro de
+     mês daqui (partnerMonthFilter). */
+  const fechamento = fechamentoPagamentos(partnerMonthFilter);
+  const fechamentoSomaCols = {sistema:0, publicos:0, cursos:0, bonus:0, salario:0, aPagar:0, consultoria:0, pendente:0};
+  fechamento.forEach(l => { Object.keys(fechamentoSomaCols).forEach(k => { fechamentoSomaCols[k] += l[k]; }); });
+  const fechamentoRowsHtml = fechamento.map(l => `
+      <tr>
+        <td><span class="th-dot" style="background:${esc(l.cor)}"></span>${esc(l.pessoa)}</td>
+        <td class="num">${maskOr(l.sistema)}</td>
+        <td class="num">${maskOr(l.publicos)}</td>
+        <td class="num">${maskOr(l.cursos)}</td>
+        <td class="num">${maskOr(l.bonus)}</td>
+        <td class="num">${maskOr(l.salario)}</td>
+        <td class="num col-apoio">${maskOr(l.consultoria)}</td>
+        <td class="num" style="font-weight:800;">${maskOr(l.aPagar)}</td>
+        <td class="num col-apoio" title="Já ganhou, mas ainda espera o cliente pagar">${maskOr(l.pendente)}</td>
+      </tr>`).join('');
+
   const sellerBreakdownRowsHtml = sellersForCurrentUser().map(s => {
     const b = sellerBreakdown[s.label] || {sistema:0,consultoria:0,publicos:0,cursos:0,bonus:0};
     const total = b.sistema + b.consultoria + b.publicos + b.cursos + b.bonus;
@@ -6721,6 +6740,45 @@ function renderParceirosSection(){
     ${panel('resumo-grafico', `Evolução mensal das comissões — ${yearFilter}`, renderMonthlyChart() + `<div class="painel-nota">São as <b>comissões</b> de todas as origens somadas — Sistema, Consultoria, Órgãos Públicos, Cursos e bônus —, não o faturamento dos contratos. Salário fixo fica de fora.</div>`, {meta: 'comissões, todas as origens'})}
 
     ${metasPanelHtml}
+
+    ${panel('resumo-fechamento', 'Fechamento — o que tem pra receber', `
+      <div class="table-scroll">
+        <table class="table-plain">
+          <thead>
+            <tr>
+              <th>Pessoa</th>
+              <th class="num">Sistema</th>
+              <th class="num">Órgãos Públicos</th>
+              <th class="num">Cursos</th>
+              <th class="num">Bônus</th>
+              <th class="num">Salário fixo</th>
+              <th class="num col-apoio">Consultoria</th>
+              <th class="num">Total a pagar</th>
+              <th class="num col-apoio">Pendente</th>
+            </tr>
+          </thead>
+          <tbody>${fechamentoRowsHtml || `<tr class="empty-row"><td colspan="9"><span class="empty-icon">◌</span>Nada a pagar ${partnerMonthFilter!=="Todos" ? 'em '+esc(partnerMonthFilter) : 'em '+yearFilter} ainda.</td></tr>`}</tbody>
+          ${fechamentoRowsHtml ? `<tfoot><tr>
+            <td>Total</td>
+            <td class="num">${maskOr(fechamentoSomaCols.sistema)}</td>
+            <td class="num">${maskOr(fechamentoSomaCols.publicos)}</td>
+            <td class="num">${maskOr(fechamentoSomaCols.cursos)}</td>
+            <td class="num">${maskOr(fechamentoSomaCols.bonus)}</td>
+            <td class="num">${maskOr(fechamentoSomaCols.salario)}</td>
+            <td class="num col-apoio">${maskOr(fechamentoSomaCols.consultoria)}</td>
+            <td class="num">${maskOr(fechamentoSomaCols.aPagar)}</td>
+            <td class="num col-apoio">${maskOr(fechamentoSomaCols.pendente)}</td>
+          </tr></tfoot>` : ''}
+        </table>
+      </div>
+      <div class="painel-nota">
+        <b>Total a pagar</b> é a comissão já liberada, pronta pra mandar pra contabilidade. Rios, Angela, Soraya,
+        Luciana e Uilma liberam Sistema, Órgãos Públicos, Cursos e Bônus na hora, mesmo sem o cliente ter pago —
+        só a Consultoria delas espera o pagamento. Arick, Gustavo, Matheus Costa e quem mais aparecer fora dessa
+        lista: tudo espera o cliente pagar, não importa o produto. <b>Pendente</b> é o que já foi ganho mas ainda
+        aguarda esse pagamento.
+      </div>
+    `, {flush: true, meta: `${partnerMonthFilter !== "Todos" ? "em <b>"+esc(partnerMonthFilter)+"</b>" : "no ano de <b>"+yearFilter+"</b>"}${fechamento.length ? ' · a pagar <b>'+(partnersValuesRevealed ? fmtMoney(fechamentoSomaCols.aPagar) : '••••')+'</b>' : ''}`})}
 
     ${panel('resumo-vendedoras', 'Vendedoras — ganhos totais', `
       <div class="kpis" style="margin:0 16px 14px;">${sellerKpiCardsHtml}</div>
