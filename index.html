@@ -1793,7 +1793,7 @@ let painelPeriodo = 'Ano';
 
 const state = {};
 ENTITY_KEYS.forEach(k => {
-  state[k] = {rows:[], vendors: ENTITIES[k].defaultVendors.slice(), filter:"Todos", vendorFilter:"Todos", nextId:1, search:{main:"", parceiro:"", colaborador:""}, valuesRevealed:false, fieldFilters:{}, ordem:"padrao"};
+  state[k] = {rows:[], vendors: ENTITIES[k].defaultVendors.slice(), filter:"Todos", vendorFilter:"Todos", nextId:1, search:{main:"", parceiro:"", colaborador:""}, valuesRevealed:false, fieldFilters:{}, ordem:"padrao", filtroPago:"Todos"};
 });
 
 /* ================= Supabase persistence layer ================= */
@@ -8229,6 +8229,9 @@ function getEntityVisible(key){
   if(st.vendorFilter !== "Todos"){
     list = list.filter(r => getRowSellerAssignments(r).some(a => a.vendedor === st.vendorFilter));
   }
+  if(ENTITIES[key].hasPagamento && st.filtroPago && st.filtroPago !== "Todos"){
+    list = list.filter(r => (st.filtroPago === "Pago") === !!r.pago);
+  }
   ENTITIES[key].fields.forEach(f => {
     if(f.type === "select" && st.fieldFilters[f.key] && st.fieldFilters[f.key] !== "Todos"){
       list = list.filter(r => r[f.key] === st.fieldFilters[f.key]);
@@ -8277,6 +8280,10 @@ function ordenarEntityRows(list, ordem, mainField, campoValor){
 }
 function setEntityOrdem(el){
   state[el.dataset.entity].ordem = el.value;
+  render();
+}
+function setEntityFiltroPago(el){
+  state[el.dataset.entity].filtroPago = el.value;
   render();
 }
 function onEntitySearchInput(el, key, field){
@@ -8726,6 +8733,14 @@ function renderEntitySection(key){
             <option value="menor" ${st.ordem==='menor'?'selected':''}>Menor valor de contrato</option>
           </select>
         </label>
+        ${cfg.hasPagamento ? `<label class="ordem-wrap">
+          <span>Pagamento</span>
+          <select data-entity="${key}" onchange="setEntityFiltroPago(this)">
+            <option value="Todos" ${st.filtroPago==='Todos'?'selected':''}>Todos</option>
+            <option value="Pago" ${st.filtroPago==='Pago'?'selected':''}>Pagos</option>
+            <option value="Pendente" ${st.filtroPago==='Pendente'?'selected':''}>Pendentes</option>
+          </select>
+        </label>` : ''}
         <button class="btn-add btn-secondary" onclick="addEntityVendor('${key}')">+ Vendedor</button>
         ${key === 'consultoria' ? `<button class="btn-add btn-secondary" onclick="abrirImportarConsultoria()">📄 Importar planilha</button>` : ''}
         <button class="btn-add" onclick="addEntityRow('${key}')">+ Novo lançamento</button>
