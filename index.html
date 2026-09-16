@@ -1780,6 +1780,53 @@ ENTITY_KEYS.forEach(k => {
 });
 
 /* ================= Supabase persistence layer ================= */
+
+/* ---------- Apagar só o que foi apagado aqui ----------
+   Cada gravação fazia: "apague do banco tudo que não está na minha
+   memória". Parece inofensivo numa pessoa só, mas é perda de dado silenciosa
+   em dois casos reais:
+
+   1. Duas pessoas ao mesmo tempo. A cria um lançamento no navegador dela; a
+      aba da B, aberta antes disso, salva qualquer coisa e apaga a linha que
+      ela nunca viu. Ninguém recebe erro.
+   2. Linha inserida direto no banco com o app aberto — foi assim que os 61
+      planos premium migrados para Órgãos Públicos desapareceram.
+
+   A trava que já existia (`carregouDoBanco`) só garante "já li esta tabela
+   alguma vez"; ela não sabe dizer se o que foi lido continua atual.
+
+   Agora a exclusão é explícita: quem apaga na tela anota o id aqui, e a
+   gravação apaga só esses. O que esta aba não conhece, ela não toca. Se o
+   DELETE falhar, o id volta para a fila — tentar de novo no próximo save é
+   melhor do que engolir a exclusão. */
+const apagarPendente = {};
+
+function marcarParaApagar(tabela, id){
+  if(id === null || id === undefined || id === '') return;
+  if(!apagarPendente[tabela]) apagarPendente[tabela] = [];
+  if(apagarPendente[tabela].indexOf(id) === -1) apagarPendente[tabela].push(id);
+}
+
+/* "Zerar tudo" e restaurar um backup SUBSTITUEM a lista inteira — ali apagar
+   é a intenção, não um efeito colateral de estar desatualizado. Por isso
+   esses dois fluxos marcam tudo explicitamente antes de trocar. */
+function marcarListaParaApagar(tabela, lista, campo){
+  (lista || []).forEach(function(r){
+    marcarParaApagar(tabela, campo ? r[campo] : (r && r.id !== undefined ? r.id : r));
+  });
+}
+
+async function apagarMarcados(tabela, coluna){
+  const lista = apagarPendente[tabela];
+  if(!lista || !lista.length) return;
+  apagarPendente[tabela] = [];
+  try{
+    await sbDeleteIn(tabela, coluna || 'id', lista);
+  }catch(e){
+    apagarPendente[tabela] = (apagarPendente[tabela] || []).concat(lista);
+    throw e;
+  }
+}
 const SUPABASE_URL = "https://ogkrrlssdrtctdyyvkql.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9na3JybHNzZHJ0Y3RkeXl2a3FsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2MDAzNTUsImV4cCI6MjEwMzE3NjM1NX0.Jsgu02MUoYbFNPVilrdK0tbDDdRxRb9cPkGPWkg8lyA";
 
@@ -2169,10 +2216,7 @@ function persist(){
         });
         await sbUpsert('vendas', dbRows, 'id');
 
-        const existing = carregouDoBanco.vendas ? ((await sbSelectTudo('vendas','select=id&order=id.asc')) || []) : [];
-        const localIds = rows.map(function(r){ return r.id; });
-        const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
-        if(toDelete.length) await sbDeleteIn('vendas','id', toDelete);
+        await apagarMarcados('vendas');
 
         const comissaoRows = [];
         rows.forEach(function(r){
@@ -2282,10 +2326,14 @@ function persistEntityRows(key){
         });
         await sbUpsert('lancamentos', dbRows, 'id');
 
-        const existing = carregouDoBanco['lanc-'+key] ? ((await sbSelectTudo('lancamentos','select=id&order=id.asc&entidade=eq.'+key)) || []) : [];
+        await apagarMarcados('lancamentos');
+
+        /* Vendedoras extras e divisão por vendedora são reescritas por
+           lançamento: apaga e reinsere, mas SÓ dos lançamentos desta aba que
+           esta sessão conhece (`localIds`). Escopo por id é o que mantém
+           isso seguro — uma aba desatualizada não encosta nas linhas que
+           não viu. */
         const localIds = state[key].rows.map(function(r){ return r.id; });
-        const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
-        if(toDelete.length) await sbDeleteIn('lancamentos','id', toDelete);
 
         if(localIds.length){
           await sbDeleteAll('lancamentos_extra_vendedores', 'lancamento_id=in.(' + localIds.join(',') + ')');
@@ -2428,10 +2476,7 @@ function persistBonus(){
       try{
         const dbRows = bonusRows.map(function(r){ return { id:r.id, ano:r.ano||2026, mes:r.mes, vendedor:r.vendedor||'', descricao:r.descricao||'', valor:numOrNull(r.valor), tipo: r.tipo || null, meta_id: r.metaId || null }; });
         await sbUpsert('bonus', dbRows, 'id');
-        const existing = carregouDoBanco.bonus ? ((await sbSelectTudo('bonus','select=id&order=id.asc')) || []) : [];
-        const localIds = bonusRows.map(function(r){ return r.id; });
-        const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
-        if(toDelete.length) await sbDeleteIn('bonus','id',toDelete);
+        await apagarMarcados('bonus');
         saveError = false;
       } catch(e){ console.error(e); saveError = true; }
       finally { saving = false; updateSaveStatus(); }
@@ -2463,10 +2508,7 @@ function persistMarketing(){
           return { id:r.id, ano:r.ano||2026, mes:r.mes, conta:r.conta, rede:r.rede, valores:r.valores||{} };
         });
         await sbUpsert('marketing_metricas', dbRows, 'id');
-        const existing = carregouDoBanco.marketing ? ((await sbSelectTudo('marketing_metricas','select=id&order=id.asc')) || []) : [];
-        const localIds = marketingRows.map(function(r){ return r.id; });
-        const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
-        if(toDelete.length) await sbDeleteIn('marketing_metricas','id',toDelete);
+        await apagarMarcados('marketing_metricas');
         saveError = false;
       } catch(e){ console.error(e); saveError = true; }
       finally { saving = false; updateSaveStatus(); }
@@ -2658,10 +2700,7 @@ function persistTrafego(){
                    leads:numOrNull(r.leads), mql:numOrNull(r.mql) };
         });
         await sbUpsert('marketing_campanhas', dbRows, 'id');
-        const existing = carregouDoBanco.trafego ? ((await sbSelectTudo('marketing_campanhas','select=id&order=id.asc')) || []) : [];
-        const localIds = trafegoRows.map(function(r){ return r.id; });
-        const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
-        if(toDelete.length) await sbDeleteIn('marketing_campanhas','id',toDelete);
+        await apagarMarcados('marketing_campanhas');
         saveError = false;
       } catch(e){ console.error(e); saveError = true; }
       finally { saving = false; updateSaveStatus(); }
@@ -2720,11 +2759,7 @@ function persistMarketingLeads(){
         });
         if(dbRows.length) await sbUpsert('marketing_leads', dbRows, 'id');
         // nunca apagar sem ter lido antes
-        const existing = carregouDoBanco['marketing-leads']
-          ? ((await sbSelectTudo('marketing_leads','select=id&order=id.asc')) || []) : [];
-        const localIds = marketingLeads.map(function(r){ return r.id; });
-        const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
-        if(toDelete.length) await sbDeleteIn('marketing_leads','id', toDelete);
+        await apagarMarcados('marketing_leads');
         saveError = false;
       } catch(e){ console.error('Falha ao salvar leads', e); saveError = true; }
       finally { saving = false; updateSaveStatus(); }
@@ -2782,6 +2817,7 @@ function deleteLeadRow(id){
   const l = marketingLeads.find(function(x){ return x.id === id; });
   const quem = (l && (l.nome || l.empresa)) ? (l.nome || l.empresa) : 'este lead';
   showConfirm('Excluir ' + quem + '?', function(){
+    marcarParaApagar('marketing_leads', id);
     marketingLeads = marketingLeads.filter(function(x){ return x.id !== id; });
     persistMarketingLeads();
     render();
@@ -3159,6 +3195,7 @@ function confirmarImportacaoLeads(){
   if(remover.length){
     const fora = {};
     remover.forEach(function(l){ fora[l.id] = true; });
+    remover.forEach(function(l){ marcarParaApagar('marketing_leads', l.id); });
     marketingLeads = marketingLeads.filter(function(l){ return !fora[l.id]; });
   }
 
@@ -3182,6 +3219,7 @@ function addTrafegoRow(){
 }
 function deleteTrafegoRow(id){
   showConfirm('Excluir esta campanha?', function(){
+    marcarParaApagar('marketing_campanhas', id);
     trafegoRows = trafegoRows.filter(function(r){ return r.id !== id; });
     persistTrafego();
     render();
@@ -3433,6 +3471,7 @@ function addMarketingRow(){
 }
 function deleteMarketingRow(id){
   showConfirm('Excluir este lançamento de marketing?', function(){
+    marcarParaApagar('marketing_metricas', id);
     marketingRows = marketingRows.filter(function(r){ return r.id !== id; });
     persistMarketing();
     render();
@@ -3672,10 +3711,7 @@ function persistVendaProducts(){
     (async function(){
       try{
         if(vendaProducts.length) await sbUpsert('venda_products', vendaProducts.map(function(n){ return {name:n}; }), 'name');
-        const existing = carregouDoBanco.venda_products ? ((await sbSelect('venda_products','select=name')) || []) : [];
-        const localSet = new Set(vendaProducts);
-        const toDelete = existing.map(function(x){ return x.name; }).filter(function(n){ return !localSet.has(n); });
-        if(toDelete.length) await sbDeleteIn('venda_products','name', toDelete);
+        await apagarMarcados('venda_products','name');
         saveError = false;
       } catch(e){ console.error(e); saveError = true; }
       finally { saving=false; updateSaveStatus(); }
@@ -3698,10 +3734,7 @@ function persistPartners(){
     (async function(){
       try{
         if(partners.length) await sbUpsert('partners', partners.map(function(n){ return {name:n}; }), 'name');
-        const existing = carregouDoBanco.partners ? ((await sbSelect('partners','select=name')) || []) : [];
-        const localSet = new Set(partners);
-        const toDelete = existing.map(function(x){ return x.name; }).filter(function(n){ return !localSet.has(n); });
-        if(toDelete.length) await sbDeleteIn('partners','name', toDelete);
+        await apagarMarcados('partners','name');
         saveError = false;
       } catch(e){ console.error(e); saveError = true; }
       finally { saving=false; updateSaveStatus(); }
@@ -3725,10 +3758,7 @@ function persistSistemaSellers(){
       try{
         const dbRows = SELLERS.map(function(s,i){ return { key:s.key, label:s.label, color:s.color, sort_order:i }; });
         if(dbRows.length) await sbUpsert('sellers', dbRows, 'key');
-        const existing = carregouDoBanco.sellers ? ((await sbSelect('sellers','select=key')) || []) : [];
-        const localSet = new Set(SELLERS.map(function(s){ return s.key; }));
-        const toDelete = existing.map(function(x){ return x.key; }).filter(function(k){ return !localSet.has(k); });
-        if(toDelete.length) await sbDeleteIn('sellers','key', toDelete);
+        await apagarMarcados('sellers','key');
         saveError = false;
       } catch(e){ console.error(e); saveError = true; }
       finally { saving=false; updateSaveStatus(); }
@@ -3790,10 +3820,7 @@ function persistMetas(){
           };
         });
         await sbUpsert('metas', dbRows, 'id');
-        const existing = carregouDoBanco.metas ? ((await sbSelectTudo('metas','select=id&order=id.asc')) || []) : [];
-        const localIds = metas.map(function(m){ return m.id; });
-        const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
-        if(toDelete.length) await sbDeleteIn('metas','id', toDelete);
+        await apagarMarcados('metas');
         saveError = false;
       } catch(e){ console.error(e); saveError = true; }
       finally { saving=false; updateSaveStatus(); }
@@ -3833,10 +3860,7 @@ function persistRelatorios(){
           return row;
         });
         await sbUpsert('relatorios_equipe', dbRows, 'id');
-        const existing = carregouDoBanco.relatorios ? ((await sbSelectTudo('relatorios_equipe','select=id&order=id.asc')) || []) : [];
-        const localIds = relatorios.map(function(r){ return r.id; });
-        const toDelete = existing.map(function(x){ return x.id; }).filter(function(id){ return localIds.indexOf(id) === -1; });
-        if(toDelete.length) await sbDeleteIn('relatorios_equipe','id', toDelete);
+        await apagarMarcados('relatorios_equipe');
         saveError = false;
       } catch(e){ console.error(e); saveError = true; }
       finally { saving = false; updateSaveStatus(); }
@@ -3951,10 +3975,7 @@ function persistExtraYears(){
     (async function(){
       try{
         if(extraYears.length) await sbUpsert('extra_years', extraYears.map(function(a){ return {ano:a}; }), 'ano');
-        const existing = carregouDoBanco.extra_years ? ((await sbSelect('extra_years','select=ano')) || []) : [];
-        const localSet = new Set(extraYears);
-        const toDelete = existing.map(function(x){ return x.ano; }).filter(function(a){ return !localSet.has(a); });
-        if(toDelete.length) await sbDeleteIn('extra_years','ano', toDelete);
+        await apagarMarcados('extra_years','ano');
         saveError = false;
       } catch(e){ console.error(e); saveError = true; }
       finally { saving=false; updateSaveStatus(); }
@@ -4878,6 +4899,13 @@ function applyImportedData(text){
     const data = JSON.parse(text);
     if(!data || !Array.isArray(data.rows)) throw new Error('formato inválido');
 
+    // Restaurar um backup substitui a lista inteira, então o que está aqui
+    // agora precisa sair do banco de propósito — marca antes de trocar.
+    marcarListaParaApagar('vendas', rows);
+    ENTITY_KEYS.forEach(function(k){ marcarListaParaApagar('lancamentos', state[k].rows); });
+    marcarListaParaApagar('bonus', bonusRows);
+    if(Array.isArray(data.metas)) marcarListaParaApagar('metas', metas);
+
     rows = data.rows;
     migrateYear(rows, 2026);
     nextId = rows.length ? Math.max(...rows.map(r=>r.id||0)) + 1 : 1;
@@ -5013,6 +5041,7 @@ function removeSistemaVendedor(key){
   showConfirm(
     `Remover "${s.label}" da lista de vendedoras do Sistema? Os valores já lançados para ela continuam guardados nos lançamentos antigos, mas a coluna some da tabela e ela deixa de poder ser escolhida em novos lançamentos.`,
     () => {
+      marcarParaApagar('sellers', key);
       SELLERS = SELLERS.filter(s => s.key !== key);
       if(sellerFilter === key) sellerFilter = "Todas";
       persistSistemaSellers();
@@ -5641,6 +5670,7 @@ function excluirMeta(id){
   showConfirm(
     `Excluir a meta de ${m.vendedor}? ${metaDescricaoRegra(m)}. O bônus já lançado a partir dela, se houver, continua na aba Bônus e Metas.`,
     () => {
+      marcarParaApagar('metas', id);
       metas = metas.filter(x => x.id !== id);
       persistMetas();
       render();
@@ -5848,6 +5878,7 @@ function deleteBonusRow(id){
     return;
   }
   showConfirm(isSalarioRow(r) ? "Excluir este lançamento de salário?" : "Excluir este bônus/meta?", () => {
+    marcarParaApagar('bonus', id);
     bonusRows = bonusRows.filter(r => r.id !== id);
     persistBonus();
   });
@@ -6859,6 +6890,7 @@ function deleteRow(id){
     return;
   }
   showConfirm("Excluir esta venda?", () => {
+    marcarParaApagar('vendas', id);
     rows = rows.filter(r => r.id !== id);
     persist();
     // Se essa venda tinha nascido de uma renovação, a renovação volta a
@@ -6935,16 +6967,21 @@ function onZerarTudoInput(el){
 function confirmarZerarTudo(){
   if(!modalState || String(modalState.texto||'').trim().toUpperCase() !== 'ZERAR TUDO') return;
   closeModal();
+  // Aqui apagar É a intenção: marca tudo antes de limpar, senão a tela
+  // esvazia e o banco continua cheio.
+  marcarListaParaApagar('vendas', rows);
   rows = [];
   nextId = 1;
   persist();
 
   ENTITY_KEYS.forEach(key => {
+    marcarListaParaApagar('lancamentos', state[key].rows);
     state[key].rows = [];
     state[key].nextId = 1;
     persistEntityRows(key);
   });
 
+  marcarListaParaApagar('bonus', bonusRows);
   bonusRows = [];
   bonusNextId = 1;
   persistBonus();
@@ -7572,6 +7609,7 @@ function deleteEntityRow(key, id){
     return;
   }
   showConfirm("Excluir este lançamento?", () => {
+    marcarParaApagar('lancamentos', id);
     state[key].rows = state[key].rows.filter(r => r.id !== id);
     persistEntityRows(key);
   });
@@ -8341,11 +8379,7 @@ function persistRenovacoes(){
           };
         });
         await sbUpsert('renovacoes', dbRows, 'id');
-        const existing = carregouDoBanco['renovacoes'] ? ((await sbSelectTudo('renovacoes','select=id&order=id.asc')) || []) : [];
-        const localIds = renovacoes.map(function(r){ return r.id; });
-        const toDelete = existing.map(function(x){ return x.id; })
-          .filter(function(id){ return localIds.indexOf(id) === -1; });
-        if(toDelete.length) await sbDeleteIn('renovacoes','id', toDelete);
+        await apagarMarcados('renovacoes');
         saveError = false;
       }catch(e){ console.error(e); saveError = true; }
       finally{ saving = false; updateSaveStatus(); }
@@ -8523,6 +8557,7 @@ function excluirRenovacao(id){
   showConfirm(
     'Excluir ' + (r.empresa ? '"' + r.empresa + '"' : 'esta empresa') + ' da lista de renovações?',
     function(){
+      marcarParaApagar('renovacoes', id);
       renovacoes = renovacoes.filter(function(x){ return x.id !== id; });
       persistRenovacoes();
       render();
@@ -9365,13 +9400,7 @@ function persistContratosNovos(){
           };
         });
         await sbUpsert('contratos_consultoria', dbRows, 'id');
-        // só apaga o que sumiu daqui se a lista do banco já tiver sido lida
-        const existing = carregouDoBanco['contratos-novos']
-          ? ((await sbSelectTudo('contratos_consultoria','select=id&order=id.asc')) || []) : [];
-        const localIds = contratosNovos.map(function(r){ return r.id; });
-        const toDelete = existing.map(function(x){ return x.id; })
-          .filter(function(id){ return localIds.indexOf(id) === -1; });
-        if(toDelete.length) await sbDeleteIn('contratos_consultoria','id', toDelete);
+        await apagarMarcados('contratos_consultoria');
         saveError = false;
       }catch(e){ console.error(e); saveError = true; }
       finally{ saving = false; updateSaveStatus(); }
@@ -9557,6 +9586,7 @@ function excluirContratoNovo(id){
   showConfirm(
     'Excluir ' + (c.empresa ? '"' + c.empresa + '"' : 'esta empresa') + ' da lista de ' + c.pessoa + '?',
     function(){
+      marcarParaApagar('contratos_consultoria', id);
       contratosNovos = contratosNovos.filter(function(x){ return x.id !== id; });
       persistContratosNovos();
       render();
@@ -9636,6 +9666,9 @@ function excluirContratoLancamento(pessoa, mes){
   showConfirm(
     `Excluir o mês de ${mes}/${yearFilter} de ${pessoa}? Os números daquele mês serão perdidos.`,
     function(){
+      relatorios.forEach(function(r){
+        if(r.ano === yearFilter && r.mes === mes && name_matches_client(r.vendedor, pessoa)) marcarParaApagar('relatorios_equipe', r.id);
+      });
       relatorios = relatorios.filter(function(r){
         return !(r.ano === yearFilter && r.mes === mes && name_matches_client(r.vendedor, pessoa));
       });
@@ -10292,6 +10325,7 @@ function excluirPainelLancamento(vendedor, mes){
   showConfirm(
     `Excluir o relatório de ${vendedor} em ${mes}/${yearFilter}? Os números daquele mês serão perdidos.`,
     () => {
+      relatorios.forEach(r => { if(r.ano === yearFilter && r.mes === mes && name_matches_client(r.vendedor, vendedor)) marcarParaApagar('relatorios_equipe', r.id); });
       relatorios = relatorios.filter(r => !(r.ano === yearFilter && r.mes === mes && name_matches_client(r.vendedor, vendedor)));
       persistRelatorios();
       if(name_matches_client(painelVendedor, vendedor) && painelMes === mes) carregarFormPainel();

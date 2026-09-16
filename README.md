@@ -303,7 +303,24 @@ A equipe de consultoria só recebe quando o **cliente paga a nota** — contrato
 
 O que move um lançamento de um quadro para o outro é a caixinha **"Pago"** na aba de origem (Sistema, Consultoria ou Órgãos Públicos). Marcou como pago, a comissão sai de "a receber" e entra em "liberadas".
 
-### A comissão libera no mês em que o cliente pagou
+### Gravar não apaga mais o que a aba não conhece
+
+Cada gravação fazia: *"apague do banco tudo que não está na minha memória"*. Parece inofensivo com uma pessoa só, mas é **perda de dado silenciosa** em dois casos reais:
+
+1. **Duas pessoas ao mesmo tempo.** A cria um lançamento no navegador dela; a aba da B, aberta antes disso, salva qualquer coisa e apaga a linha que ela nunca viu. Ninguém recebe erro.
+2. **Linha inserida direto no banco com o app aberto.** Foi exatamente assim que os 61 planos premium migrados para Órgãos Públicos desapareceram: foram inseridos por SQL, uma aba antiga salvou a aba de Órgãos Públicos, e o delete-sync varreu os 61.
+
+A trava que já existia (`carregouDoBanco`) garante *"já li esta tabela alguma vez"* — ela não sabe dizer se o que foi lido **continua atual**. São coisas diferentes, e só a segunda protege contra isso.
+
+**Agora a exclusão é explícita.** Quem apaga na tela anota o id (`marcarParaApagar`), e a gravação apaga só esses (`apagarMarcados`). O que a aba não conhece, ela não toca. Se o DELETE falhar, o id volta para a fila — tentar de novo no próximo save é melhor que engolir a exclusão. Valia para 10 tabelas: vendas, lançamentos, bônus, metas, renovações, leads, indicadores de rede, campanhas, contratos assinados e vendedoras.
+
+Dois fluxos **querem** apagar em massa, e continuam apagando: **"Zerar tudo"** e **restaurar um backup** marcam tudo explicitamente antes de trocar a lista (`marcarListaParaApagar`). Sem isso a tela esvaziaria e o banco continuaria cheio.
+
+> **Efeito colateral aceito:** catálogos derivados (produtos da aba Sistema, parceiros, anos) passam a só acumular — antes um nome sumia do banco quando nenhum lançamento o usava. Um nome digitado errado fica na lista até alguém tirar à mão. É o preço de não apagar por dedução, e é barato.
+
+> Ao mexer em qualquer `persist*()`: as tabelas **filhas** (vendedoras extras, divisão de curso por vendedora, comissões por vendedora) continuam sendo reescritas com apaga-e-reinsere — mas **escopadas aos ids que a sessão conhece** (`lancamento_id=in.(...)`). É o escopo por id que mantém isso seguro; nunca troque por um apaga-tudo da tabela.
+
+## A comissão libera no mês em que o cliente pagou
 
 A nota de **agosto** que o cliente só pagou em **setembro** libera a comissão em **setembro** — é quando o dinheiro entrou. Por isso "mês de pagamento" é um campo próprio (`mes_pagamento`), separado do mês do lançamento, e é por ele que filtram os quadros de **Comissões liberadas**, **Pagamentos realizados** e a seção de liberadas do relatório em PDF.
 
