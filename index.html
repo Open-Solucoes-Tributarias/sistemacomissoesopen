@@ -1282,6 +1282,10 @@
     background:var(--primary-soft);border:1px solid var(--ring);color:var(--primary);
   }
   .selo-sistema:hover{background:var(--ring);color:var(--navy);}
+  /* Lançada em Órgãos Públicos, não em Sistema: outro tom, pra dar pra ver
+     de longe em qual aba a renovação foi parar. */
+  .selo-sistema.selo-publicos{background:#DCFCE7;color:#15803D;border-color:#86EFAC;}
+  .selo-sistema.selo-publicos:hover{background:#BBF7D0;color:#166534;}
   .selo-renovacao{
     margin-left:6px;font-size:10px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
     padding:2px 7px;border-radius:999px;background:#DCFCE7;border:1px solid #86EFAC;color:#15803D;
@@ -4466,22 +4470,32 @@ function renderModal(){
   if(m.type === 'lancar-renovacoes'){
     const total = m.lista.reduce(function(a,r){ return a + valorDeRenovacao(r); }, 0);
     const previa = m.lista.slice(0, 60);
+    // O produto escolhido decide a aba de destino: premium vai para Órgãos
+    // Públicos, o resto para Sistema.
+    const ehPremium = produtoEhPremium(m.produto);
+    const abaDestino = NOME_DA_ABA_DESTINO[ehPremium ? 'publicos' : 'vendas'];
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
         <div class="modal-box modal-box-wide">
-          <div class="modal-msg">Lançar renovações na aba Sistema</div>
+          <div class="modal-msg">Lançar renovações em ${esc(abaDestino)}</div>
           <div class="painel-equipe-nota">
-            Vão virar <b>venda do mês</b> na aba Sistema, cada uma no nome de quem cuidou da renovação,
-            e entram na sua lista de comissões — o percentual de cada uma você preenche por lá.
-            Só entram as marcadas como <b>Renovado</b> que ainda não foram lançadas.
+            Vão virar <b>lançamento do mês</b> na aba <b>${esc(abaDestino)}</b>, cada uma no nome de quem
+            cuidou da renovação, e entram na sua lista de comissões — o percentual de cada uma você
+            preenche por lá. Só entram as marcadas como <b>Renovado</b> que ainda não foram lançadas.
           </div>
+          ${ehPremium ? `<div class="import-resumo import-alerta">
+            📍 <b>${esc(m.produto)}</b> é plano premium, então o destino é
+            <b>Consultorias e site para Órgãos Públicos</b> — não a aba Sistema. Lá o produto, a
+            etiqueta e quem vendeu vão para <b>Observações</b>, porque a aba não tem esses campos;
+            e a comissão é por <b>percentual</b>, não por valor.
+          </div>` : ''}
           <div class="import-resumo">
             <b>${m.lista.length}</b> ${m.lista.length===1?'renovação':'renovações'} · <b>${fmtMoney(total)}</b>
             ${renovacaoMes !== 'Todos' ? ' · ' + esc(rotuloRenovacao()) : ' · todo o ano de ' + yearFilter}
           </div>
           ${vendaProducts.length ? `
             <label class="painel-campo" style="margin:12px 0 8px;">
-              <span>Produto na aba Sistema (pode deixar em branco e escolher depois)</span>
+              <span>Produto (é ele que decide a aba: premium vai para Órgãos Públicos)</span>
               <select onchange="setLancarProduto(this)">
                 <option value="">—</option>
                 ${vendaProducts.map(function(pr){ return `<option value="${esc(pr)}" ${m.produto===pr?'selected':''}>${esc(pr)}</option>`; }).join('')}
@@ -4501,10 +4515,10 @@ function renderModal(){
             </table>
           </div>
           ${m.lista.length > previa.length ? `<div class="import-resumo">…e mais ${m.lista.length - previa.length}.</div>` : ''}
-          <div class="import-resumo">As vendas nascem com a observação <b>“Renovação”</b> (ou <b>“Upgrade de plano”</b>), para você distinguir na aba Sistema. Só o upgrade conta no ranking.</div>
+          <div class="import-resumo">Nascem com a observação <b>“Renovação”</b> (ou <b>“Upgrade de plano”</b>), para você distinguir na aba de destino.${ehPremium ? ' Lançamento de Órgãos Públicos <b>não conta</b> nos indicadores de venda de sistema do ranking.' : ' Só o upgrade conta no ranking.'}</div>
           <div class="modal-actions">
             <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
-            <button class="modal-btn modal-btn-primary" onclick="confirmarLancarNoSistema()">Lançar ${m.lista.length === 1 ? 'a renovação' : 'as ' + m.lista.length}</button>
+            <button class="modal-btn modal-btn-primary" onclick="confirmarLancarNoSistema()">Lançar ${m.lista.length === 1 ? 'a renovação' : 'as ' + m.lista.length} em ${esc(ehPremium ? 'Órgãos Públicos' : 'Sistema')}</button>
           </div>
         </div>
       </div>`;
@@ -8349,6 +8363,8 @@ async function tryLoadRenovacoesAsync(){
           id: d.id, ano: d.ano, mes: d.mes, pessoa: d.pessoa || '', empresa: d.empresa || '',
           valor: (d.valor === null || d.valor === undefined) ? null : Number(d.valor),
           vendaId: d.venda_id || null,
+          // onde a renovação foi lançada: 'vendas' (aba Sistema) ou 'publicos'
+          vendaEntidade: d.venda_entidade || 'vendas',
           renovado: (d.renovado === null || d.renovado === undefined) ? null : !!d.renovado,
           upgrade: !!d.upgrade,
           valorUpgrade: (d.valor_upgrade === null || d.valor_upgrade === undefined) ? null : Number(d.valor_upgrade),
@@ -8373,6 +8389,7 @@ function persistRenovacoes(){
             id: r.id, ano: r.ano, mes: r.mes, pessoa: r.pessoa, empresa: r.empresa || '',
             valor: numOrNull(r.valor),
             venda_id: r.vendaId || null,
+            venda_entidade: r.vendaId ? (r.vendaEntidade || 'vendas') : null,
             renovado: (r.renovado === null || r.renovado === undefined) ? null : !!r.renovado,
             upgrade: !!r.upgrade,
             valor_upgrade: numOrNull(r.valorUpgrade),
@@ -9167,42 +9184,82 @@ function abrirLancarNoSistema(){
   render();
 }
 
-function setLancarProduto(el){ modalState.produto = el.value; }
+/* Redesenha: é o produto que decide a aba de destino, e o modal mostra
+   qual é — sem render o aviso ficaria desatualizado. */
+function setLancarProduto(el){ modalState.produto = el.value; render(); }
 
 function confirmarLancarNoSistema(){
   const m = modalState;
   if(!m || !m.lista || !m.lista.length) return;
   const fechados = [];
   let lancadas = 0;
+  /* Premium não é venda de Sistema: vai para a aba de Órgãos Públicos. É o
+     produto escolhido aqui que decide, e ele vale para o lote inteiro. */
+  const destino = produtoEhPremium(m.produto) ? 'publicos' : 'vendas';
+
   m.lista.forEach(function(r){
     if(isMonthClosed(r.ano, r.mes)){ fechados.push(r.mes); return; }
-    const venda = {
-      id: nextId++, ano: r.ano, mes: r.mes,
-      cliente: r.empresa, venda: m.produto || '',
-      valor: valorDeRenovacao(r) || null,
-      parceiro: '', participacao: null, formaPagamento: '', colaborador: '',
-      vendedor2: '', vendedor3: '', vendedorResponsavel: r.pessoa || '',
-      pago: false, mesPagamento: null,
-      // Renovar não é venda nova e fica fora do ranking. Subir o plano de um
-      // cliente é: vai com a etiqueta de upgrade e conta no desempenho.
-      observacoes: r.upgrade ? 'Upgrade de plano' : 'Renovação',
-      renovacao: !r.upgrade,
-      novoContrato: false, upgrade: !!r.upgrade,
-      comissaoPercents: {},
-    };
-    SELLERS.forEach(function(sv){ venda[sv.key] = null; });
-    rows.unshift(venda);
-    r.vendaId = venda.id;
+    // Renovar não é venda nova e fica fora do ranking. Subir o plano de um
+    // cliente é: vai com a etiqueta de upgrade e conta no desempenho.
+    const etiqueta = r.upgrade ? 'Upgrade de plano' : 'Renovação';
+    let novoId;
+
+    if(destino === 'publicos'){
+      /* A aba de Órgãos Públicos não tem campo de produto, etiqueta nem
+         "quem vendeu" — os três vão para Observações, na mesma forma usada
+         na migração dos premium que já estavam lançados. E a comissão lá é
+         percentual, não valor: nasce vazia, pra ser preenchida por lá. */
+      /* Os ids de `lancamentos` são namespeados por aba (publicos em
+         100001+). Se a lista de publicos vier vazia, o nextId nasce em 1 e
+         colidiria com um lançamento de Consultoria — a tabela é a mesma. */
+      if(state.publicos.nextId < 100001) state.publicos.nextId = 100001;
+      novoId = state.publicos.nextId++;
+      state.publicos.rows.unshift({
+        id: novoId, ano: r.ano, mes: r.mes,
+        orgao: r.empresa, valorContrato: valorDeRenovacao(r) || null,
+        tipo: '', parceiro: '', participacao: null,
+        formaPagamento: '', colaborador: '',
+        observacoes: [m.produto || '', etiqueta, r.pessoa ? 'vendeu: ' + r.pessoa : '']
+                       .filter(function(x){ return x; }).join(' · '),
+        comissaoPercent: null, vendedor: '',
+        comissaoPercent2: null, vendedor2: '',
+        comissaoPercent3: null, vendedor3: '',
+        extraVendedores: [],
+        pago: false, mesPagamento: null,
+        notaEmitida: false, notaEmitidaEm: null,
+      });
+    } else {
+      const venda = {
+        id: nextId++, ano: r.ano, mes: r.mes,
+        cliente: r.empresa, venda: m.produto || '',
+        valor: valorDeRenovacao(r) || null,
+        parceiro: '', participacao: null, formaPagamento: '', colaborador: '',
+        vendedor2: '', vendedor3: '', vendedorResponsavel: r.pessoa || '',
+        pago: false, mesPagamento: null,
+        observacoes: etiqueta,
+        renovacao: !r.upgrade,
+        novoContrato: false, upgrade: !!r.upgrade,
+        comissaoPercents: {},
+      };
+      SELLERS.forEach(function(sv){ venda[sv.key] = null; });
+      rows.unshift(venda);
+      novoId = venda.id;
+    }
+
+    r.vendaId = novoId;
+    r.vendaEntidade = destino;
     lancadas++;
   });
-  persist();
+
+  if(destino === 'publicos') persistEntityRows('publicos'); else persist();
   persistRenovacoes();
   closeModal();
   const aviso = fechados.length
     ? ' ' + fechados.filter(function(v,i,a){ return a.indexOf(v)===i; }).join(', ') + ' está fechado para lançamentos, então essas ficaram de fora.'
     : '';
   showAlert(lancadas
-    ? lancadas + (lancadas === 1 ? ' renovação lançada' : ' renovações lançadas') + ' na aba Sistema. Preencha o percentual de comissão de cada uma por lá.' + aviso
+    ? lancadas + (lancadas === 1 ? ' renovação lançada' : ' renovações lançadas')
+      + ' na aba ' + NOME_DA_ABA_DESTINO[destino] + '. Preencha o percentual de comissão de cada uma por lá.' + aviso
     : 'Nada foi lançado.' + aviso);
   setTimeout(tryLoadPainelTotaisAsync, 900);
 }
@@ -9211,18 +9268,27 @@ function confirmarLancarNoSistema(){
 function irParaVendaDaRenovacao(id){
   const r = renovacoes.find(function(x){ return x.id === id; });
   if(!r || !r.vendaId) return;
-  const v = rows.find(function(x){ return x.id === r.vendaId; });
-  if(!v){
-    // É exatamente aqui que o sistema descobre que a venda sumiu — então é
+  const destino = destinoDaRenovacao(r);
+  const linha = linhaDoDestino(destino, r.vendaId);
+  if(!linha){
+    // É exatamente aqui que o sistema descobre que a linha sumiu — então é
     // aqui que ele solta a marca, em vez de só avisar e deixar presa.
     soltarRenovacoesOrfas();
-    showAlert('A venda desta renovação não está mais na aba Sistema — ela deve ter sido excluída por lá. Soltei a marca: a renovação voltou para a fila de lançamento.');
+    showAlert('O lançamento desta renovação não está mais na aba ' + NOME_DA_ABA_DESTINO[destino]
+      + ' — deve ter sido excluído por lá. Soltei a marca: a renovação voltou para a fila de lançamento.');
     return;
   }
-  activeTab = 'vendas';
-  filter = v.mes;
-  sellerFilter = 'Todas';
-  searchCliente = v.cliente || '';
+  if(destino === 'publicos'){
+    activeTab = 'publicos';
+    state.publicos.filter = linha.mes;
+    state.publicos.vendorFilter = 'Todos';
+    state.publicos.search.main = linha.orgao || '';
+  } else {
+    activeTab = 'vendas';
+    filter = linha.mes;
+    sellerFilter = 'Todas';
+    searchCliente = linha.cliente || '';
+  }
   render();
 }
 
@@ -9260,33 +9326,71 @@ function irParaVendaDaRenovacao(id){
    carga, em qualquer ordem. */
 function reservarNextIdVendas(){
   const maiorVenda = rows.reduce(function(a, r){ return Math.max(a, r.id || 0); }, 0);
-  const maiorReferenciado = renovacoes.reduce(function(a, r){ return Math.max(a, r.vendaId || 0); }, 0);
+  // só os vínculos que apontam para a aba Sistema disputam o espaço de ids
+  // de `vendas`; os de Órgãos Públicos vivem em outro espaço (100001+).
+  const maiorReferenciado = renovacoes.reduce(function(a, r){
+    return destinoDaRenovacao(r) === 'vendas' ? Math.max(a, r.vendaId || 0) : a;
+  }, 0);
   const minimo = Math.max(maiorVenda, maiorReferenciado) + 1;
   if(nextId < minimo) nextId = minimo;
 }
 
-/* A renovação só está de fato presa se a venda que ela aponta continuar
+/* ---------- Para onde a renovação foi (ou vai) ----------
+   Plano premium é lançado na aba de Órgãos Públicos; o resto, na aba
+   Sistema. São TABELAS diferentes (`lancamentos` e `vendas`) e espaços de id
+   diferentes, então o vínculo guarda os dois: o id e a entidade.
+
+   Sem a entidade, `vendaId` seria um número ambíguo — a limpeza de vínculo
+   morto não acharia a linha em `vendas`, concluiria que foi excluída, e
+   soltaria o vínculo de um lançamento vivo em Órgãos Públicos. */
+function destinoDaRenovacao(r){
+  return (r && r.vendaEntidade === 'publicos') ? 'publicos' : 'vendas';
+}
+
+/* Premium é o que vai para Órgãos Públicos. A regra é o nome do produto:
+   "GT Premium Mensal", "Plano Premium", "GT Plano Premium" — qualquer um
+   com "premium" no nome, com ou sem acento e em qualquer caixa. */
+function produtoEhPremium(nome){
+  return /premium/.test(semAcento(String(nome || '')));
+}
+
+function linhaDoDestino(destino, id){
+  if(destino === 'publicos') return state.publicos.rows.find(function(l){ return l.id === id; }) || null;
+  return rows.find(function(v){ return v.id === id; }) || null;
+}
+
+/* A leitura da tabela de destino já voltou do banco? Antes disso a lista
+   pode estar vazia só porque a resposta não chegou, e concluir "foi
+   excluída" apagaria vínculo bom. */
+function destinoJaLido(destino){
+  return destino === 'publicos' ? !!carregouDoBanco['lanc-publicos'] : !!carregouDoBanco.vendas;
+}
+
+const NOME_DA_ABA_DESTINO = { vendas: 'Sistema', publicos: 'Consultorias e site para Órgãos Públicos' };
+
+/* A renovação só está de fato presa se a linha que ela aponta continuar
    existindo. As travas de upgrade e de situação perguntavam apenas "tem
    vendaId?", e por isso barravam para sempre quem já tinha excluído a venda.
    Se o vínculo estiver morto, solta na hora e libera a ação. */
 function renovacaoPresaNaVenda(r){
   if(!r || !r.vendaId) return false;
-  if(rows.some(function(v){ return v.id === r.vendaId; })) return true;
-  // Não achou a venda. Só é seguro concluir que ela foi excluída se as
-  // vendas já vieram do banco; antes disso, `rows` pode estar vazio apenas
-  // porque a leitura não voltou — e aí o seguro é seguir tratando como presa.
-  if(!carregouDoBanco.vendas) return true;
+  const destino = destinoDaRenovacao(r);
+  if(linhaDoDestino(destino, r.vendaId)) return true;
+  if(!destinoJaLido(destino)) return true;
   soltarRenovacoesOrfas();
   return false;
 }
 
 function soltarRenovacoesOrfas(){
-  if(!carregouDoBanco.vendas || !carregouDoBanco['renovacoes']) return false;
+  if(!carregouDoBanco['renovacoes']) return false;
   let mudou = false;
   renovacoes.forEach(function(r){
     if(!r.vendaId) return;
-    if(rows.some(function(v){ return v.id === r.vendaId; })) return;
+    const destino = destinoDaRenovacao(r);
+    if(!destinoJaLido(destino)) return;          // nunca apagar sem ter lido
+    if(linhaDoDestino(destino, r.vendaId)) return;
     r.vendaId = null;
+    r.vendaEntidade = null;
     mudou = true;
   });
   if(mudou) persistRenovacoes();
@@ -10892,7 +10996,9 @@ function renderPainelRenovacoes(){
       <td class="col-nome">${editavel
         ? `<input class="contrato-linha-input" id="renov-emp-${r.id}" type="text" placeholder="Nome da empresa"
                   value="${esc(r.empresa)}" oninput="onRenovacaoTexto(this,${r.id})" />`
-        : esc(r.empresa || '—')}${r.vendaId ? `<button class="selo-sistema" title="Já lançada na aba Sistema — clique para ver" onclick="irParaVendaDaRenovacao(${r.id})">no Sistema</button>` : ''}</td>
+        : esc(r.empresa || '—')}${r.vendaId ? `<button class="selo-sistema${destinoDaRenovacao(r)==='publicos'?' selo-publicos':''}"
+                title="Já lançada na aba ${esc(NOME_DA_ABA_DESTINO[destinoDaRenovacao(r)])} — clique para ver"
+                onclick="irParaVendaDaRenovacao(${r.id})">${destinoDaRenovacao(r)==='publicos'?'em Órgãos Públicos':'no Sistema'}</button>` : ''}</td>
       <td class="col-valor col-valor-larga">${editavel
         ? `<div class="currency-wrap"><span class="currency-prefix">R$</span><input class="num contrato-linha-input" type="number" step="0.01" placeholder="—"
                   value="${r.valor===null||r.valor===undefined?'':r.valor}" oninput="onRenovacaoValor(this,${r.id})" /></div>`
