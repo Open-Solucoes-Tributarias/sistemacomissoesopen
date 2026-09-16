@@ -6923,6 +6923,78 @@ function duplicateRow(id){
   render();
 }
 
+/* Venda que devia ter sido lançada em Órgãos Públicos (normalmente porque o
+   produto é premium) mas foi digitada — ou ficou parada — em Sistema. Move
+   a linha inteira pra lá sem perder a comissão nem soltar o vínculo com a
+   renovação que a gerou. */
+function moverVendaParaPublicos(id){
+  const r = rows.find(function(v){ return v.id === id; });
+  if(!r) return;
+  if(isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado. Reabra em Resumo Geral para poder mover.");
+    return;
+  }
+  showConfirm(
+    'Mover "' + (r.cliente || 'esta venda') + '" para a aba Consultorias e site para Órgãos Públicos? '
+      + 'Ela sai do Sistema (deixa de contar no ranking de vendas) e a comissão de cada vendedora vai junto, quando estiver em percentual.',
+    function(){ executarMoverVendaParaPublicos(id); },
+    'Mover'
+  );
+}
+
+function executarMoverVendaParaPublicos(id){
+  const r = rows.find(function(v){ return v.id === id; });
+  if(!r) return;
+
+  /* Órgãos Públicos só entende comissão em percentual. Junta quem tem
+     percentual definido, das maiores pras menores — as 3 primeiras vão nos
+     campos principais, o resto em extraVendedores. */
+  const comissoes = [];
+  let semPercentual = false;
+  SELLERS.forEach(function(s){
+    const pct = (r.comissaoPercents || {})[s.key];
+    const temPct = pct !== null && pct !== undefined && pct !== '';
+    if(temPct) comissoes.push({vendedor: s.label, percent: numOrNull(pct)});
+    else if(numOrNull(r[s.key]) !== null) semPercentual = true;
+  });
+  comissoes.sort(function(a,b){ return (b.percent||0) - (a.percent||0); });
+
+  if(state.publicos.nextId < 100001) state.publicos.nextId = 100001;
+  const novoId = state.publicos.nextId++;
+  state.publicos.rows.unshift({
+    id: novoId, ano: r.ano, mes: r.mes,
+    orgao: r.cliente, valorContrato: numOrNull(r.valor),
+    tipo: '', parceiro: r.parceiro || '', participacao: numOrNull(r.participacao),
+    formaPagamento: r.formaPagamento || '', colaborador: r.colaborador || '',
+    observacoes: [r.venda || '', r.observacoes || '', r.vendedorResponsavel ? 'vendeu: ' + r.vendedorResponsavel : '']
+                   .filter(function(x){ return x; }).join(' · '),
+    comissaoPercent: comissoes[0] ? comissoes[0].percent : null, vendedor: comissoes[0] ? comissoes[0].vendedor : '',
+    comissaoPercent2: comissoes[1] ? comissoes[1].percent : null, vendedor2: comissoes[1] ? comissoes[1].vendedor : '',
+    comissaoPercent3: comissoes[2] ? comissoes[2].percent : null, vendedor3: comissoes[2] ? comissoes[2].vendedor : '',
+    extraVendedores: comissoes.slice(3).map(function(c, i){ return {id: Date.now()+i, vendedor: c.vendedor, percent: c.percent}; }),
+    pago: !!r.pago, mesPagamento: r.mesPagamento || null,
+    notaEmitida: !!r.notaEmitida, notaEmitidaEm: r.notaEmitidaEm || null,
+  });
+
+  marcarParaApagar('vendas', id);
+  rows = rows.filter(function(v){ return v.id !== id; });
+
+  renovacoes.forEach(function(rv){
+    if(rv.vendaId === id && destinoDaRenovacao(rv) === 'vendas'){
+      rv.vendaId = novoId;
+      rv.vendaEntidade = 'publicos';
+    }
+  });
+
+  persist();
+  persistEntityRows('publicos');
+  persistRenovacoes();
+  closeModal();
+  showAlert('Movida para Consultorias e site para Órgãos Públicos.'
+    + (semPercentual ? ' Uma comissão estava em valor fixo (R$), não percentual — confira e preencha o % por lá.' : ''));
+  setTimeout(tryLoadPainelTotaisAsync, 900);
+}
+
 function repeatRowForYear(id){
   const r = rows.find(r => r.id === id);
   if(!r) return;
@@ -7451,6 +7523,7 @@ function renderVendasSection(){
             <button class="action-btn" title="Duplicar" onclick="duplicateRow(${row.id})">⎘</button>
             <button class="action-btn" title="Parcelar em vários meses" onclick="parcelarRow(${row.id})">🧩</button>
             <button class="action-btn" title="Repetir até dezembro (assinatura mensal)" onclick="repeatRowForYear(${row.id})">🔁</button>
+            <button class="action-btn${produtoEhPremium(row.venda) ? ' ativo' : ''}" title="${produtoEhPremium(row.venda) ? 'Produto premium — o normal é ficar em Órgãos Públicos. Clique para mover.' : 'Mover para Consultorias e site para Órgãos Públicos'}" onclick="moverVendaParaPublicos(${row.id})">🏛️</button>
             <button class="action-btn danger" title="Excluir" onclick="deleteRow(${row.id})">✕</button>
           </div>
         </td>
