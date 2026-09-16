@@ -1509,6 +1509,7 @@ const ENTITIES = {
     commissionLabel: "Valor da Comissão",
     defaultVendors: ["Soraya","Angela","Rios","Uilma","Luciana"],
     hasPagamento: true,
+    hasVendedorResponsavel: true,
   },
   cursos: {
     tabLabel: "Cursos",
@@ -1731,6 +1732,8 @@ const METRICAS = [
   {key:'vendasCursosInCompany', col:'vendas_cursos_incompany', label:'Vendas de curso In Company', auto:true, moeda:true},
   {key:'vendasSistemas',  col:'vendas_sistemas',  label:'Vendas de sistemas',      auto:true, moeda:true},
   {key:'qtdSistemas',     col:'qtd_sistemas',     label:'Qtd. sistemas vendidos',  auto:true},
+  {key:'vendasPublicos',  col:'vendas_publicos',  label:'Vendas Órgãos Públicos',  auto:true, moeda:true},
+  {key:'qtdPublicos',     col:'qtd_publicos',     label:'Qtd. Órgãos Públicos vendidos', auto:true},
 ];
 const METRICAS_MANUAIS = METRICAS.filter(m => !m.auto);
 
@@ -1748,6 +1751,7 @@ const METRICAS_MANUAIS = METRICAS.filter(m => !m.auto);
 const PESOS_PADRAO = {
   // o que a empresa mais valoriza: o que vira contrato
   reunioes: 5, vendasCursos: 5, vendasCursosInCompany: 5, vendasSistemas: 5, qtdSistemas: 5,
+  vendasPublicos: 5, qtdPublicos: 5,
   // importam, mas são caminho e não resultado
   propostas: 2, prospeccaoZero: 2, prospeccao: 2, negociosAbertos: 2,
   // volume de contato, o mais fácil de inflar
@@ -2329,6 +2333,7 @@ function persistEntityRows(key){
             pago:false, mes_pagamento:null, pago_em: r.pagoEm || null, fechamento_mes: r.fechamentoMes || null,
             nota_emitida: !!r.notaEmitida, nota_emitida_em: r.notaEmitidaEm || null,
             in_company: !!r.inCompany, renovacao: !!r.renovacao, upgrade: !!r.upgrade,
+            vendedor_responsavel: cfg.hasVendedorResponsavel ? (r.vendedorResponsavel || '') : null,
           };
           cfg.fields.forEach(function(f){
             if(f.key === 'valorContrato') row.valor_contrato = numOrNull(r.valorContrato);
@@ -2459,6 +2464,7 @@ async function tryLoadEntityFromStorageAsync(key){
         };
         if(cfg.hasVendasPorVendedor) r.vendasVendedoras = divisaoByLanc[d.id] || [];
         if(cfg.hasPagamento){ r.pago = d.pago; r.mesPagamento = d.mes_pagamento; r.pagoEm = d.pago_em || null; r.fechamentoMes = d.fechamento_mes || null; }
+        if(cfg.hasVendedorResponsavel) r.vendedorResponsavel = d.vendedor_responsavel || '';
         cfg.fields.forEach(function(f){
           if(f.key === 'valorContrato') r.valorContrato = d.valor_contrato;
           else if(f.key === 'tipo') r.tipo = d.tipo;
@@ -8204,7 +8210,7 @@ function updateEntityCell(key, id, field, value){
   }
   r[field] = value;
   persistEntityRows(key);
-  if(field === "mes" || field === "vendedor" || field === "vendedor2" || field === "vendedor3" || field === "parceiro") render();
+  if(field === "mes" || field === "vendedor" || field === "vendedor2" || field === "vendedor3" || field === "parceiro" || field === "vendedorResponsavel") render();
   else {
     updateEntitySummaries(key);
     if(field === "valorContrato" || field === "comissaoPercent" || field === "comissaoPercent2" || field === "comissaoPercent3" || field === "participacao"){
@@ -8565,12 +8571,21 @@ function renderEntitySection(key){
     : `Nenhum lançamento ainda. Clique em "+ Novo lançamento" para começar.`;
 
   const maxExtra = visible.reduce((max,r) => Math.max(max, Array.isArray(r.extraVendedores)?r.extraVendedores.length:0), 0);
-  const colCount = 2 + cfg.fields.length + 7 + (maxExtra*2) + (cfg.hasPagamento?1:0) + (cfg.hasVendasPorVendedor?1:0);
+  const colCount = 2 + cfg.fields.length + 7 + (maxExtra*2) + (cfg.hasPagamento?1:0) + (cfg.hasVendasPorVendedor?1:0) + (cfg.hasVendedorResponsavel?1:0);
   const rowsHtml = visible.length === 0
     ? `<tr class="empty-row"><td colspan="${colCount}"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
     : visible.map(row => {
         let cells = `<td class="col-mes"><select data-entity="${key}" data-id="${row.id}" onchange="onEntityMonthSelect(this)" title="${esc(row.mes)}">${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>${isEntityRowPending(row) ? '<span class="pending-badge" title="Lançamento incompleto: falta valor ou percentual">⚠️</span>' : ''}${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}${isEntityRowDuplicate(key,row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo nome neste mês — confira se não é duplicado">🔁 Duplicado</span>` : ''}</td>`;
         cfg.fields.forEach((f, fi) => {
+          if(fi === 1 && cfg.hasVendedorResponsavel && !isFinanceiro){
+            cells += `<td class="resp-cell">
+              <select class="${(row.vendedorResponsavel||'').trim() ? '' : 'sem-resp'}" data-entity="${key}" data-id="${row.id}" data-field="vendedorResponsavel" onchange="onEntitySelectField(this)"
+                      title="Quem efetivamente fez esta venda — é essa pessoa que o Relatório de Desempenho conta">
+                <option value="">— quem vendeu?</option>
+                ${entityVendorsForCurrentUser(key).map(v => `<option value="${esc(v)}" ${row.vendedorResponsavel===v?'selected':''}>${esc(v)}</option>`).join('')}
+              </select>
+            </td>`;
+          }
           if(fi === 1 && cfg.hasVendasPorVendedor && !isFinanceiro){
             const d = resumoDivisao(row);
             if(!isAdmin){
@@ -8704,7 +8719,7 @@ function renderEntitySection(key){
           <thead>
             <tr>
               <th class="col-mes">Mês</th>
-              ${cfg.fields.map((f,fi) => `<th${f.key==='valorContrato'?' class="num col-valor" title="Valor do Contrato"':(f.key==='participacao'?' class="num col-pct"':(f.type==='number'?' class="num"':(fi===0?' class="col-nome"':'')))}>${f.key==='valorContrato'?'Valor':f.label}</th>${fi===0&&cfg.hasVendasPorVendedor&&!isFinanceiro?('<th style="width:150px">'+(isAdmin?'Vendas por vendedora':'Sua venda')+'</th>'):''}${f.key==='formaPagamento'&&cfg.hasPagamento?'<th style="width:110px">Pagamento</th>':''}`).join('')}
+              ${cfg.fields.map((f,fi) => `<th${f.key==='valorContrato'?' class="num col-valor" title="Valor do Contrato"':(f.key==='participacao'?' class="num col-pct"':(f.type==='number'?' class="num"':(fi===0?' class="col-nome"':'')))}>${f.key==='valorContrato'?'Valor':f.label}</th>${fi===0&&cfg.hasVendasPorVendedor&&!isFinanceiro?('<th style="width:150px">'+(isAdmin?'Vendas por vendedora':'Sua venda')+'</th>'):''}${fi===0&&cfg.hasVendedorResponsavel&&!isFinanceiro?'<th style="width:150px">Quem vendeu?</th>':''}${f.key==='formaPagamento'&&cfg.hasPagamento?'<th style="width:110px">Pagamento</th>':''}`).join('')}
               ${isFinanceiro ? '' : `
               <th class="num">% Comissão</th>
               <th>Vendedor</th>
