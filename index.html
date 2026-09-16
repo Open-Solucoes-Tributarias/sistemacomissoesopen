@@ -5232,6 +5232,40 @@ function getRowForPayment(entityKey, id){
 function persistAfterPayment(entityKey){
   if(entityKey) persistEntityRows(entityKey); else persist();
 }
+/* vendas/lancamentos só aceitam UPDATE de admin (RLS) — o upsert normal
+   de persist()/persistEntityRows() é rejeitado em silêncio pro
+   financeiro (ex: Deborah): a marca fica só na tela, nunca grava. Essa
+   porta estreita (mesmo padrão da "nota emitida") é liberada pra
+   financeiro também, e mexe só nas colunas de pagamento. */
+async function persistirPagamentoRPC(entityKey, r){
+  saving = true; updateSaveStatus();
+  try{
+    await sbRpc('marcar_pago', {
+      p_tabela: entityKey ? 'lancamentos' : 'vendas', p_id: r.id,
+      p_pago: !!r.pago, p_mes_pagamento: r.mesPagamento || null,
+    });
+    saveError = false;
+  }catch(e){
+    console.error('Falha ao marcar pagamento', e);
+    saveError = true;
+  } finally {
+    saving = false; updateSaveStatus();
+  }
+}
+async function corrigirMesPagamentoRPC(entityKey, r){
+  saving = true; updateSaveStatus();
+  try{
+    await sbRpc('corrigir_mes_pagamento', {
+      p_tabela: entityKey ? 'lancamentos' : 'vendas', p_id: r.id, p_mes_pagamento: r.mesPagamento || null,
+    });
+    saveError = false;
+  }catch(e){
+    console.error('Falha ao corrigir mês de pagamento', e);
+    saveError = true;
+  } finally {
+    saving = false; updateSaveStatus();
+  }
+}
 /* ---------- O mês em que a comissão é liberada ----------
    A nota de agosto que o cliente só pagou em setembro libera a comissão em
    SETEMBRO — é quando o dinheiro entrou. Por isso "mês de pagamento" é um
@@ -5278,7 +5312,8 @@ function onPagamentoToggle(el, entityKey){
     r.pagoEm = null;
     r.fechamentoMes = null;   // desmarcou pago: solta a trava, se tinha
   }
-  persistAfterPayment(entityKey);
+  if(isFinanceiro && !isAdmin) persistirPagamentoRPC(entityKey, r);
+  else persistAfterPayment(entityKey);
   render();
 }
 function onPagamentoMesSelect(el, entityKey){
@@ -5291,7 +5326,8 @@ function onPagamentoMesSelect(el, entityKey){
     return;
   }
   r.mesPagamento = el.value;
-  persistAfterPayment(entityKey);
+  if(isFinanceiro && !isAdmin) corrigirMesPagamentoRPC(entityKey, r);
+  else persistAfterPayment(entityKey);
 }
 function setPagamentosMonthFilter(m){ pagamentosMonthFilter = m; render(); }
 function setAReceberMonthFilter(m){ aReceberMonthFilter = m; render(); }
@@ -8150,6 +8186,7 @@ function getRowSellerAssignments(r){
 
 function computeEntityTotals(key, visible){
   const st = state[key];
+  const cfg = ENTITIES[key];
   const t = {contrato:0, comissao:0, byVendor:{}};
   st.vendors.forEach(v => t.byVendor[v] = 0);
   visible.forEach(r => {
@@ -8159,6 +8196,12 @@ function computeEntityTotals(key, visible){
     getRowSellerAssignments(r).forEach(a => {
       const commission = baseAposParceiro * (a.percent/100);
       t.comissao += commission;
+      /* Quem não é vendedora de Sistema só aparece no próprio card com o
+         que já foi pago — senão o número dá a entender que aquele
+         dinheiro já é dela antes da hora, e ninguém pode confiar nele
+         pra se planejar. Vendedora de Sistema continua vendo tudo, como
+         sempre foi. */
+      if(cfg.hasPagamento && !ehVendedorDeSistema(a.vendedor) && !r.pago) return;
       if(t.byVendor[a.vendedor] === undefined) t.byVendor[a.vendedor] = 0;
       t.byVendor[a.vendedor] += commission;
     });
