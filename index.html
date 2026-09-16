@@ -2322,7 +2322,7 @@ function persistEntityRows(key){
             forma_pagamento:'', colaborador:'', observacoes:'',
             pago:false, mes_pagamento:null,
             nota_emitida: !!r.notaEmitida, nota_emitida_em: r.notaEmitidaEm || null,
-            in_company: !!r.inCompany, renovacao: !!r.renovacao,
+            in_company: !!r.inCompany, renovacao: !!r.renovacao, upgrade: !!r.upgrade,
           };
           cfg.fields.forEach(function(f){
             if(f.key === 'valorContrato') row.valor_contrato = numOrNull(r.valorContrato);
@@ -2449,7 +2449,7 @@ async function tryLoadEntityFromStorageAsync(key){
           extraVendedores: extrasByLanc[d.id] || [],
           parcelaLabel: d.parcela_label,
           notaEmitida: !!d.nota_emitida, notaEmitidaEm: d.nota_emitida_em || null,
-          inCompany: !!d.in_company, renovacao: !!d.renovacao,
+          inCompany: !!d.in_company, renovacao: !!d.renovacao, upgrade: !!d.upgrade,
         };
         if(cfg.hasVendasPorVendedor) r.vendasVendedoras = divisaoByLanc[d.id] || [];
         if(cfg.hasPagamento){ r.pago = d.pago; r.mesPagamento = d.mes_pagamento; }
@@ -6215,15 +6215,17 @@ function getSellerBreakdown(){
       if(partnerMonthFilter !== "Todos" && r.mes !== partnerMonthFilter) return;
       const base = entityRemainingAfterPartner(r);
       const premium = key === 'publicos' && r.tipo === 'Plano Premium';
+      const contaComoSistema = premium || r.upgrade;
       getRowSellerAssignments(r).forEach(a => {
         ensure(a.vendedor);
         const valor = base * (a.percent/100);
-        /* Plano premium é lançado em Órgãos Públicos, mas pra quem é
-           vendedora de Sistema (Rios, Soraya, Angela, Luciana, Uilma) a
-           comissão entra no total de Sistema — só lá, não soma de novo em
-           Órgãos Públicos. Gustavo, Arick e Matheus Costa não são
-           vendedores de Sistema: ficam detalhados no lugar de sempre. */
-        if(premium && ehVendedorDeSistema(a.vendedor)) by[a.vendedor].sistema += valor;
+        /* Plano premium (Órgãos Públicos) e upgrade (qualquer entidade) são
+           lançados fora do Sistema, mas pra quem é vendedora de Sistema
+           (Rios, Soraya, Angela, Luciana, Uilma) a comissão entra no total
+           de Sistema — só lá, não soma de novo no lugar onde foi lançado.
+           Gustavo, Arick e Matheus Costa não são vendedores de Sistema:
+           ficam detalhados no lugar de sempre. */
+        if(contaComoSistema && ehVendedorDeSistema(a.vendedor)) by[a.vendedor].sistema += valor;
         else by[a.vendedor][key] += valor;
       });
     });
@@ -7706,9 +7708,10 @@ function toggleCursoInCompany(id){
   render();
 }
 
-/* Mesma tag ♻️ Renovação que o Sistema usa: vale comissão, mas não é
-   contrato novo. Puramente informativo aqui — Consultoria e Órgãos
-   Públicos não têm ranking de desempenho pra excluir. */
+/* Mesmas tags ♻️ Renovação / ⬆️ Upgrade que o Sistema usa, mutuamente
+   exclusivas como lá. Puramente informativas aqui — Consultoria e Órgãos
+   Públicos não têm ranking de desempenho pra excluir — exceto que upgrade
+   também muda pra ONDE vai a comissão: veja getSellerBreakdown. */
 function toggleEntityRenovacao(key, id){
   const r = state[key].rows.find(function(r){ return r.id === id; });
   if(!r) return;
@@ -7716,7 +7719,23 @@ function toggleEntityRenovacao(key, id){
     showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
     return;
   }
-  r.renovacao = !r.renovacao;
+  const ligar = !r.renovacao;
+  r.renovacao = ligar;
+  if(ligar) r.upgrade = false;
+  persistEntityRows(key);
+  render();
+}
+
+function toggleEntityUpgrade(key, id){
+  const r = state[key].rows.find(function(r){ return r.id === id; });
+  if(!r) return;
+  if(isMonthClosed(r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    return;
+  }
+  const ligar = !r.upgrade;
+  r.upgrade = ligar;
+  if(ligar) r.renovacao = false;
   persistEntityRows(key);
   render();
 }
@@ -8213,7 +8232,8 @@ function renderEntitySection(key){
           } else if(f.type === "text"){
             const seloInCompany = (key === 'cursos' && fi === 0 && row.inCompany) ? '<span class="selo-incompany">🏢 In Company</span>' : '';
             const seloRenovacao = (fi === 0 && row.renovacao) ? '<span class="selo-renovacao" title="Renovação: vale comissão, mas não é contrato novo">♻️ Renovação</span>' : '';
-            cells += `<td${fi===0?' class="col-nome"':''}><input type="text" data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}${seloRenovacao}</td>`;
+            const seloUpgrade = (fi === 0 && row.upgrade) ? '<span class="selo-upgrade" title="Upgrade: cliente que subiu de plano">⬆️ Upgrade</span>' : '';
+            cells += `<td${fi===0?' class="col-nome"':''}><input type="text" data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}${seloRenovacao}${seloUpgrade}</td>`;
             if(f.key === "formaPagamento" && cfg.hasPagamento){
               cells += `<td class="pagamento-cell">
                 <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" onchange="onPagamentoToggle(this,'${key}')" /><span>${row.pago?'Pago':'Pendente'}</span></label>
@@ -8272,6 +8292,7 @@ function renderEntitySection(key){
             <button class="action-btn" title="Duplicar" onclick="duplicateEntityRow('${key}',${row.id})">⎘</button>
             <button class="action-btn" title="Parcelar em vários meses" onclick="parcelarEntityRow('${key}',${row.id})">🧩</button>
             <button class="action-btn" title="Repetir até dezembro (assinatura mensal)" onclick="repeatEntityRowForYear('${key}',${row.id})">🔁</button>
+            <button class="action-btn${row.upgrade ? ' ativo-upgrade' : ''}" title="${row.upgrade ? 'É um upgrade — clique para desmarcar' : 'Marcar como upgrade (cliente que subiu de plano)'}" onclick="toggleEntityUpgrade('${key}',${row.id})">⬆️</button>
             <button class="action-btn${row.renovacao ? ' ativo' : ''}" title="${row.renovacao ? 'É uma renovação — clique para desmarcar' : 'Marcar como renovação (vale comissão, mas não é contrato novo)'}" onclick="toggleEntityRenovacao('${key}',${row.id})">♻️</button>
             <button class="action-btn danger" title="Excluir" onclick="deleteEntityRow('${key}',${row.id})">✕</button>
           </div>
