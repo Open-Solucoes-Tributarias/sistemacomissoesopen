@@ -1779,6 +1779,7 @@ let trafegoMetricaFoco = 'gasto';
 let closedMonths = [];
 let fechamentosMes = [];   // [{ano, mes, fechadoEm}] — quando cada mês foi fechado pra pagamento (não confundir com closedMonths, que é o mês fechado pra EDIÇÃO)
 let prazosEmissaoNota = [];   // [{id, entidade, nomeCliente, dia}] — dia fixo do mês combinado pra emitir a nota de um contrato Mensal/Plano Premium (lembrete só pro financeiro)
+let atualizandoNotas = false;   // "↻ Atualizar" do quadro de notas — busca de novo do banco, sem recarregar a página inteira
 let metas = [];      // regras de meta: gatilho da empresa que premia uma pessoa
 let metasNextId = 1;
 let pagamentosMonthFilter = "Todos";
@@ -8385,6 +8386,25 @@ function dataCurta(iso){
   return isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
 }
 
+/* A tela carrega os dados uma vez só, quando a aba abre — edições de
+   outra pessoa (ou da mesma pessoa numa outra aba) não chegam sozinhas.
+   Esse botão busca de novo, sem precisar recarregar a página inteira e
+   perder o que estiver sendo editado em outro lugar da tela. */
+async function atualizarNotasLancadas(){
+  if(atualizandoNotas) return;
+  atualizandoNotas = true; render();
+  try{
+    await Promise.allSettled([
+      tryLoadFromStorageAsync(),
+      tryLoadEntityFromStorageAsync('consultoria'),
+      tryLoadEntityFromStorageAsync('publicos'),
+      tryLoadEntityFromStorageAsync('cursos'),
+    ]);
+  } finally {
+    atualizandoNotas = false; render();
+  }
+}
+
 /* O quadro das notas do período, com o visto. É o mesmo para o financeiro
    (que dá o visto) e para quem administra (que precisa ver o que já foi
    emitido) — um quadro só, para os dois lados nunca contarem diferente. */
@@ -8470,7 +8490,8 @@ function renderNotasPanel(){
     flush: true,
     meta: `<b>${doPeriodo.length}</b> nota${doPeriodo.length===1?'':'s'} ${partnerMonthFilter==='Todos' ? 'no ano de '+yearFilter : 'em '+esc(partnerMonthFilter)}${
       doPeriodo.length ? ` · <b>${emitidas.length}</b> emitida${emitidas.length===1?'':'s'}` : ''}`,
-    actions: `<button class="eye-toggle" onclick="abrirRelatorioNotasEmitidas()">📊 Relatório de notas emitidas</button>`,
+    actions: `<button class="eye-toggle" onclick="atualizarNotasLancadas()" ${atualizandoNotas?'disabled':''}>${atualizandoNotas?'↻ Atualizando…':'↻ Atualizar'}</button>
+              <button class="eye-toggle" onclick="abrirRelatorioNotasEmitidas()">📊 Relatório de notas emitidas</button>`,
   });
 }
 
@@ -10367,6 +10388,40 @@ function abrirEmpresasCurso(entKey, rowId){
   if(!isAdmin && !isFinanceiro) return;
   modalState = { type:'empresas-curso', entKey: entKey, rowId: rowId };
   render();
+  // A tela carrega os dados uma vez só, quando a aba abre — se alguém
+  // mexeu nas empresas deste lançamento depois disso (outra pessoa
+  // logada, ou a mesma pessoa em outra aba), essa cópia em memória fica
+  // desatualizada até a página recarregar. Como é exatamente aqui que
+  // isso mais importa (admin cadastra, financeiro confere/emite logo
+  // depois), busca de novo do banco toda vez que o modal abre.
+  refrescarEmpresasDoLancamento(entKey, rowId);
+}
+
+async function refrescarEmpresasDoLancamento(entKey, rowId){
+  try{
+    const db = await sbSelectOpcional('lancamento_empresas', 'select=*&lancamento_id=eq.'+rowId+'&order=id.asc', []);
+    const r = state[entKey] && state[entKey].rows.find(function(x){ return x.id === rowId; });
+    if(!r) return;
+    if(!Array.isArray(r.empresas)) r.empresas = [];
+    // Nunca troca a lista inteira: se a pessoa acabou de adicionar uma
+    // empresa nesse meio-tempo (ainda no debounce, não gravada), um
+    // "replace" apagaria essa edição em andamento. Por isso só atualiza
+    // quem já existe e acrescenta quem é novo — nunca remove (excluir
+    // continua sendo uma ação explícita, via removeEmpresaCurso).
+    const porId = {};
+    r.empresas.forEach(function(e){ porId[e.id] = e; });
+    (db||[]).forEach(function(e){
+      const doServidor = {
+        id: e.id, nome: e.nome||'', cnpj: e.cnpj||'', responsavel: e.responsavel||'',
+        valor: e.valor, observacoes: e.observacoes||'',
+        notaEmitida: !!e.nota_emitida, notaEmitidaEm: e.nota_emitida_em || null,
+        notaArquivoPath: e.nota_arquivo_path || null, notaArquivoNome: e.nota_arquivo_nome || null,
+      };
+      if(porId[e.id]) Object.assign(porId[e.id], doServidor);
+      else { r.empresas.push(doServidor); porId[e.id] = doServidor; }
+    });
+    render();
+  }catch(e){ console.error('Falha ao atualizar as empresas deste lançamento', e); }
 }
 
 const empresaTimers = {};
