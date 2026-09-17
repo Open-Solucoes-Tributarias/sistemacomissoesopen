@@ -6169,6 +6169,7 @@ function renderBonusSection(){
         ${celulaFechamento(l.pessoa, 'consultoria', 'Consultoria', l.consultoria, bonusFilter, dinheiro(l.consultoria), 'col-apoio', bonusValuesRevealed)}
         <td class="num" style="font-weight:800;">${dinheiro(l.aPagar)}</td>
         <td class="num col-apoio" title="Já ganhou, mas ainda espera o cliente pagar">${dinheiro(l.pendente)}</td>
+        <td class="del-cell">${bonusFilter!=="Todos" ? `<button class="action-btn" title="Gerar comprovante em PDF dos recebíveis de ${esc(l.pessoa)} em ${esc(bonusFilter)}" onclick="imprimirComprovanteFechamento('${escJs(l.pessoa)}','${escJs(bonusFilter)}')">📄</button>` : ''}</td>
       </tr>`).join('');
 
   const editorFechamentoHtml = (isAdmin && fechamentoEditando) ? panel('bonus-fechamento-quem', 'Quem entra no fechamento', `
@@ -6231,9 +6232,10 @@ function renderBonusSection(){
               <th class="num col-apoio">Consultoria</th>
               <th class="num">Total a pagar</th>
               <th class="num col-apoio">Pendente</th>
+              <th style="width:40px"></th>
             </tr>
           </thead>
-          <tbody>${fechamentoRowsHtml || `<tr class="empty-row"><td colspan="9"><span class="empty-icon">◌</span>Nada a pagar ${bonusFilter!=="Todos" ? 'em '+esc(bonusFilter) : 'em '+yearFilter} ainda.</td></tr>`}</tbody>
+          <tbody>${fechamentoRowsHtml || `<tr class="empty-row"><td colspan="10"><span class="empty-icon">◌</span>Nada a pagar ${bonusFilter!=="Todos" ? 'em '+esc(bonusFilter) : 'em '+yearFilter} ainda.</td></tr>`}</tbody>
           ${fechamentoRowsHtml ? `<tfoot><tr>
             <td>Total</td>
             <td class="num">${dinheiro(somaCols.sistema)}</td>
@@ -6244,6 +6246,7 @@ function renderBonusSection(){
             <td class="num col-apoio">${dinheiro(somaCols.consultoria)}</td>
             <td class="num">${dinheiro(somaCols.aPagar)}</td>
             <td class="num col-apoio">${dinheiro(somaCols.pendente)}</td>
+            <td></td>
           </tr></tfoot>` : ''}
         </table>
       </div>
@@ -6868,6 +6871,7 @@ function renderParceirosSection(){
         ${celulaFechamento(l.pessoa, 'consultoria', 'Consultoria', l.consultoria, partnerMonthFilter, maskOr(l.consultoria), 'col-apoio', partnersValuesRevealed)}
         <td class="num" style="font-weight:800;">${maskOr(l.aPagar)}</td>
         <td class="num col-apoio" title="Já ganhou, mas ainda espera o cliente pagar">${maskOr(l.pendente)}</td>
+        <td class="del-cell">${partnerMonthFilter!=="Todos" ? `<button class="action-btn" title="Gerar comprovante em PDF dos recebíveis de ${esc(l.pessoa)} em ${esc(partnerMonthFilter)}" onclick="imprimirComprovanteFechamento('${escJs(l.pessoa)}','${escJs(partnerMonthFilter)}')">📄</button>` : ''}</td>
       </tr>`).join('');
 
   const sellerBreakdownRowsHtml = sellersForCurrentUser().map(s => {
@@ -6989,9 +6993,10 @@ function renderParceirosSection(){
               <th class="num col-apoio">Consultoria</th>
               <th class="num">Total a pagar</th>
               <th class="num col-apoio">Pendente</th>
+              <th style="width:40px"></th>
             </tr>
           </thead>
-          <tbody>${fechamentoRowsHtml || `<tr class="empty-row"><td colspan="9"><span class="empty-icon">◌</span>Nada a pagar ${partnerMonthFilter!=="Todos" ? 'em '+esc(partnerMonthFilter) : 'em '+yearFilter} ainda.</td></tr>`}</tbody>
+          <tbody>${fechamentoRowsHtml || `<tr class="empty-row"><td colspan="10"><span class="empty-icon">◌</span>Nada a pagar ${partnerMonthFilter!=="Todos" ? 'em '+esc(partnerMonthFilter) : 'em '+yearFilter} ainda.</td></tr>`}</tbody>
           ${fechamentoRowsHtml ? `<tfoot><tr>
             <td>Total</td>
             <td class="num">${maskOr(fechamentoSomaCols.sistema)}</td>
@@ -7002,6 +7007,7 @@ function renderParceirosSection(){
             <td class="num col-apoio">${maskOr(fechamentoSomaCols.consultoria)}</td>
             <td class="num">${maskOr(fechamentoSomaCols.aPagar)}</td>
             <td class="num col-apoio">${maskOr(fechamentoSomaCols.pendente)}</td>
+            <td></td>
           </tr></tfoot>` : ''}
         </table>
       </div>
@@ -10441,6 +10447,88 @@ function imprimirRelatorioMes(){
     document.body.appendChild(div);
   }
   div.innerHTML = montarRelatorioMes(mes);
+  document.body.classList.add('imprimindo-relatorio');
+  const limpar = function(){
+    document.body.classList.remove('imprimindo-relatorio');
+    window.removeEventListener('afterprint', limpar);
+  };
+  window.addEventListener('afterprint', limpar);
+  setTimeout(function(){ window.print(); setTimeout(limpar, 1500); }, 60);
+}
+
+/* Comprovante de comissão de uma pessoa, só o mês escolhido — pra
+   anexar junto do comprovante de pagamento. Junta todas as origens
+   (mesma regra do Fechamento: sistema, órgãos públicos, consultoria,
+   cursos, bônus, salário fixo) num único documento para impressão. */
+function montarComprovanteFechamento(pessoa, mes){
+  const ano = yearFilter;
+  const agora = new Date();
+  const emitido = agora.toLocaleDateString('pt-BR') + ' às ' + agora.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+
+  const origens = [
+    {key:'sistema', label:'Sistema'},
+    {key:'publicos', label:'Órgãos Públicos'},
+    {key:'consultoria', label:'Consultoria'},
+    {key:'cursos', label:'Cursos'},
+    {key:'bonus', label:'Bônus'},
+    {key:'salario', label:'Salário fixo'},
+  ];
+  let linhas = [];
+  origens.forEach(function(o){ linhas = linhas.concat(detalheFechamento(pessoa, o.key, mes)); });
+  linhas.sort(function(a,b){ return MONTHS.indexOf(a.mes) - MONTHS.indexOf(b.mes); });
+  const total = linhas.reduce(function(a,l){ return a + l.comissao; }, 0);
+
+  const linhasHtml = linhas.map(function(l){
+    return `<tr><td>${esc(monthShort(l.mes))}</td><td>${esc(l.origemLabel)}</td><td>${esc(l.cliente)}</td>
+      <td class="num">${l.valorContrato===null||l.valorContrato===undefined?'—':fmtMoney(l.valorContrato)}</td>
+      <td class="num">${l.percent===null||l.percent===undefined?'—':esc(l.percent)+'%'}</td>
+      <td class="num destaque">${fmtMoney(l.comissao)}</td></tr>`;
+  });
+
+  return `
+    <div class="rel-doc">
+      <header class="rel-faixa">
+        <div class="rel-faixa-globo">${logoGloboSvg(150, '#ffffff')}</div>
+        <div class="rel-marca">
+          ${marcaOpenHtml({tam:32, clara:true, cor:'#8FCBF5'})}
+          <div class="rel-divisor"></div>
+          <div>
+            <div class="rel-empresa">HUB Comercial · Painel Diretoria Comercial</div>
+            <h1>Comprovante de comissão — ${esc(pessoa)}</h1>
+          </div>
+        </div>
+        <div class="rel-emissao">
+          <div class="rel-emissao-tit">Recebíveis de ${esc(mes)} de ${ano}</div>
+          <div class="rel-emissao-sub">Emitido em ${esc(emitido)}</div>
+        </div>
+      </header>
+      <div class="rel-faixa-linha"></div>
+
+      <section class="rel-sec">
+        <div class="rel-cards">
+          <div class="rel-card rel-card-total"><span>Total a receber em ${esc(mes)}</span><b>${fmtMoney(total)}</b></div>
+        </div>
+        ${relTabela(
+          [{label:'Mês'},{label:'Origem'},{label:'Cliente/Empresa'},{label:'Valor do contrato',num:true},{label:'%',num:true},{label:'Comissão',num:true}],
+          linhasHtml, 'Nenhum recebível de ' + pessoa + ' em ' + mes + '.')}
+        <p class="rel-nota">Considera só o que já está liberado para pagamento em ${esc(mes)} — o que ainda espera o cliente pagar não entra aqui.</p>
+      </section>
+    </div>
+  `;
+}
+
+function imprimirComprovanteFechamento(pessoa, mes){
+  if(!mes || mes === 'Todos'){
+    showAlert('Escolha um mês específico no filtro para gerar o comprovante desta pessoa.');
+    return;
+  }
+  let div = document.getElementById('relatorio-print');
+  if(!div){
+    div = document.createElement('div');
+    div.id = 'relatorio-print';
+    document.body.appendChild(div);
+  }
+  div.innerHTML = montarComprovanteFechamento(pessoa, mes);
   document.body.classList.add('imprimindo-relatorio');
   const limpar = function(){
     document.body.classList.remove('imprimindo-relatorio');
