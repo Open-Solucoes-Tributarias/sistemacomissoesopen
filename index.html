@@ -1310,6 +1310,10 @@
     padding:2px 7px;border-radius:999px;background:#E0E7FF;border:1px solid #C7D2FE;color:#4338CA;
   }
   .action-btn.ativo-incompany{background:#E0E7FF;color:#4338CA;}
+  .selo-empresas{
+    margin-left:6px;font-size:10px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
+    padding:2px 7px;border-radius:999px;background:#CFFAFE;border:1px solid #A5F3FC;color:#0E7490;cursor:default;
+  }
   .kpi-sub{font-size:11.5px;font-weight:700;color:var(--ink-faint);margin-top:2px;font-variant-numeric:tabular-nums;}
   .import-arquivo{display:block;margin:4px 0 10px;}
   .import-arquivo input{display:none;}
@@ -1534,6 +1538,10 @@ const ENTITIES = {
     // quem GANHA comissão; a divisão de quanto cada uma vendeu é outra
     // coisa, e é o que o Painel da Equipe conta.
     hasVendasPorVendedor: true,
+    // Um curso pode ser várias empresas inscritas, cada uma com sua
+    // própria nota fiscal (CNPJ, responsável, valor) — outra coisa
+    // diferente de "quem vendeu" e de comissão.
+    hasEmpresas: true,
   },
 };
 const ENTITY_KEYS = ["consultoria","publicos","cursos"];
@@ -2445,6 +2453,11 @@ async function tryLoadEntityFromStorageAsync(key){
     const divisoes = cfg.hasVendasPorVendedor
       ? await sbSelectOpcional('lancamento_vendas', 'select=*&order=id.asc', [])
       : [];
+    // Empresas por curso: RLS só devolve linha pra admin/financeiro —
+    // pra quem mais não é, a consulta volta vazia (não é erro).
+    const empresasDb = cfg.hasEmpresas
+      ? await sbSelectOpcional('lancamento_empresas', 'select=*&order=id.asc', [])
+      : [];
     const vendorsDb = await sbSelectOpcional('entity_vendors', 'select=vendor_name&entidade=eq.'+key+'&order=id.asc', []);
     carregouDoBanco['lanc-'+key] = true;
     if(dbRows && dbRows.length){
@@ -2457,6 +2470,15 @@ async function tryLoadEntityFromStorageAsync(key){
       (divisoes||[]).forEach(function(d){
         if(!divisaoByLanc[d.lancamento_id]) divisaoByLanc[d.lancamento_id] = [];
         divisaoByLanc[d.lancamento_id].push({id: d.id, vendedor: d.vendedor||'', valor: d.valor});
+      });
+      const empresasByLanc = {};
+      (empresasDb||[]).forEach(function(e){
+        if(!empresasByLanc[e.lancamento_id]) empresasByLanc[e.lancamento_id] = [];
+        empresasByLanc[e.lancamento_id].push({
+          id: e.id, nome: e.nome||'', cnpj: e.cnpj||'', responsavel: e.responsavel||'',
+          valor: e.valor, observacoes: e.observacoes||'',
+          notaEmitida: !!e.nota_emitida, notaEmitidaEm: e.nota_emitida_em || null,
+        });
       });
       state[key].rows = dbRows.map(function(d){
         const r = {
@@ -2472,6 +2494,7 @@ async function tryLoadEntityFromStorageAsync(key){
           professor: d.professor||'', honorarioProfessor: d.honorario_professor,
         };
         if(cfg.hasVendasPorVendedor) r.vendasVendedoras = divisaoByLanc[d.id] || [];
+        if(cfg.hasEmpresas) r.empresas = empresasByLanc[d.id] || [];
         if(cfg.hasPagamento){ r.pago = d.pago; r.mesPagamento = d.mes_pagamento; r.pagoEm = d.pago_em || null; r.fechamentoMes = d.fechamento_mes || null; }
         if(cfg.hasVendedorResponsavel) r.vendedorResponsavel = d.vendedor_responsavel || '';
         cfg.fields.forEach(function(f){
@@ -4391,6 +4414,129 @@ function renderModal(){
         </div>
       </div>
     `;
+  }
+  if(m.type === 'empresas-curso'){
+    const r = empresasRowAtual();
+    if(!r) return '';
+    const nome = r.curso || 'este curso';
+    const d = resumoEmpresas(r);
+    const podeVisar = isAdmin || isFinanceiro;
+    const linhas = d.lista.length ? d.lista.map(function(e){
+      return `
+        <tr>
+          <td><input type="text" value="${esc(e.nome)}" placeholder="Razão social" ${isAdmin?'':'disabled'}
+                 onchange="updateEmpresaCurso(${e.id},'nome',this.value)" /></td>
+          <td>
+            <input type="text" value="${esc(formatCnpj(e.cnpj))}" placeholder="00.000.000/0000-00" ${isAdmin?'':'disabled'}
+                   oninput="this.value=formatCnpj(this.value)" onchange="updateEmpresaCurso(${e.id},'cnpj',this.value)" />
+            <span class="contrato-cnpj-aviso" id="empresa-cnpj-aviso-${e.id}">${(cnpjDigitos(e.cnpj) && !cnpjValido(e.cnpj)) ? 'CNPJ incompleto' : ''}</span>
+          </td>
+          <td><input type="text" value="${esc(e.responsavel)}" placeholder="Responsável pela nota" ${isAdmin?'':'disabled'}
+                 onchange="updateEmpresaCurso(${e.id},'responsavel',this.value)" /></td>
+          <td class="col-valor">
+            <div class="currency-wrap"><span class="currency-prefix">R$</span>
+              <input class="num" type="number" step="0.01" value="${e.valor===null||e.valor===undefined?'':e.valor}" ${isAdmin?'':'disabled'}
+                     oninput="onEmpresaValorInput(this,${e.id})" onchange="updateEmpresaCurso(${e.id},'valor',this.value)" />
+            </div>
+          </td>
+          <td>${podeVisar
+            ? `<button type="button" class="nota-btn${e.notaEmitida?' on':''}"
+                       title="${e.notaEmitida ? 'Nota emitida — clique para desmarcar' : 'Marcar que a nota foi emitida'}"
+                       onclick="toggleNotaEmitida('lancamento_empresas',${e.id},'')">${
+                 e.notaEmitida ? '✓ Emitida' + (dataCurta(e.notaEmitidaEm) ? ' · ' + dataCurta(e.notaEmitidaEm) : '') : 'Emitir'
+               }</button>`
+            : (e.notaEmitida ? '<span class="nota-selo">✓ Emitida</span>' : '—')}</td>
+          ${isAdmin ? `<td><button class="action-btn danger" title="Remover" onclick="removeEmpresaCurso(${e.id})">✕</button></td>` : ''}
+        </tr>`;
+    }).join('') : `<tr class="empty-row"><td colspan="${isAdmin?6:5}"><span class="empty-icon">◌</span>Nenhuma empresa cadastrada ainda.</td></tr>`;
+
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-wide">
+          <div class="modal-msg">Empresas inscritas — ${esc(nome)}</div>
+          <div class="divisao-explica">
+            O faturamento deste curso é de <b>${fmtMoney(d.total)}</b>. Liste aqui cada empresa inscrita, com o
+            que precisa pra emitir a nota fiscal dela — CNPJ, responsável e valor. O financeiro marca "Emitida"
+            conforme for emitindo, igual às outras notas do sistema.
+          </div>
+          <div class="table-scroll">
+            <table class="table-plain">
+              <thead><tr>
+                <th>Empresa</th><th>CNPJ</th><th>Responsável</th><th class="num">Valor</th><th>Nota fiscal</th>${isAdmin?'<th></th>':''}
+              </tr></thead>
+              <tbody>${linhas}</tbody>
+            </table>
+          </div>
+          ${isAdmin ? `
+            <div style="display:flex;gap:8px;margin-top:10px;">
+              <button class="modal-btn modal-btn-ghost" style="flex:1;" onclick="addEmpresaCurso()">+ Adicionar empresa</button>
+              <button class="modal-btn modal-btn-ghost" style="flex:1;" onclick="abrirImportarEmpresasCurso(${r.id})">📄 Importar planilha</button>
+            </div>` : ''}
+          <div id="empresas-conferencia" class="divisao-conferencia${d.fecha?' ok':''}">
+            Somado: <b>${fmtMoney(d.somado)}</b> de ${fmtMoney(d.total)}${d.fecha ? ' — confere' : ' — <b>'+esc(d.rotuloDiferenca)+'</b>'}
+          </div>
+          <div class="modal-actions"><button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button></div>
+        </div>
+      </div>
+    `;
+  }
+  if(m.type === 'import-empresas-curso'){
+    const d = m.dados;
+    const novos = d ? d.itens.filter(function(i){ return !i.duplicada; }) : [];
+    const problemas = d ? d.itens.filter(function(i){ return i.aviso; }) : [];
+    const previa = d ? d.itens.slice(0, 60) : [];
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-wide">
+          <div class="modal-msg">Importar empresas da planilha</div>
+          <div class="painel-equipe-nota">
+            Reconheço colunas com estes nomes (com ou sem acento, em qualquer ordem):
+            <b>Empresa</b>, <b>CNPJ</b>, <b>Responsável</b>, <b>Valor</b> e <b>Vendedora</b> (opcional). Sem
+            cabeçalho reconhecido, uso essa mesma ordem. Aceito <b>.xlsx</b> e <b>.csv</b>; se preferir,
+            selecione as células no Excel, copie com Ctrl+C e cole no campo de baixo.
+            Trazendo a vendedora, o valor de cada empresa já soma em "Vendas por vendedora" — e o valor total
+            do curso vira a soma de todas as empresas cadastradas nele.
+          </div>
+          <label class="import-arquivo">
+            <input type="file" accept=".xlsx,.csv,.txt,.tsv" onchange="onArquivoEmpresas(this)" />
+            <span>📄 Escolher arquivo da planilha</span>
+          </label>
+          <textarea class="modal-textarea" style="min-height:90px;" placeholder="…ou cole aqui as células copiadas do Excel"
+                    oninput="onColarEmpresas(this)"></textarea>
+          ${m.lendo ? `<div class="modal-msg" style="margin:10px 0 0;">Lendo a planilha…</div>` : ''}
+          ${m.erro ? `<div class="modal-error">${esc(m.erro)}</div>` : ''}
+          ${d ? `
+            <div class="import-resumo">
+              <b>${novos.length}</b> empresa${novos.length===1?'':'s'} nova${novos.length===1?'':'s'} de <b>${d.itens.length}</b> linha${d.itens.length===1?'':'s'} lida${d.itens.length===1?'':'s'}
+              ${problemas.length ? ` · <span class="import-alerta">${problemas.length} com aviso</span>` : ''}
+              ${d.cols.temCabecalho ? ' · cabeçalho reconhecido' : ' · sem cabeçalho, usei a ordem empresa / CNPJ / responsável / valor / vendedora'}
+            </div>
+            <div class="table-scroll import-previa">
+              <table class="table-plain">
+                <thead><tr><th>Empresa</th><th>CNPJ</th><th>Responsável</th><th class="num">Valor</th><th>Vendedora</th><th></th></tr></thead>
+                <tbody>${previa.map(function(i){
+                  return `<tr class="${i.aviso ? 'row-pending' : ''}">
+                    <td>${esc(i.nome)}</td>
+                    <td>${esc(formatCnpj(i.cnpj)) || '—'}</td>
+                    <td>${esc(i.responsavel) || '—'}</td>
+                    <td class="num">${i.valor === null ? '—' : fmtMoney(i.valor)}</td>
+                    <td>${esc(i.vendedora) || '—'}</td>
+                    <td>${i.aviso ? `<span class="import-alerta">${esc(i.aviso)}</span>` : '✓'}</td>
+                  </tr>`;
+                }).join('')}</tbody>
+              </table>
+            </div>
+            ${d.itens.length > previa.length ? `<div class="import-resumo">…e mais ${d.itens.length - previa.length} linha${d.itens.length - previa.length === 1 ? '' : 's'}.</div>` : ''}
+            ${problemas.length ? `<div class="import-resumo import-alerta">Linhas duplicadas (mesma empresa e CNPJ já cadastrados) não são importadas de novo; CNPJ incompleto importa mesmo assim, pra corrigir depois.</div>` : ''}
+          ` : ''}
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-ghost" onclick="voltarParaEmpresasCurso(${m.rowId})">Voltar</button>
+            <button class="modal-btn modal-btn-primary" ${novos.length ? '' : 'disabled'} onclick="confirmarImportacaoEmpresas()">
+              ${novos.length ? 'Importar ' + novos.length + (novos.length===1?' empresa':' empresas') : 'Importar'}
+            </button>
+          </div>
+        </div>
+      </div>`;
   }
   if(m.type === 'detalhe-fechamento'){
     const total = m.linhas.reduce(function(a,l){ return a + l.comissao; }, 0);
@@ -7715,6 +7861,17 @@ function notasDoAno(){
   ENTITY_KEYS.forEach(function(key){
     const campo = ENTITIES[key].fields[0].key;
     state[key].rows.filter(noAno).forEach(function(r){
+      // Curso com empresas cadastradas: uma nota por empresa, não uma pro
+      // curso inteiro — é cada empresa que recebe sua própria nota fiscal.
+      if(ENTITIES[key].hasEmpresas && Array.isArray(r.empresas) && r.empresas.length){
+        r.empresas.forEach(function(e){
+          out.push({mes:r.mes, origem:ENTITIES[key].tabLabel,
+                    nome:(r[campo]||'—') + ' — ' + (e.nome||'empresa sem nome') + (e.cnpj ? ' (CNPJ ' + formatCnpj(e.cnpj) + ')' : ''),
+                    valor:Number(e.valor)||0, pago:r.pago, mesPagamento:r.mesPagamento, forma:r.formaPagamento||'',
+                    tabela:'lancamento_empresas', entKey:'', id:e.id, emitida:!!e.notaEmitida, emitidaEm:e.notaEmitidaEm||null});
+        });
+        return;
+      }
       out.push({mes:r.mes, origem:ENTITIES[key].tabLabel, nome:r[campo] || '—', valor:Number(r.valorContrato)||0,
                 pago:r.pago, mesPagamento:r.mesPagamento, forma:r.formaPagamento||'',
                 tabela:'lancamentos', entKey:key, id:r.id, emitida:!!r.notaEmitida, emitidaEm:r.notaEmitidaEm||null});
@@ -7738,11 +7895,21 @@ function notasDoAno(){
 let notaFiltro = 'Todas';   // 'Todas' | 'Pendentes' | 'Emitidas'
 function setNotaFiltro(f){ notaFiltro = f; render(); }
 
+function acharEmpresaPorId(id){
+  for(let i = 0; i < state.cursos.rows.length; i++){
+    const e = (state.cursos.rows[i].empresas||[]).find(function(x){ return x.id === id; });
+    if(e) return e;
+  }
+  return null;
+}
+
 async function toggleNotaEmitida(tabela, id, entKey){
   if(!isAdmin && !isFinanceiro) return;
   const alvo = tabela === 'vendas'
     ? rows.find(function(r){ return r.id === id; })
-    : (state[entKey] ? state[entKey].rows.find(function(r){ return r.id === id; }) : null);
+    : tabela === 'lancamento_empresas'
+      ? acharEmpresaPorId(id)
+      : (state[entKey] ? state[entKey].rows.find(function(r){ return r.id === id; }) : null);
   if(!alvo) return;
   const novo = !alvo.notaEmitida;
   alvo.notaEmitida = novo;
@@ -8734,7 +8901,10 @@ function renderEntitySection(key){
             const seloInCompany = (key === 'cursos' && fi === 0 && row.inCompany) ? '<span class="selo-incompany">🏢 In Company</span>' : '';
             const seloRenovacao = (fi === 0 && row.renovacao) ? '<span class="selo-renovacao" title="Renovação: vale comissão, mas não é contrato novo">♻️ Renovação</span>' : '';
             const seloUpgrade = (fi === 0 && row.upgrade) ? '<span class="selo-upgrade" title="Upgrade: cliente que subiu de plano">⬆️ Upgrade</span>' : '';
-            cells += `<td${fi===0?' class="col-nome"':''}><input type="text" data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}${seloRenovacao}${seloUpgrade}</td>`;
+            const dEmp = (cfg.hasEmpresas && fi === 0 && row.empresas && row.empresas.length) ? resumoEmpresas(row) : null;
+            const seloEmpresas = dEmp
+              ? `<span class="selo-empresas" title="${dEmp.fecha ? 'Soma das empresas confere com o valor total' : esc(dEmp.rotuloDiferenca)}">🧾 ${row.empresas.length} empresa${row.empresas.length===1?'':'s'}</span>` : '';
+            cells += `<td${fi===0?' class="col-nome"':''}><input type="text" data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}${seloRenovacao}${seloUpgrade}${seloEmpresas}</td>`;
             if(f.key === "formaPagamento" && cfg.hasPagamento){
               cells += `<td class="pagamento-cell">
                 <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" onchange="onPagamentoToggle(this,'${key}')" /><span>${row.pago?'Pago':'Pendente'}</span></label>
@@ -8789,6 +8959,7 @@ function renderEntitySection(key){
         cells += `<td class="del-cell">
           <div class="row-actions">
             ${key === 'cursos' ? `<button class="action-btn${row.inCompany?' ativo-incompany':''}" title="${row.inCompany?'Curso In Company — clique para desmarcar':'Marcar como curso In Company (entra no ranking)'}" onclick="toggleCursoInCompany(${row.id})">🏢</button>` : ''}
+            ${cfg.hasEmpresas && (isAdmin || isFinanceiro) ? `<button class="action-btn${row.empresas && row.empresas.length ? ' ativo' : ''}" title="Empresas inscritas neste curso — dados pra emitir nota fiscal" onclick="abrirEmpresasCurso(${row.id})">🧾</button>` : ''}
             <button class="action-btn" title="Adicionar mais um vendedor" onclick="addExtraVendedorSlot('${key}',${row.id})">➕</button>
             <button class="action-btn" title="Duplicar" onclick="duplicateEntityRow('${key}',${row.id})">⎘</button>
             <button class="action-btn" title="Parcelar em vários meses" onclick="parcelarEntityRow('${key}',${row.id})">🧩</button>
@@ -9685,6 +9856,252 @@ function confirmarImportacaoConsultoria(){
   persistEntityRows('consultoria');
   closeModal();
   showAlert(novos.length + (novos.length === 1 ? ' lançamento importado.' : ' lançamentos importados.'));
+}
+
+/* ---------- Empresas inscritas num curso só (dados pra nota fiscal) ----------
+   Um lançamento de Cursos é o faturamento TOTAL — só que às vezes vem de
+   várias empresas inscritas juntas, cada uma com sua própria nota fiscal
+   (CNPJ, responsável, valor). Isso é outra coisa que "quem vendeu" e que
+   comissão: fica numa tabela própria (lancamento_empresas), gravada linha
+   a linha — nunca pelo ciclo de persistEntityRows, porque esse sempre
+   reenvia o lançamento inteiro com o que a aba tem em memória, e ia
+   sobrescrever o visto de "nota emitida" que o financeiro grava por fora
+   (mesmo bug que já pegou o fechamento — aprendido, não repetido aqui). */
+
+function empresasRowAtual(){
+  if(!modalState || (modalState.type !== 'empresas-curso' && modalState.type !== 'import-empresas-curso')) return null;
+  return state.cursos.rows.find(function(r){ return r.id === modalState.rowId; }) || null;
+}
+
+function resumoEmpresas(row){
+  const lista = row.empresas || [];
+  const somado = lista.reduce(function(a,x){ return a + (Number(x.valor)||0); }, 0);
+  const total = Number(row.valorContrato) || 0;
+  const diferenca = total - somado;
+  const fecha = lista.length > 0 && Math.abs(diferenca) < 0.005;
+  return {
+    lista: lista, somado: somado, total: total, diferenca: diferenca, fecha: fecha,
+    rotuloDiferenca: diferenca > 0 ? ('falta ' + fmtMoney(diferenca))
+                   : (diferenca < 0 ? (fmtMoney(-diferenca) + ' a mais') : 'confere'),
+  };
+}
+
+function abrirEmpresasCurso(rowId){
+  if(!isAdmin && !isFinanceiro) return;
+  modalState = { type:'empresas-curso', rowId: rowId };
+  render();
+}
+
+const empresaTimers = {};
+function persistEmpresaCurso(empresa, rowId){
+  if(!isAdmin) return;
+  const tk = 'empresa-' + empresa.id;
+  if(empresaTimers[tk]) clearTimeout(empresaTimers[tk]);
+  empresaTimers[tk] = setTimeout(function(){
+    (async function(){
+      saving = true; updateSaveStatus();
+      try{
+        // nota_emitida/nota_emitida_em nunca vão nesse payload — ver nota acima.
+        await sbUpsert('lancamento_empresas', [{
+          id: empresa.id, lancamento_id: rowId,
+          nome: empresa.nome||'', cnpj: cnpjDigitos(empresa.cnpj), responsavel: empresa.responsavel||'',
+          valor: numOrNull(empresa.valor), observacoes: empresa.observacoes||'',
+        }], 'id');
+        saveError = false;
+      }catch(e){ console.error('Falha ao salvar empresa do curso', e); saveError = true; }
+      finally{ saving = false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+
+function addEmpresaCurso(){
+  const r = empresasRowAtual();
+  if(!r || !isAdmin) return;
+  if(!Array.isArray(r.empresas)) r.empresas = [];
+  const nova = { id: Date.now() + r.empresas.length, nome:'', cnpj:'', responsavel:'', valor:null, observacoes:'', notaEmitida:false, notaEmitidaEm:null };
+  r.empresas.push(nova);
+  persistEmpresaCurso(nova, r.id);
+  render();
+}
+
+function removeEmpresaCurso(empresaId){
+  const r = empresasRowAtual();
+  if(!r || !isAdmin) return;
+  r.empresas = (r.empresas||[]).filter(function(x){ return x.id !== empresaId; });
+  if(empresaTimers['empresa-'+empresaId]) clearTimeout(empresaTimers['empresa-'+empresaId]);
+  sbDeleteAll('lancamento_empresas', 'id=eq.'+empresaId).catch(function(e){ console.error('Falha ao excluir empresa', e); });
+  render();
+}
+
+function updateEmpresaCurso(empresaId, campo, valor){
+  const r = empresasRowAtual();
+  if(!r || !isAdmin) return;
+  const item = (r.empresas||[]).find(function(x){ return x.id === empresaId; });
+  if(!item) return;
+  item[campo] = campo === 'valor' ? numOrNull(valor) : valor;
+  persistEmpresaCurso(item, r.id);
+  if(campo === 'cnpj'){
+    const aviso = document.getElementById('empresa-cnpj-aviso-'+empresaId);
+    if(aviso) aviso.textContent = (cnpjDigitos(item.cnpj) && !cnpjValido(item.cnpj)) ? 'CNPJ incompleto' : '';
+  }
+}
+
+/* Enquanto digita o valor, só atualiza o rodapé de conferência — sem
+   re-render, pra não perder o cursor do campo (mesmo padrão de
+   onDivisaoValorInput). */
+function onEmpresaValorInput(el, empresaId){
+  const r = empresasRowAtual();
+  if(!r) return;
+  const item = (r.empresas||[]).find(function(x){ return x.id === empresaId; });
+  if(!item) return;
+  item.valor = numOrNull(el.value);
+  const d = resumoEmpresas(r);
+  const alvo = document.getElementById('empresas-conferencia');
+  if(alvo){
+    alvo.className = 'divisao-conferencia' + (d.fecha ? ' ok' : '');
+    alvo.innerHTML = 'Somado: <b>' + fmtMoney(d.somado) + '</b> de ' + fmtMoney(d.total)
+      + (d.fecha ? ' — confere' : ' — <b>' + esc(d.rotuloDiferenca) + '</b>');
+  }
+  persistEmpresaCurso(item, r.id);
+}
+
+function mapearColunasEmpresas(linhas){
+  const cab = linhas[0] || [];
+  const rotulos = cab.map(semAcento);
+  const acha = function(re){ return rotulos.findIndex(function(r){ return re.test(r); }); };
+  const nome = acha(/empresa|razao|nome/);
+  const cnpj = acha(/cnpj/);
+  if(nome >= 0 && (cnpj >= 0 || acha(/valor/) >= 0)){
+    return {
+      temCabecalho: true, nome: nome, cnpj: cnpj,
+      responsavel: acha(/respons/),
+      valor: acha(/valor|mensalidade|contrato/),
+      vendedora: acha(/vended/),
+      observacoes: acha(/observa/),
+    };
+  }
+  return { temCabecalho: false, nome: 0, cnpj: 1, responsavel: 2, valor: 3, vendedora: 4, observacoes: 5 };
+}
+
+function prepararImportacaoEmpresas(linhas, rowId){
+  if(!linhas.length) throw new Error('A planilha veio vazia.');
+  const r = state.cursos.rows.find(function(x){ return x.id === rowId; });
+  const cols = mapearColunasEmpresas(linhas);
+  const corpo = cols.temCabecalho ? linhas.slice(1) : linhas;
+  const celula = function(l, idx){ return idx >= 0 && l[idx] !== null && l[idx] !== undefined ? String(l[idx]).trim() : ''; };
+
+  const existentes = {};
+  (r && r.empresas || []).forEach(function(e){
+    existentes[semAcento(e.nome) + '|' + cnpjDigitos(e.cnpj)] = true;
+  });
+
+  const itens = [];
+  corpo.forEach(function(l){
+    const nome = celula(l, cols.nome);
+    if(!nome) return;
+    const cnpj = celula(l, cols.cnpj);
+    const chave = semAcento(nome) + '|' + cnpjDigitos(cnpj);
+    const duplicada = !!existentes[chave];
+    if(!duplicada) existentes[chave] = true;
+    itens.push({
+      nome: nome, cnpj: cnpj, responsavel: celula(l, cols.responsavel),
+      valor: cols.valor >= 0 ? valorDaPlanilha(l[cols.valor]) : null,
+      vendedora: celula(l, cols.vendedora),
+      observacoes: celula(l, cols.observacoes),
+      duplicada: duplicada,
+      aviso: duplicada ? 'já cadastrada' : (cnpj && !cnpjValido(cnpj) ? 'CNPJ incompleto' : ''),
+    });
+  });
+  if(!itens.length) throw new Error('Não achei nenhuma empresa na planilha. Confira se a coluna de nome tem dado.');
+  return { itens: itens, cols: cols };
+}
+
+function abrirImportarEmpresasCurso(rowId){
+  if(!isAdmin) return;
+  modalState = { type:'import-empresas-curso', rowId: rowId, dados:null, erro:'', lendo:false };
+  render();
+}
+function voltarParaEmpresasCurso(rowId){
+  modalState = { type:'empresas-curso', rowId: rowId };
+  render();
+}
+async function onArquivoEmpresas(input){
+  const arq = input.files && input.files[0];
+  if(!arq) return;
+  modalState.lendo = true; modalState.erro = ''; render();
+  try{
+    let linhas;
+    if(/\.(csv|txt|tsv)$/i.test(arq.name)){
+      let texto = await arq.text();
+      if(texto.indexOf('�') >= 0){
+        texto = new TextDecoder('iso-8859-1').decode(await arq.arrayBuffer());
+      }
+      linhas = linhasDeTexto(texto);
+    } else {
+      linhas = await linhasDoXlsx(await arq.arrayBuffer());
+    }
+    modalState.dados = prepararImportacaoEmpresas(linhas, modalState.rowId);
+    modalState.erro = '';
+  }catch(e){
+    console.error(e);
+    modalState.dados = null;
+    modalState.erro = e && e.message ? e.message : 'Não consegui ler esse arquivo.';
+  }
+  modalState.lendo = false;
+  render();
+}
+function onColarEmpresas(el){
+  const texto = el.value;
+  if(!String(texto).trim()){ modalState.dados = null; modalState.erro = ''; render(); return; }
+  try{
+    modalState.dados = prepararImportacaoEmpresas(linhasDeTexto(texto), modalState.rowId);
+    modalState.erro = '';
+  }catch(e){
+    modalState.dados = null;
+    modalState.erro = e && e.message ? e.message : 'Não consegui ler o que foi colado.';
+  }
+  render();
+}
+function confirmarImportacaoEmpresas(){
+  const m = modalState;
+  if(!m || !m.dados) return;
+  const r = state.cursos.rows.find(function(x){ return x.id === m.rowId; });
+  if(!r) return;
+  const novos = m.dados.itens.filter(function(i){ return !i.duplicada; });
+  if(!novos.length){ showAlert('Não há nada novo para importar.'); return; }
+  if(!Array.isArray(r.empresas)) r.empresas = [];
+  if(!Array.isArray(r.vendasVendedoras)) r.vendasVendedoras = [];
+
+  // Enquanto lança a empresa, já junta quanto cada vendedora vendeu (pra
+  // não digitar de novo lá em "Vendas por vendedora") — soma em cima do
+  // que já tinha, nunca substitui.
+  const somaPorVendedora = {};
+  novos.forEach(function(i, idx){
+    const nova = {
+      id: Date.now() + r.empresas.length + idx, nome: i.nome, cnpj: i.cnpj, responsavel: i.responsavel,
+      valor: i.valor, observacoes: i.observacoes, notaEmitida: false, notaEmitidaEm: null,
+    };
+    r.empresas.push(nova);
+    persistEmpresaCurso(nova, r.id);
+    if(i.vendedora){
+      somaPorVendedora[i.vendedora] = (somaPorVendedora[i.vendedora]||0) + (Number(i.valor)||0);
+    }
+  });
+  Object.keys(somaPorVendedora).forEach(function(v){
+    const existente = r.vendasVendedoras.find(function(x){ return name_matches_client(x.vendedor, v); });
+    if(existente) existente.valor = (Number(existente.valor)||0) + somaPorVendedora[v];
+    else r.vendasVendedoras.push({ id: Date.now() + r.vendasVendedoras.length, vendedor: v, valor: somaPorVendedora[v] });
+  });
+
+  // "Total previsto" do curso passa a ser a soma de TODAS as empresas
+  // cadastradas nele — as que já existiam mais as que acabaram de entrar.
+  r.valorContrato = r.empresas.reduce(function(a,e){ return a + (Number(e.valor)||0); }, 0);
+  persistEntityRows('cursos');
+
+  modalState = { type:'empresas-curso', rowId: r.id };
+  render();
+  showAlert(novos.length + (novos.length === 1 ? ' empresa importada. ' : ' empresas importadas. ')
+    + 'Valor total do curso atualizado pra ' + fmtMoney(r.valorContrato) + '.');
 }
 
 /* ---------- Renovação renovada vira venda na aba Sistema ----------
