@@ -1520,6 +1520,9 @@ const ENTITIES = {
     commissionLabel: "Valor da Comissão",
     defaultVendors: ["Soraya","Angela","Rios","Uilma","Luciana"],
     hasPagamento: true,
+    // Um contrato de consultoria pode ter várias empresas dentro (grupo
+    // econômico, por exemplo), cada uma com sua própria nota fiscal.
+    hasEmpresas: true,
   },
   publicos: {
     tabLabel: "Consultorias e site para Órgãos Públicos",
@@ -1538,6 +1541,9 @@ const ENTITIES = {
     defaultVendors: ["Soraya","Angela","Rios","Uilma","Luciana"],
     hasPagamento: true,
     hasVendedorResponsavel: true,
+    // Um órgão pode ter várias entidades/empresas dentro do mesmo
+    // contrato, cada uma com sua própria nota fiscal.
+    hasEmpresas: true,
   },
   cursos: {
     tabLabel: "Cursos",
@@ -4502,7 +4508,9 @@ function renderModal(){
   if(m.type === 'empresas-curso'){
     const r = empresasRowAtual();
     if(!r) return '';
-    const nome = r.curso || 'este curso';
+    const entKey = m.entKey;
+    const mainField = ENTITIES[entKey].fields[0].key;
+    const nome = r[mainField] || 'este lançamento';
     const d = resumoEmpresas(r);
     const podeVisar = isAdmin || isFinanceiro;
     const linhas = d.lista.length ? d.lista.map(function(e){
@@ -4547,9 +4555,9 @@ function renderModal(){
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
         <div class="modal-box modal-box-xwide">
-          <div class="modal-msg">Empresas inscritas — ${esc(nome)}</div>
+          <div class="modal-msg">Empresas — ${esc(nome)}</div>
           <div class="divisao-explica">
-            O faturamento deste curso é de <b>${fmtMoney(d.total)}</b>. Liste aqui cada empresa inscrita, com o
+            O valor deste lançamento é de <b>${fmtMoney(d.total)}</b>. Liste aqui cada empresa dele, com o
             que precisa pra emitir a nota fiscal dela — CNPJ, responsável e valor. O financeiro marca "Emitida"
             conforme for emitindo, igual às outras notas do sistema.
           </div>
@@ -4564,7 +4572,7 @@ function renderModal(){
           ${isAdmin ? `
             <div style="display:flex;gap:8px;margin-top:10px;">
               <button class="modal-btn modal-btn-ghost" style="flex:1;" onclick="addEmpresaCurso()">+ Adicionar empresa</button>
-              <button class="modal-btn modal-btn-ghost" style="flex:1;" onclick="abrirImportarEmpresasCurso(${r.id})">📄 Importar planilha</button>
+              <button class="modal-btn modal-btn-ghost" style="flex:1;" onclick="abrirImportarEmpresasCurso('${entKey}',${r.id})">📄 Importar planilha</button>
             </div>` : ''}
           <div id="empresas-conferencia" class="divisao-conferencia${d.fecha?' ok':''}">
             Somado: <b>${fmtMoney(d.somado)}</b> de ${fmtMoney(d.total)}${d.fecha ? ' — confere' : ' — <b>'+esc(d.rotuloDiferenca)+'</b>'}
@@ -4579,17 +4587,18 @@ function renderModal(){
     const novos = d ? d.itens.filter(function(i){ return !i.duplicada; }) : [];
     const problemas = d ? d.itens.filter(function(i){ return i.aviso; }) : [];
     const previa = d ? d.itens.slice(0, 60) : [];
+    const temVendasPorVendedor = ENTITIES[m.entKey].hasVendasPorVendedor;
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
         <div class="modal-box modal-box-xwide">
           <div class="modal-msg">Importar empresas da planilha</div>
           <div class="painel-equipe-nota">
             Reconheço colunas com estes nomes (com ou sem acento, em qualquer ordem):
-            <b>Empresa</b>, <b>CNPJ</b>, <b>Responsável</b>, <b>Valor</b> e <b>Vendedora</b> (opcional). Sem
+            <b>Empresa</b>, <b>CNPJ</b>, <b>Responsável</b> e <b>Valor</b>${temVendasPorVendedor ? ', e <b>Vendedora</b> (opcional)' : ''}. Sem
             cabeçalho reconhecido, uso essa mesma ordem. Aceito <b>.xlsx</b> e <b>.csv</b>; se preferir,
             selecione as células no Excel, copie com Ctrl+C e cole no campo de baixo.
-            Trazendo a vendedora, o valor de cada empresa já soma em "Vendas por vendedora" — e o valor total
-            do curso vira a soma de todas as empresas cadastradas nele.
+            ${temVendasPorVendedor ? 'Trazendo a vendedora, o valor de cada empresa já soma em "Vendas por vendedora" — e o ' : 'O '}valor total
+            do lançamento vira a soma de todas as empresas cadastradas nele.
           </div>
           <label class="import-arquivo">
             <input type="file" accept=".xlsx,.csv,.txt,.tsv" onchange="onArquivoEmpresas(this)" />
@@ -4607,14 +4616,14 @@ function renderModal(){
             </div>
             <div class="table-scroll import-previa">
               <table class="table-plain">
-                <thead><tr><th>Empresa</th><th>CNPJ</th><th>Responsável</th><th class="num">Valor</th><th>Vendedora</th><th></th></tr></thead>
+                <thead><tr><th>Empresa</th><th>CNPJ</th><th>Responsável</th><th class="num">Valor</th>${temVendasPorVendedor ? '<th>Vendedora</th>' : ''}<th></th></tr></thead>
                 <tbody>${previa.map(function(i){
                   return `<tr class="${i.aviso ? 'row-pending' : ''}">
                     <td>${esc(i.nome)}</td>
                     <td>${esc(formatCnpj(i.cnpj)) || '—'}</td>
                     <td>${esc(i.responsavel) || '—'}</td>
                     <td class="num">${i.valor === null ? '—' : fmtMoney(i.valor)}</td>
-                    <td>${esc(i.vendedora) || '—'}</td>
+                    ${temVendasPorVendedor ? `<td>${esc(i.vendedora) || '—'}</td>` : ''}
                     <td>${i.aviso ? `<span class="import-alerta">${esc(i.aviso)}</span>` : '✓'}</td>
                   </tr>`;
                 }).join('')}</tbody>
@@ -4624,7 +4633,7 @@ function renderModal(){
             ${problemas.length ? `<div class="import-resumo import-alerta">Linhas duplicadas (mesma empresa e CNPJ já cadastrados) não são importadas de novo; CNPJ incompleto importa mesmo assim, pra corrigir depois.</div>` : ''}
           ` : ''}
           <div class="modal-actions">
-            <button class="modal-btn modal-btn-ghost" onclick="voltarParaEmpresasCurso(${m.rowId})">Voltar</button>
+            <button class="modal-btn modal-btn-ghost" onclick="voltarParaEmpresasCurso('${m.entKey}',${m.rowId})">Voltar</button>
             <button class="modal-btn modal-btn-primary" ${novos.length ? '' : 'disabled'} onclick="confirmarImportacaoEmpresas()">
               ${novos.length ? 'Importar ' + novos.length + (novos.length===1?' empresa':' empresas') : 'Importar'}
             </button>
@@ -8001,9 +8010,14 @@ let notaFiltro = 'Todas';   // 'Todas' | 'Pendentes' | 'Emitidas'
 function setNotaFiltro(f){ notaFiltro = f; render(); }
 
 function acharEmpresaPorId(id){
-  for(let i = 0; i < state.cursos.rows.length; i++){
-    const e = (state.cursos.rows[i].empresas||[]).find(function(x){ return x.id === id; });
-    if(e) return e;
+  for(let k = 0; k < ENTITY_KEYS.length; k++){
+    const key = ENTITY_KEYS[k];
+    if(!ENTITIES[key].hasEmpresas) continue;
+    const entRows = state[key].rows;
+    for(let i = 0; i < entRows.length; i++){
+      const e = (entRows[i].empresas||[]).find(function(x){ return x.id === id; });
+      if(e) return e;
+    }
   }
   return null;
 }
@@ -9023,8 +9037,8 @@ function renderEntitySection(key){
             const dEmp = (cfg.hasEmpresas && fi === 0 && temEmpresas) ? resumoEmpresas(row) : null;
             const seloEmpresas = (cfg.hasEmpresas && fi === 0 && (isAdmin || isFinanceiro))
               ? (dEmp
-                  ? `<button type="button" class="selo-empresas" title="${dEmp.fecha ? 'Soma das empresas confere com o valor total — clique pra ver' : esc(dEmp.rotuloDiferenca)+' — clique pra ver'}" onclick="abrirEmpresasCurso(${row.id})">🧾 ${row.empresas.length} empresa${row.empresas.length===1?'':'s'}</button>`
-                  : `<button type="button" class="selo-empresas selo-empresas-vazio" title="Nenhuma empresa cadastrada ainda — clique pra adicionar" onclick="abrirEmpresasCurso(${row.id})">🧾 empresas</button>`)
+                  ? `<button type="button" class="selo-empresas" title="${dEmp.fecha ? 'Soma das empresas confere com o valor total — clique pra ver' : esc(dEmp.rotuloDiferenca)+' — clique pra ver'}" onclick="abrirEmpresasCurso('${key}',${row.id})">🧾 ${row.empresas.length} empresa${row.empresas.length===1?'':'s'}</button>`
+                  : `<button type="button" class="selo-empresas selo-empresas-vazio" title="Nenhuma empresa cadastrada ainda — clique pra adicionar" onclick="abrirEmpresasCurso('${key}',${row.id})">🧾 empresas</button>`)
               : '';
             cells += `<td${fi===0?' class="col-nome"':''}><input type="text" data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}${seloRenovacao}${seloUpgrade}${seloEmpresas}</td>`;
             if(f.key === "formaPagamento" && cfg.hasPagamento){
@@ -9991,7 +10005,8 @@ function confirmarImportacaoConsultoria(){
 
 function empresasRowAtual(){
   if(!modalState || (modalState.type !== 'empresas-curso' && modalState.type !== 'import-empresas-curso')) return null;
-  return state.cursos.rows.find(function(r){ return r.id === modalState.rowId; }) || null;
+  const st = state[modalState.entKey];
+  return st ? (st.rows.find(function(r){ return r.id === modalState.rowId; }) || null) : null;
 }
 
 function resumoEmpresas(row){
@@ -10007,9 +10022,9 @@ function resumoEmpresas(row){
   };
 }
 
-function abrirEmpresasCurso(rowId){
+function abrirEmpresasCurso(entKey, rowId){
   if(!isAdmin && !isFinanceiro) return;
-  modalState = { type:'empresas-curso', rowId: rowId };
+  modalState = { type:'empresas-curso', entKey: entKey, rowId: rowId };
   render();
 }
 
@@ -10075,10 +10090,18 @@ async function anexarNotaArquivo(tabela, id, entKey, input){
 async function verNotaAnexada(tabela, id, entKey){
   const alvo = acharAlvoNota(tabela, id, entKey);
   if(!alvo || !alvo.notaArquivoPath) return;
+  // A aba precisa abrir NA HORA do clique, ainda síncrona — se abrir só
+  // depois do "await" da URL assinada, o navegador não reconhece mais
+  // como ação direta da pessoa e bloqueia como pop-up (sem erro nenhum
+  // aparecer, o anexo simplesmente "não abre"). Por isso abre em branco
+  // primeiro e só troca o endereço quando a URL chega.
+  const aba = window.open('', '_blank');
   try{
     const url = await sbSignedUrl('notas-fiscais', alvo.notaArquivoPath, 120);
-    window.open(url, '_blank');
+    if(aba) aba.location.href = url;
+    else window.open(url, '_blank');
   }catch(e){
+    if(aba) aba.close();
     console.error('Falha ao abrir a nota anexada', e);
     showAlert('Não consegui abrir o arquivo anexado. Tente de novo.');
   }
@@ -10174,9 +10197,9 @@ function mapearColunasEmpresas(linhas){
   return { temCabecalho: false, nome: 0, cnpj: 1, responsavel: 2, valor: 3, vendedora: 4, observacoes: 5 };
 }
 
-function prepararImportacaoEmpresas(linhas, rowId){
+function prepararImportacaoEmpresas(linhas, entKey, rowId){
   if(!linhas.length) throw new Error('A planilha veio vazia.');
-  const r = state.cursos.rows.find(function(x){ return x.id === rowId; });
+  const r = state[entKey].rows.find(function(x){ return x.id === rowId; });
   const cols = mapearColunasEmpresas(linhas);
   const corpo = cols.temCabecalho ? linhas.slice(1) : linhas;
   const celula = function(l, idx){ return idx >= 0 && l[idx] !== null && l[idx] !== undefined ? String(l[idx]).trim() : ''; };
@@ -10207,13 +10230,13 @@ function prepararImportacaoEmpresas(linhas, rowId){
   return { itens: itens, cols: cols };
 }
 
-function abrirImportarEmpresasCurso(rowId){
+function abrirImportarEmpresasCurso(entKey, rowId){
   if(!isAdmin) return;
-  modalState = { type:'import-empresas-curso', rowId: rowId, dados:null, erro:'', lendo:false };
+  modalState = { type:'import-empresas-curso', entKey: entKey, rowId: rowId, dados:null, erro:'', lendo:false };
   render();
 }
-function voltarParaEmpresasCurso(rowId){
-  modalState = { type:'empresas-curso', rowId: rowId };
+function voltarParaEmpresasCurso(entKey, rowId){
+  modalState = { type:'empresas-curso', entKey: entKey, rowId: rowId };
   render();
 }
 async function onArquivoEmpresas(input){
@@ -10231,7 +10254,7 @@ async function onArquivoEmpresas(input){
     } else {
       linhas = await linhasDoXlsx(await arq.arrayBuffer());
     }
-    modalState.dados = prepararImportacaoEmpresas(linhas, modalState.rowId);
+    modalState.dados = prepararImportacaoEmpresas(linhas, modalState.entKey, modalState.rowId);
     modalState.erro = '';
   }catch(e){
     console.error(e);
@@ -10245,7 +10268,7 @@ function onColarEmpresas(el){
   const texto = el.value;
   if(!String(texto).trim()){ modalState.dados = null; modalState.erro = ''; render(); return; }
   try{
-    modalState.dados = prepararImportacaoEmpresas(linhasDeTexto(texto), modalState.rowId);
+    modalState.dados = prepararImportacaoEmpresas(linhasDeTexto(texto), modalState.entKey, modalState.rowId);
     modalState.erro = '';
   }catch(e){
     modalState.dados = null;
@@ -10256,16 +10279,18 @@ function onColarEmpresas(el){
 function confirmarImportacaoEmpresas(){
   const m = modalState;
   if(!m || !m.dados) return;
-  const r = state.cursos.rows.find(function(x){ return x.id === m.rowId; });
+  const cfg = ENTITIES[m.entKey];
+  const r = state[m.entKey].rows.find(function(x){ return x.id === m.rowId; });
   if(!r) return;
   const novos = m.dados.itens.filter(function(i){ return !i.duplicada; });
   if(!novos.length){ showAlert('Não há nada novo para importar.'); return; }
   if(!Array.isArray(r.empresas)) r.empresas = [];
-  if(!Array.isArray(r.vendasVendedoras)) r.vendasVendedoras = [];
+  if(cfg.hasVendasPorVendedor && !Array.isArray(r.vendasVendedoras)) r.vendasVendedoras = [];
 
   // Enquanto lança a empresa, já junta quanto cada vendedora vendeu (pra
   // não digitar de novo lá em "Vendas por vendedora") — soma em cima do
-  // que já tinha, nunca substitui.
+  // que já tinha, nunca substitui. Só existe pra Cursos: as outras abas
+  // não têm "Vendas por vendedora".
   const somaPorVendedora = {};
   novos.forEach(function(i, idx){
     const nova = {
@@ -10274,25 +10299,28 @@ function confirmarImportacaoEmpresas(){
     };
     r.empresas.push(nova);
     persistEmpresaCurso(nova, r.id);
-    if(i.vendedora){
+    if(cfg.hasVendasPorVendedor && i.vendedora){
       somaPorVendedora[i.vendedora] = (somaPorVendedora[i.vendedora]||0) + (Number(i.valor)||0);
     }
   });
-  Object.keys(somaPorVendedora).forEach(function(v){
-    const existente = r.vendasVendedoras.find(function(x){ return name_matches_client(x.vendedor, v); });
-    if(existente) existente.valor = (Number(existente.valor)||0) + somaPorVendedora[v];
-    else r.vendasVendedoras.push({ id: Date.now() + r.vendasVendedoras.length, vendedor: v, valor: somaPorVendedora[v] });
-  });
+  if(cfg.hasVendasPorVendedor){
+    Object.keys(somaPorVendedora).forEach(function(v){
+      const existente = r.vendasVendedoras.find(function(x){ return name_matches_client(x.vendedor, v); });
+      if(existente) existente.valor = (Number(existente.valor)||0) + somaPorVendedora[v];
+      else r.vendasVendedoras.push({ id: Date.now() + r.vendasVendedoras.length, vendedor: v, valor: somaPorVendedora[v] });
+    });
+  }
 
-  // "Total previsto" do curso passa a ser a soma de TODAS as empresas
-  // cadastradas nele — as que já existiam mais as que acabaram de entrar.
+  // "Total previsto" do lançamento passa a ser a soma de TODAS as
+  // empresas cadastradas nele — as que já existiam mais as que acabaram
+  // de entrar.
   r.valorContrato = r.empresas.reduce(function(a,e){ return a + (Number(e.valor)||0); }, 0);
-  persistEntityRows('cursos');
+  persistEntityRows(m.entKey);
 
-  modalState = { type:'empresas-curso', rowId: r.id };
+  modalState = { type:'empresas-curso', entKey: m.entKey, rowId: r.id };
   render();
   showAlert(novos.length + (novos.length === 1 ? ' empresa importada. ' : ' empresas importadas. ')
-    + 'Valor total do curso atualizado pra ' + fmtMoney(r.valorContrato) + '.');
+    + 'Valor total atualizado pra ' + fmtMoney(r.valorContrato) + '.');
 }
 
 /* ---------- Renovação renovada vira venda na aba Sistema ----------
