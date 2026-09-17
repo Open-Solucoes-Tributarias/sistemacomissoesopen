@@ -1547,6 +1547,8 @@ const ENTITIES = {
       {key:"valorContrato", label:"Valor do Contrato", type:"number"},
       {key:"professor", label:"Professor", type:"select", options:PROFESSORES_CURSOS},
       {key:"honorarioProfessor", label:"Honorário do Professor", type:"number"},
+      {key:"professor2", label:"Professor 2 (opcional)", type:"select", options:PROFESSORES_CURSOS},
+      {key:"honorarioProfessor2", label:"Honorário do Professor 2", type:"number"},
       {key:"formaPagamento", label:"Forma de Pagamento", type:"text"},
       {key:"observacoes", label:"Observações", type:"text"},
     ],
@@ -2382,6 +2384,7 @@ async function tryLoadFromStorageAsync(){
           parcelaLabel: d.parcela_label,
           vendedorResponsavel: d.vendedor_responsavel || '',
           notaEmitida: !!d.nota_emitida, notaEmitidaEm: d.nota_emitida_em || null,
+          notaArquivoPath: d.nota_arquivo_path || null, notaArquivoNome: d.nota_arquivo_nome || null,
         };
         SELLERS.forEach(function(s){ r[s.key] = null; });
         const sellerVals = bySellerByVenda[d.id] || {};
@@ -2427,11 +2430,12 @@ function persistEntityRows(key){
             in_company: !!r.inCompany, renovacao: !!r.renovacao, upgrade: !!r.upgrade,
             vendedor_responsavel: cfg.hasVendedorResponsavel ? (r.vendedorResponsavel || '') : null,
             professor: r.professor||'', honorario_professor: numOrNull(r.honorarioProfessor),
+            professor2: r.professor2||'', honorario_professor2: numOrNull(r.honorarioProfessor2),
           };
           cfg.fields.forEach(function(f){
             if(f.key === 'valorContrato') row.valor_contrato = numOrNull(r.valorContrato);
             else if(f.key === 'tipo') row.tipo = r.tipo;
-            else if(f.key === 'parceiro' || f.key === 'participacao' || f.key === 'professor' || f.key === 'honorarioProfessor'){ /* já tratados acima, sempre preservados */ }
+            else if(f.key === 'parceiro' || f.key === 'participacao' || f.key === 'professor' || f.key === 'honorarioProfessor' || f.key === 'professor2' || f.key === 'honorarioProfessor2'){ /* já tratados acima, sempre preservados */ }
             else if(f.key === 'formaPagamento') row.forma_pagamento = r.formaPagamento||'';
             else if(f.key === 'colaborador') row.colaborador = r.colaborador||'';
             else if(f.key === 'observacoes') row.observacoes = r.observacoes||'';
@@ -2567,9 +2571,11 @@ async function tryLoadEntityFromStorageAsync(key){
           extraVendedores: extrasByLanc[d.id] || [],
           parcelaLabel: d.parcela_label,
           notaEmitida: !!d.nota_emitida, notaEmitidaEm: d.nota_emitida_em || null,
+          notaArquivoPath: d.nota_arquivo_path || null, notaArquivoNome: d.nota_arquivo_nome || null,
           inCompany: !!d.in_company, renovacao: !!d.renovacao, upgrade: !!d.upgrade,
           parceiro: d.parceiro||'', participacao: d.participacao,
           professor: d.professor||'', honorarioProfessor: d.honorario_professor,
+          professor2: d.professor2||'', honorarioProfessor2: d.honorario_professor2,
         };
         if(cfg.hasVendasPorVendedor) r.vendasVendedoras = divisaoByLanc[d.id] || [];
         if(cfg.hasEmpresas) r.empresas = empresasByLanc[d.id] || [];
@@ -2578,7 +2584,7 @@ async function tryLoadEntityFromStorageAsync(key){
         cfg.fields.forEach(function(f){
           if(f.key === 'valorContrato') r.valorContrato = d.valor_contrato;
           else if(f.key === 'tipo') r.tipo = d.tipo;
-          else if(f.key === 'parceiro' || f.key === 'participacao' || f.key === 'professor' || f.key === 'honorarioProfessor'){ /* já tratados acima, sempre preservados */ }
+          else if(f.key === 'parceiro' || f.key === 'participacao' || f.key === 'professor' || f.key === 'honorarioProfessor' || f.key === 'professor2' || f.key === 'honorarioProfessor2'){ /* já tratados acima, sempre preservados */ }
           else if(f.key === 'formaPagamento') r.formaPagamento = d.forma_pagamento||'';
           else if(f.key === 'colaborador') r.colaborador = d.colaborador||'';
           else if(f.key === 'observacoes') r.observacoes = d.observacoes||'';
@@ -4527,13 +4533,13 @@ function renderModal(){
           <td>${podeVisar
             ? (e.notaArquivoPath
               ? `<span class="anexo-arquivo">
-                   <button type="button" class="anexo-link" title="${esc(e.notaArquivoNome||'')}" onclick="verNotaAnexada(${e.id})">📎 ${esc(e.notaArquivoNome||'arquivo')}</button>
-                   <button type="button" class="anexo-remover" title="Remover anexo" onclick="removerNotaAnexada(${e.id})">✕</button>
+                   <button type="button" class="anexo-link" title="${esc(e.notaArquivoNome||'')}" onclick="verNotaAnexada('lancamento_empresas',${e.id},'')">📎 ${esc(e.notaArquivoNome||'arquivo')}</button>
+                   <button type="button" class="anexo-remover" title="Remover anexo" onclick="removerNotaAnexada('lancamento_empresas',${e.id},'')">✕</button>
                  </span>`
               : `<label class="anexo-upload" title="Anexar PDF ou imagem da nota">
-                   📎 Anexar<input type="file" accept="application/pdf,image/*" onchange="anexarNotaEmpresa(${e.id},this)" />
+                   📎 Anexar<input type="file" accept="application/pdf,image/*" onchange="anexarNotaArquivo('lancamento_empresas',${e.id},'',this)" />
                  </label>`)
-            : (e.notaArquivoPath ? `<button type="button" class="anexo-link" title="${esc(e.notaArquivoNome||'')}" onclick="verNotaAnexada(${e.id})">📎 ${esc(e.notaArquivoNome||'arquivo')}</button>` : '—')}</td>
+            : (e.notaArquivoPath ? `<button type="button" class="anexo-link" title="${esc(e.notaArquivoNome||'')}" onclick="verNotaAnexada('lancamento_empresas',${e.id},'')">📎 ${esc(e.notaArquivoNome||'arquivo')}</button>` : '—')}</td>
           ${isAdmin ? `<td><button class="action-btn danger" title="Remover" onclick="removeEmpresaCurso(${e.id})">✕</button></td>` : ''}
         </tr>`;
     }).join('') : `<tr class="empty-row"><td colspan="${isAdmin?7:6}"><span class="empty-icon">◌</span>Nenhuma empresa cadastrada ainda.</td></tr>`;
@@ -5498,6 +5504,7 @@ function isEntityRowPending(r){
   if(r.vendedor3 && !(Number(r.comissaoPercent3) > 0)) return true;
   if(r.parceiro && !(Number(r.participacao) > 0)) return true;
   if(r.professor && !(Number(r.honorarioProfessor) > 0)) return true;
+  if(r.professor2 && !(Number(r.honorarioProfessor2) > 0)) return true;
   if(Array.isArray(r.extraVendedores) && r.extraVendedores.some(ev => ev.vendedor && !(Number(ev.percent) > 0))) return true;
   return false;
 }
@@ -6575,9 +6582,11 @@ function getSellerBreakdown(){
   state.cursos.rows.forEach(r => {
     if((r.ano||2026) !== yearFilter) return;
     if(partnerMonthFilter !== "Todos" && r.mes !== partnerMonthFilter) return;
-    if(!r.professor) return;
-    ensure(r.professor);
-    by[r.professor].cursos += Number(r.honorarioProfessor)||0;
+    [['professor','honorarioProfessor'],['professor2','honorarioProfessor2']].forEach(function(par){
+      if(!r[par[0]]) return;
+      ensure(r[par[0]]);
+      by[r[par[0]]].cursos += Number(r[par[1]])||0;
+    });
   });
 
   bonusRows.forEach(r => {
@@ -6695,9 +6704,11 @@ function getSellerReceivable(mes){
      lançamento, sem esperar pagamento — não é comissão de venda. */
   state.cursos.rows.forEach(r => {
     if(!noPeriodoLancamento(r)) return;
-    if(!r.professor) return;
-    ensure(r.professor);
-    by[r.professor].cursos += Number(r.honorarioProfessor)||0;
+    [['professor','honorarioProfessor'],['professor2','honorarioProfessor2']].forEach(function(par){
+      if(!r[par[0]]) return;
+      ensure(r[par[0]]);
+      by[r[par[0]]].cursos += Number(r[par[1]])||0;
+    });
   });
 
   bonusRows.forEach(r => {
@@ -6779,13 +6790,16 @@ function detalheFechamento(pessoa, origem, mes){
           valorContrato: Number(r.valorContrato)||0, percent: a.percent, comissao: base*(a.percent/100),
           pago: !!r.pago, mesPagamento: r.mesPagamento });
       });
-      if(key === 'cursos' && r.professor === pessoa){
-        const honor = Number(r.honorarioProfessor)||0;
-        if(honor && noPeriodoLancamento(r)){
-          linhas.push({ origemLabel: 'Cursos · honorário professor', mes: r.mes, cliente: r[mainField] || '—',
-            valorContrato: Number(r.valorContrato)||0, percent: null, comissao: honor,
-            pago: true, mesPagamento: null });
-        }
+      if(key === 'cursos'){
+        [['professor','honorarioProfessor','Cursos · honorário professor'],['professor2','honorarioProfessor2','Cursos · honorário professor 2']].forEach(function(par){
+          if(r[par[0]] !== pessoa) return;
+          const honor = Number(r[par[1]])||0;
+          if(honor && noPeriodoLancamento(r)){
+            linhas.push({ origemLabel: par[2], mes: r.mes, cliente: r[mainField] || '—',
+              valorContrato: Number(r.valorContrato)||0, percent: null, comissao: honor,
+              pago: true, mesPagamento: null });
+          }
+        });
       }
     });
   }
@@ -7944,7 +7958,8 @@ function notasDoAno(){
   rows.filter(noAno).forEach(function(r){
     out.push({mes:r.mes, origem:'Sistema', nome:r.cliente || r.venda || '—', valor:Number(r.valor)||0,
               pago:r.pago, mesPagamento:r.mesPagamento, forma:r.formaPagamento||'',
-              tabela:'vendas', entKey:'', id:r.id, emitida:!!r.notaEmitida, emitidaEm:r.notaEmitidaEm||null});
+              tabela:'vendas', entKey:'', id:r.id, emitida:!!r.notaEmitida, emitidaEm:r.notaEmitidaEm||null,
+              notaArquivoPath:r.notaArquivoPath||null, notaArquivoNome:r.notaArquivoNome||null});
   });
   ENTITY_KEYS.forEach(function(key){
     const campo = ENTITIES[key].fields[0].key;
@@ -7956,13 +7971,15 @@ function notasDoAno(){
           out.push({mes:r.mes, origem:ENTITIES[key].tabLabel,
                     nome:(r[campo]||'—') + ' — ' + (e.nome||'empresa sem nome') + (e.cnpj ? ' (CNPJ ' + formatCnpj(e.cnpj) + ')' : ''),
                     valor:Number(e.valor)||0, pago:r.pago, mesPagamento:r.mesPagamento, forma:r.formaPagamento||'',
-                    tabela:'lancamento_empresas', entKey:'', id:e.id, emitida:!!e.notaEmitida, emitidaEm:e.notaEmitidaEm||null});
+                    tabela:'lancamento_empresas', entKey:'', id:e.id, emitida:!!e.notaEmitida, emitidaEm:e.notaEmitidaEm||null,
+                    notaArquivoPath:e.notaArquivoPath||null, notaArquivoNome:e.notaArquivoNome||null});
         });
         return;
       }
       out.push({mes:r.mes, origem:ENTITIES[key].tabLabel, nome:r[campo] || '—', valor:Number(r.valorContrato)||0,
                 pago:r.pago, mesPagamento:r.mesPagamento, forma:r.formaPagamento||'',
-                tabela:'lancamentos', entKey:key, id:r.id, emitida:!!r.notaEmitida, emitidaEm:r.notaEmitidaEm||null});
+                tabela:'lancamentos', entKey:key, id:r.id, emitida:!!r.notaEmitida, emitidaEm:r.notaEmitidaEm||null,
+                notaArquivoPath:r.notaArquivoPath||null, notaArquivoNome:r.notaArquivoNome||null});
     });
   });
   return out.sort(function(a,b){
@@ -7991,13 +8008,15 @@ function acharEmpresaPorId(id){
   return null;
 }
 
+function acharAlvoNota(tabela, id, entKey){
+  if(tabela === 'vendas') return rows.find(function(r){ return r.id === id; });
+  if(tabela === 'lancamento_empresas') return acharEmpresaPorId(id);
+  return state[entKey] ? state[entKey].rows.find(function(r){ return r.id === id; }) : null;
+}
+
 async function toggleNotaEmitida(tabela, id, entKey){
   if(!isAdmin && !isFinanceiro) return;
-  const alvo = tabela === 'vendas'
-    ? rows.find(function(r){ return r.id === id; })
-    : tabela === 'lancamento_empresas'
-      ? acharEmpresaPorId(id)
-      : (state[entKey] ? state[entKey].rows.find(function(r){ return r.id === id; }) : null);
+  const alvo = acharAlvoNota(tabela, id, entKey);
   if(!alvo) return;
   const novo = !alvo.notaEmitida;
   alvo.notaEmitida = novo;
@@ -8065,6 +8084,7 @@ function renderNotasPanel(){
           <th>Forma de pagamento</th><th>Pagamento</th>
           <th class="num col-valor-larga">Valor</th>
           <th>Nota fiscal</th>
+          <th>Anexo</th>
         </tr></thead>
         <tbody>${notas.length ? notas.map(function(n){
           return `<tr class="${n.emitida ? '' : 'row-pending'}">
@@ -8081,9 +8101,19 @@ function renderNotasPanel(){
                    n.emitida ? '✓ Emitida' + (dataCurta(n.emitidaEm) ? ' · ' + dataCurta(n.emitidaEm) : '') : 'Emitir'
                  }</button>`
               : (n.emitida ? '<span class="nota-selo">✓ Emitida</span>' : '—')}</td>
+            <td>${podeVisar
+              ? (n.notaArquivoPath
+                ? `<span class="anexo-arquivo">
+                     <button type="button" class="anexo-link" title="${esc(n.notaArquivoNome||'')}" onclick="verNotaAnexada('${n.tabela}',${n.id},'${escJs(n.entKey)}')">📎 ${esc(n.notaArquivoNome||'arquivo')}</button>
+                     <button type="button" class="anexo-remover" title="Remover anexo" onclick="removerNotaAnexada('${n.tabela}',${n.id},'${escJs(n.entKey)}')">✕</button>
+                   </span>`
+                : `<label class="anexo-upload" title="Anexar PDF ou imagem da nota">
+                     📎 Anexar<input type="file" accept="application/pdf,image/*" onchange="anexarNotaArquivo('${n.tabela}',${n.id},'${escJs(n.entKey)}',this)" />
+                   </label>`)
+              : (n.notaArquivoPath ? `<button type="button" class="anexo-link" title="${esc(n.notaArquivoNome||'')}" onclick="verNotaAnexada('${n.tabela}',${n.id},'${escJs(n.entKey)}')">📎 ${esc(n.notaArquivoNome||'arquivo')}</button>` : '—')}</td>
           </tr>`;
-        }).join('') : `<tr class="empty-row"><td colspan="7"><span class="empty-icon">◌</span>Nenhuma nota neste filtro.</td></tr>`}</tbody>
-        ${notas.length ? `<tfoot><tr><td>Total</td><td></td><td></td><td></td><td></td><td class="num">${fmtMoney(total)}</td><td></td></tr></tfoot>` : ''}
+        }).join('') : `<tr class="empty-row"><td colspan="8"><span class="empty-icon">◌</span>Nenhuma nota neste filtro.</td></tr>`}</tbody>
+        ${notas.length ? `<tfoot><tr><td>Total</td><td></td><td></td><td></td><td></td><td class="num">${fmtMoney(total)}</td><td></td><td></td></tr></tfoot>` : ''}
       </table>
     </div>`;
 
@@ -9006,7 +9036,7 @@ function renderEntitySection(key){
               </td>`;
             }
           } else if(f.type === "number"){
-            const isValor = f.key === "valorContrato" || f.key === "honorarioProfessor";
+            const isValor = f.key === "valorContrato" || f.key === "honorarioProfessor" || f.key === "honorarioProfessor2";
             cells += `<td${isValor?' class="col-valor"':''}>${isValor?'<div class="currency-wrap"><span class="currency-prefix">R$</span>'+entityNumInputHtml(key,row,f.key)+'</div>':entityNumInputHtml(key,row,f.key)}</td>`;
           } else if(f.type === "select"){
             cells += `<td><select data-entity="${key}" data-id="${row.id}" data-field="${f.key}" onchange="onEntitySelectField(this)">${f.options.map(o => `<option value="${o}" ${row[f.key]===o?'selected':''}>${o||'—'}</option>`).join('')}</select></td>`;
@@ -10014,24 +10044,25 @@ function persistEmpresaCurso(empresa, rowId){
   }, 450);
 }
 
-/* Anexo da nota fiscal em si (PDF/imagem), não só o visto de "emitida".
-   Vai pro Storage (bucket privado notas-fiscais) e grava o caminho via
-   RPC — mesma porta estreita do visto, porque o financeiro não tem (nem
-   deve ter) permissão de UPDATE direto na tabela. */
-async function anexarNotaEmpresa(empresaId, input){
+/* Anexo do arquivo da nota fiscal (PDF/imagem), não só o visto de
+   "emitida" — vale para as notas de Sistema, Consultoria, Órgãos
+   Públicos e Cursos (inclusive cada empresa de um curso), sempre pela
+   mesma porta estreita (anexar_nota_arquivo), porque o financeiro não
+   tem UPDATE direto em nenhuma dessas tabelas. */
+async function anexarNotaArquivo(tabela, id, entKey, input){
   if(!isAdmin && !isFinanceiro) return;
   const arq = input.files && input.files[0];
   if(!arq) return;
-  const empresa = acharEmpresaPorId(empresaId);
-  if(!empresa) return;
+  const alvo = acharAlvoNota(tabela, id, entKey);
+  if(!alvo) return;
   saving = true; updateSaveStatus();
   try{
     const nomeLimpo = arq.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-    const path = 'empresa-' + empresaId + '/' + Date.now() + '-' + nomeLimpo;
+    const path = tabela + '-' + id + '/' + Date.now() + '-' + nomeLimpo;
     await sbUploadFile('notas-fiscais', path, arq);
-    await sbRpc('anexar_nota_arquivo', { p_id: empresaId, p_path: path, p_nome: arq.name });
-    empresa.notaArquivoPath = path;
-    empresa.notaArquivoNome = arq.name;
+    await sbRpc('anexar_nota_arquivo', { p_tabela: tabela, p_id: id, p_path: path, p_nome: arq.name });
+    alvo.notaArquivoPath = path;
+    alvo.notaArquivoNome = arq.name;
     saveError = false;
   }catch(e){
     console.error('Falha ao anexar nota fiscal', e);
@@ -10041,29 +10072,29 @@ async function anexarNotaEmpresa(empresaId, input){
     saving = false; updateSaveStatus(); input.value = ''; render();
   }
 }
-async function verNotaAnexada(empresaId){
-  const empresa = acharEmpresaPorId(empresaId);
-  if(!empresa || !empresa.notaArquivoPath) return;
+async function verNotaAnexada(tabela, id, entKey){
+  const alvo = acharAlvoNota(tabela, id, entKey);
+  if(!alvo || !alvo.notaArquivoPath) return;
   try{
-    const url = await sbSignedUrl('notas-fiscais', empresa.notaArquivoPath, 120);
+    const url = await sbSignedUrl('notas-fiscais', alvo.notaArquivoPath, 120);
     window.open(url, '_blank');
   }catch(e){
     console.error('Falha ao abrir a nota anexada', e);
     showAlert('Não consegui abrir o arquivo anexado. Tente de novo.');
   }
 }
-function removerNotaAnexada(empresaId){
+function removerNotaAnexada(tabela, id, entKey){
   if(!isAdmin && !isFinanceiro) return;
-  const empresa = acharEmpresaPorId(empresaId);
-  if(!empresa || !empresa.notaArquivoPath) return;
+  const alvo = acharAlvoNota(tabela, id, entKey);
+  if(!alvo || !alvo.notaArquivoPath) return;
   showConfirm(
-    'Remover o anexo "' + (empresa.notaArquivoNome || 'arquivo') + '"? Isso não desmarca "Emitida", só tira o arquivo.',
+    'Remover o anexo "' + (alvo.notaArquivoNome || 'arquivo') + '"? Isso não desmarca "Emitida", só tira o arquivo.',
     async function(){
-      const caminho = empresa.notaArquivoPath;
-      empresa.notaArquivoPath = null; empresa.notaArquivoNome = null;
+      const caminho = alvo.notaArquivoPath;
+      alvo.notaArquivoPath = null; alvo.notaArquivoNome = null;
       closeModal(); render();
       try{
-        await sbRpc('anexar_nota_arquivo', { p_id: empresaId, p_path: null, p_nome: null });
+        await sbRpc('anexar_nota_arquivo', { p_tabela: tabela, p_id: id, p_path: null, p_nome: null });
         sbDeleteFile('notas-fiscais', caminho).catch(function(e){ console.error('Falha ao apagar arquivo do storage', e); });
       }catch(e){
         console.error('Falha ao remover o anexo', e);
