@@ -1475,6 +1475,11 @@ function ehVendedorDeSistema(nome){
 const STORAGE_KEY = "vendas";
 const VENDOR_PALETTE = ["#5046E5","#0D9488","#D97706","#E11D48","#9333EA","#2563EB","#059669","#DC2626","#7C3AED","#EA580C"];
 
+/* Os únicos dois que dão aula hoje — mesmo nome curto usado em
+   vendedor/vendedor2/vendedor3, pra o honorário cair na mesma linha
+   deles no Fechamento, e não virar uma pessoa "nova" duplicada. */
+const PROFESSORES_CURSOS = ["","Arick","Gustavo"];
+
 const ENTITIES = {
   consultoria: {
     tabLabel: "Consultoria",
@@ -1517,8 +1522,8 @@ const ENTITIES = {
     fields: [
       {key:"curso", label:"Nome do Curso", type:"text"},
       {key:"valorContrato", label:"Valor do Contrato", type:"number"},
-      {key:"parceiro", label:"Parceiro", type:"text"},
-      {key:"participacao", label:"Participação (%)", type:"text"},
+      {key:"professor", label:"Professor", type:"select", options:PROFESSORES_CURSOS},
+      {key:"honorarioProfessor", label:"Honorário do Professor", type:"number"},
       {key:"formaPagamento", label:"Forma de Pagamento", type:"text"},
       {key:"observacoes", label:"Observações", type:"text"},
     ],
@@ -2328,18 +2333,19 @@ function persistEntityRows(key){
             comissao_percent2: numOrNull(r.comissaoPercent2), vendedor2: r.vendedor2||'',
             comissao_percent3: numOrNull(r.comissaoPercent3), vendedor3: r.vendedor3||'',
             parcela_label: r.parcelaLabel || null,
-            nome:'', valor_contrato:null, tipo:null, parceiro:'', participacao:null,
+            nome:'', valor_contrato:null, tipo:null,
+            parceiro: r.parceiro||'', participacao: numOrNull(r.participacao),
             forma_pagamento:'', colaborador:'', observacoes:'',
             pago:false, mes_pagamento:null, pago_em: r.pagoEm || null, fechamento_mes: r.fechamentoMes || null,
             nota_emitida: !!r.notaEmitida, nota_emitida_em: r.notaEmitidaEm || null,
             in_company: !!r.inCompany, renovacao: !!r.renovacao, upgrade: !!r.upgrade,
             vendedor_responsavel: cfg.hasVendedorResponsavel ? (r.vendedorResponsavel || '') : null,
+            professor: r.professor||'', honorario_professor: numOrNull(r.honorarioProfessor),
           };
           cfg.fields.forEach(function(f){
             if(f.key === 'valorContrato') row.valor_contrato = numOrNull(r.valorContrato);
             else if(f.key === 'tipo') row.tipo = r.tipo;
-            else if(f.key === 'parceiro') row.parceiro = r.parceiro||'';
-            else if(f.key === 'participacao') row.participacao = numOrNull(r.participacao);
+            else if(f.key === 'parceiro' || f.key === 'participacao' || f.key === 'professor' || f.key === 'honorarioProfessor'){ /* já tratados acima, sempre preservados */ }
             else if(f.key === 'formaPagamento') row.forma_pagamento = r.formaPagamento||'';
             else if(f.key === 'colaborador') row.colaborador = r.colaborador||'';
             else if(f.key === 'observacoes') row.observacoes = r.observacoes||'';
@@ -2461,6 +2467,8 @@ async function tryLoadEntityFromStorageAsync(key){
           parcelaLabel: d.parcela_label,
           notaEmitida: !!d.nota_emitida, notaEmitidaEm: d.nota_emitida_em || null,
           inCompany: !!d.in_company, renovacao: !!d.renovacao, upgrade: !!d.upgrade,
+          parceiro: d.parceiro||'', participacao: d.participacao,
+          professor: d.professor||'', honorarioProfessor: d.honorario_professor,
         };
         if(cfg.hasVendasPorVendedor) r.vendasVendedoras = divisaoByLanc[d.id] || [];
         if(cfg.hasPagamento){ r.pago = d.pago; r.mesPagamento = d.mes_pagamento; r.pagoEm = d.pago_em || null; r.fechamentoMes = d.fechamento_mes || null; }
@@ -2468,8 +2476,7 @@ async function tryLoadEntityFromStorageAsync(key){
         cfg.fields.forEach(function(f){
           if(f.key === 'valorContrato') r.valorContrato = d.valor_contrato;
           else if(f.key === 'tipo') r.tipo = d.tipo;
-          else if(f.key === 'parceiro') r.parceiro = d.parceiro||'';
-          else if(f.key === 'participacao') r.participacao = d.participacao;
+          else if(f.key === 'parceiro' || f.key === 'participacao' || f.key === 'professor' || f.key === 'honorarioProfessor'){ /* já tratados acima, sempre preservados */ }
           else if(f.key === 'formaPagamento') r.formaPagamento = d.forma_pagamento||'';
           else if(f.key === 'colaborador') r.colaborador = d.colaborador||'';
           else if(f.key === 'observacoes') r.observacoes = d.observacoes||'';
@@ -5255,6 +5262,7 @@ function isEntityRowPending(r){
   if(r.vendedor2 && !(Number(r.comissaoPercent2) > 0)) return true;
   if(r.vendedor3 && !(Number(r.comissaoPercent3) > 0)) return true;
   if(r.parceiro && !(Number(r.participacao) > 0)) return true;
+  if(r.professor && !(Number(r.honorarioProfessor) > 0)) return true;
   if(Array.isArray(r.extraVendedores) && r.extraVendedores.some(ev => ev.vendedor && !(Number(ev.percent) > 0))) return true;
   return false;
 }
@@ -6325,6 +6333,17 @@ function getSellerBreakdown(){
     });
   });
 
+  /* Honorário do professor de curso: valor fixo por lançamento, não %
+     de comissão — soma direto no total de Cursos de quem der a aula,
+     sem passar pela divisão de vendedor/vendedor2/vendedor3. */
+  state.cursos.rows.forEach(r => {
+    if((r.ano||2026) !== yearFilter) return;
+    if(partnerMonthFilter !== "Todos" && r.mes !== partnerMonthFilter) return;
+    if(!r.professor) return;
+    ensure(r.professor);
+    by[r.professor].cursos += Number(r.honorarioProfessor)||0;
+  });
+
   bonusRows.forEach(r => {
     if((r.ano||2026) !== yearFilter) return;
     if(isSalarioRow(r)) return;              // salário não é ganho de comissão
@@ -6413,6 +6432,15 @@ function getSellerReceivable(mes){
     });
   });
 
+  /* Honorário do professor libera igual ao Bônus: no mês do próprio
+     lançamento, sem esperar pagamento — não é comissão de venda. */
+  state.cursos.rows.forEach(r => {
+    if(!noPeriodoLancamento(r)) return;
+    if(!r.professor) return;
+    ensure(r.professor);
+    by[r.professor].cursos += Number(r.honorarioProfessor)||0;
+  });
+
   bonusRows.forEach(r => {
     if(!noPeriodoLancamento(r)) return;
     if(isSalarioRow(r)) return;
@@ -6492,6 +6520,14 @@ function detalheFechamento(pessoa, origem, mes){
           valorContrato: Number(r.valorContrato)||0, percent: a.percent, comissao: base*(a.percent/100),
           pago: !!r.pago, mesPagamento: r.mesPagamento });
       });
+      if(key === 'cursos' && r.professor === pessoa){
+        const honor = Number(r.honorarioProfessor)||0;
+        if(honor && noPeriodoLancamento(r)){
+          linhas.push({ origemLabel: 'Cursos · honorário professor', mes: r.mes, cliente: r[mainField] || '—',
+            valorContrato: Number(r.valorContrato)||0, percent: null, comissao: honor,
+            pago: true, mesPagamento: null });
+        }
+      }
     });
   }
 
@@ -8546,7 +8582,7 @@ function renderEntitySection(key){
     const current = st.fieldFilters[f.key] || "Todos";
     const optsHtml = ['Todos', ...f.options].map(o => {
       const active = o === current ? ' active' : '';
-      return `<button class="pill seller-pill${active}" onclick="setEntityFieldFilter('${key}','${f.key}','${esc(o)}')">${esc(o)}</button>`;
+      return `<button class="pill seller-pill${active}" onclick="setEntityFieldFilter('${key}','${f.key}','${esc(o)}')">${esc(o||'— sem —')}</button>`;
     }).join('');
     return `
       <div class="filters-row">
@@ -8635,10 +8671,10 @@ function renderEntitySection(key){
               </td>`;
             }
           } else if(f.type === "number"){
-            const isValor = f.key === "valorContrato";
+            const isValor = f.key === "valorContrato" || f.key === "honorarioProfessor";
             cells += `<td${isValor?' class="col-valor"':''}>${isValor?'<div class="currency-wrap"><span class="currency-prefix">R$</span>'+entityNumInputHtml(key,row,f.key)+'</div>':entityNumInputHtml(key,row,f.key)}</td>`;
           } else if(f.type === "select"){
-            cells += `<td><select data-entity="${key}" data-id="${row.id}" data-field="${f.key}" onchange="onEntitySelectField(this)">${f.options.map(o => `<option value="${o}" ${row[f.key]===o?'selected':''}>${o}</option>`).join('')}</select></td>`;
+            cells += `<td><select data-entity="${key}" data-id="${row.id}" data-field="${f.key}" onchange="onEntitySelectField(this)">${f.options.map(o => `<option value="${o}" ${row[f.key]===o?'selected':''}>${o||'—'}</option>`).join('')}</select></td>`;
           }
         });
         if(!isFinanceiro){
