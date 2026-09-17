@@ -671,6 +671,11 @@
     background:var(--primary-soft);box-shadow:inset 0 0 0 2px var(--ring);border-radius:6px;
   }
   td.cliente input{min-width:230px;}
+  td.cliente .cliente-cnpj{
+    display:block;margin-top:3px;min-width:230px;font-size:11px;padding:3px 8px;
+    color:var(--ink-faint);border-color:var(--border-soft);background:var(--border-soft);
+  }
+  td.cliente .cliente-cnpj:focus{color:var(--ink);}
   td.venda select{min-width:150px;}
   /* Larguras das colunas das tabelas de lançamento.
      Como a tabela é larga e rola na horizontal, o navegador encolhe cada
@@ -1691,6 +1696,7 @@ const TABS = [
   {key:"parceiros", label:"Resumo Geral"},
   {key:"pagamentos", label:"Pagamentos Realizados"},
   {key:"painel", label:"Relatório de Desempenho"},
+  {key:"empresas", label:"Empresas", adminOnly:true},
   {key:"usuarios", label:"Usuários e Acessos", adminOnly:true},
 ];
 
@@ -1703,7 +1709,7 @@ const TABS = [
 const ABAS_FINANCEIRO = ['parceiros','vendas','renovacoes','consultoria','publicos','cursos'];
 
 const NAV_GROUPS = [
-  {label:"Visão geral",  keys:["parceiros","pagamentos"]},
+  {label:"Visão geral",  keys:["parceiros","pagamentos","empresas"]},
   {label:"Lançamentos",  keys:["vendas","renovacoes","consultoria","publicos","cursos"]},
   {label:"Equipe",       keys:["painel","bonus","marketing","equipeConsultoria"]},
   {label:"Administração", keys:["usuarios"]},
@@ -1723,6 +1729,7 @@ const NAV_ICONS = {
   renovacoes:  SVG_OPEN + '<path d="M20.5 12a8.5 8.5 0 0 1-14.6 5.9"/><path d="M3.5 12a8.5 8.5 0 0 1 14.6-5.9"/><path d="M18.1 2.6v3.5h-3.5"/><path d="M5.9 21.4v-3.5h3.5"/></svg>',
   painel:      SVG_OPEN + '<path d="M16.5 20.5v-2a4 4 0 0 0-4-4h-6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="3.5"/><path d="M22 20.5v-2a4 4 0 0 0-3-3.87"/><path d="M16.5 3.6a4 4 0 0 1 0 7.75"/></svg>',
   usuarios:    SVG_OPEN + '<path d="M12 2.5 4 6v5.5c0 5 3.4 9.3 8 10.5 4.6-1.2 8-5.5 8-10.5V6l-8-3.5Z"/><circle cx="12" cy="11" r="2.6"/><path d="M8.2 17.3a4.2 4.2 0 0 1 7.6 0"/></svg>',
+  empresas:    SVG_OPEN + '<path d="M4 21V5a1.5 1.5 0 0 1 1.5-1.5h9A1.5 1.5 0 0 1 16 5v16"/><path d="M16 10.5h3.5A1.5 1.5 0 0 1 21 12v9"/><path d="M4 21h17"/><path d="M7.5 7.5h2M7.5 11h2M7.5 14.5h2M11.5 7.5h2M11.5 11h2M11.5 14.5h2"/></svg>',
 };
 
 function sidebarNavHtml(){
@@ -1749,6 +1756,9 @@ let naturezaFilter = 'Todas';   // 'Todas' | 'novo' | 'renov' | 'sem'
 let searchParceiro = "";
 let searchColaborador = "";
 let vendaProducts = [];
+let empresasCadastro = [];   // [{id, nome, cnpj, responsavel, telefone, email, observacoes}] — cadastro central de empresas, pra sugerir nome/CNPJ nos lançamentos
+let empresasCadastroNextId = 1;
+let empresasCadastroBusca = '';
 let partners = [];
 let partnerMonthFilter = "Todos";
 let partnersValuesRevealed = false;
@@ -2351,7 +2361,7 @@ function persist(){
       try{
         const dbRows = rows.map(function(r){
           return {
-            id: r.id, ano: r.ano||2026, mes: r.mes, cliente: r.cliente||'', venda: r.venda||'',
+            id: r.id, ano: r.ano||2026, mes: r.mes, cliente: r.cliente||'', venda: r.venda||'', cnpj: cnpjDigitos(r.cnpj),
             valor: numOrNull(r.valor), parceiro: r.parceiro||'', participacao: numOrNull(r.participacao),
             forma_pagamento: r.formaPagamento||'', colaborador: r.colaborador||'', observacoes: r.observacoes||'',
             renovacao: !!r.renovacao, novo_contrato: !!r.novoContrato, upgrade: !!r.upgrade,
@@ -2410,7 +2420,7 @@ async function tryLoadFromStorageAsync(){
       });
       rows = dbRows.map(function(d){
         const r = {
-          id: d.id, ano: d.ano, mes: d.mes, cliente: d.cliente||'', venda: d.venda||'',
+          id: d.id, ano: d.ano, mes: d.mes, cliente: d.cliente||'', venda: d.venda||'', cnpj: d.cnpj||'',
           valor: d.valor, parceiro: d.parceiro||'', participacao: d.participacao,
           formaPagamento: d.forma_pagamento||'', colaborador: d.colaborador||'', observacoes: d.observacoes||'',
           renovacao: !!d.renovacao, novoContrato: !!d.novo_contrato, upgrade: !!d.upgrade,
@@ -3922,6 +3932,166 @@ async function tryLoadPartnersFromStorageAsync(){
     carregouDoBanco.partners = true;
     if(dbRows && dbRows.length){ partners = dbRows.map(function(d){ return d.name; }); render(); }
   } catch(e){ console.error(e); }
+}
+
+/* ---------- Cadastro central de empresas ----------
+   Nasceu de um pedido simples: parar de digitar nome e CNPJ do zero toda
+   vez. Todo mundo lê (pra sugerir nome/CNPJ nos lançamentos), só admin
+   cadastra e edita — é a mesma regra de "catalog" que parceiros e
+   vendedores já seguem. */
+async function tryLoadEmpresasCadastroAsync(){
+  try{
+    const dbRows = await sbSelectOpcional('empresas_cadastro', 'select=*&order=nome.asc', []);
+    carregouDoBanco['empresas-cadastro'] = true;
+    empresasCadastro = (dbRows||[]).map(function(e){
+      return { id:e.id, nome:e.nome||'', cnpj:e.cnpj||'', responsavel:e.responsavel||'',
+               telefone:e.telefone||'', email:e.email||'', observacoes:e.observacoes||'' };
+    });
+    empresasCadastroNextId = empresasCadastro.length ? Math.max.apply(null, empresasCadastro.map(function(e){ return e.id||0; })) + 1 : 1;
+    render();
+  } catch(e){ console.error(e); }
+}
+
+function addEmpresaCadastro(){
+  if(!isAdmin) return;
+  empresasCadastro.unshift({ id: empresasCadastroNextId++, nome:'', cnpj:'', responsavel:'', telefone:'', email:'', observacoes:'' });
+  persistEmpresasCadastro();
+  render();
+}
+
+function removeEmpresaCadastro(id){
+  if(!isAdmin) return;
+  showConfirm(
+    'Remover esta empresa do cadastro? Os lançamentos já feitos com ela não mudam — ela só sai da lista de sugestão.',
+    function(){
+      empresasCadastro = empresasCadastro.filter(function(e){ return e.id !== id; });
+      render();
+      sbDeleteAll('empresas_cadastro', 'id=eq.'+id).catch(function(e){ console.error('Falha ao excluir empresa do cadastro', e); });
+    },
+    'Remover'
+  );
+}
+
+function updateEmpresaCadastro(id, campo, valor){
+  if(!isAdmin) return;
+  const e = empresasCadastro.find(function(x){ return x.id === id; });
+  if(!e) return;
+  e[campo] = valor;
+  persistEmpresasCadastro();
+  if(campo === 'cnpj'){
+    const aviso = document.getElementById('empresa-cadastro-cnpj-aviso-'+id);
+    if(aviso) aviso.textContent = (cnpjDigitos(e.cnpj) && !cnpjValido(e.cnpj)) ? 'CNPJ incompleto' : '';
+  }
+}
+
+let empresasCadastroTimer = null;
+function persistEmpresasCadastro(){
+  if(!isAdmin) return;
+  saving = true; updateSaveStatus();
+  if(empresasCadastroTimer) clearTimeout(empresasCadastroTimer);
+  empresasCadastroTimer = setTimeout(function(){
+    (async function(){
+      try{
+        const dbRows = empresasCadastro.map(function(e){
+          return { id:e.id, nome:e.nome||'', cnpj:cnpjDigitos(e.cnpj), responsavel:e.responsavel||'',
+                   telefone:e.telefone||'', email:e.email||'', observacoes:e.observacoes||'' };
+        });
+        if(dbRows.length) await sbUpsert('empresas_cadastro', dbRows, 'id');
+        saveError = false;
+      }catch(e){
+        console.error('Falha ao gravar o cadastro de empresas', e);
+        saveError = true;
+      }finally{
+        saving = false; updateSaveStatus();
+      }
+    })();
+  }, 450);
+}
+
+function onEmpresaCadastroBuscaInput(el){ empresasCadastroBusca = el.value; render(); }
+
+/* Datalist compartilhado pelos campos de nome que ganharam sugestão —
+   por ora só "Cliente" no Sistema, que é onde a Soraya pediu o vínculo.
+   Um <datalist> nativo em vez de dropdown customizado: sugestão ao
+   digitar sem escrever mecanismo de autocomplete do zero. */
+function empresasDatalistHtml(){
+  return `<datalist id="empresas-datalist">${empresasCadastro.map(function(e){ return `<option value="${esc(e.nome)}">`; }).join('')}</datalist>`;
+}
+
+/* Quando o nome digitado/selecionado bate com uma empresa cadastrada,
+   preenche o CNPJ sozinho — só se o campo ainda estiver vazio, pra
+   nunca sobrescrever um CNPJ diferente que a pessoa já tinha posto ali
+   de propósito. */
+function onClienteVendaEscolhido(el){
+  const id = Number(el.dataset.id);
+  const row = rows.find(function(r){ return r.id === id; });
+  if(!row || row.cnpj) return;
+  const match = empresasCadastro.find(function(e){ return e.cnpj && name_matches_client(e.nome, row.cliente); });
+  if(!match) return;
+  row.cnpj = match.cnpj;
+  persist();
+  render();
+}
+
+function onVendaCnpjChange(el){
+  const id = Number(el.dataset.id);
+  const row = rows.find(function(r){ return r.id === id; });
+  if(!row) return;
+  row.cnpj = cnpjDigitos(el.value);
+  persist();
+}
+
+function renderEmpresasCadastroSection(){
+  if(!isAdmin) return `<div class="meta-empty" style="padding:24px;">Esta área é só de administrador.</div>`;
+  const buscaNorm = semAcento(empresasCadastroBusca).trim();
+  const buscaDigitos = buscaNorm.replace(/\D/g,'');
+  const visiveis = buscaNorm
+    ? empresasCadastro.filter(function(e){
+        return semAcento(e.nome).indexOf(buscaNorm) !== -1 || (buscaDigitos && cnpjDigitos(e.cnpj).indexOf(buscaDigitos) !== -1);
+      })
+    : empresasCadastro;
+
+  const linhas = visiveis.length ? visiveis.map(function(e){
+    return `
+      <tr>
+        <td class="col-nome"><input type="text" value="${esc(e.nome)}" placeholder="Razão social" onchange="updateEmpresaCadastro(${e.id},'nome',this.value)" /></td>
+        <td>
+          <input type="text" value="${esc(formatCnpj(e.cnpj))}" placeholder="00.000.000/0000-00"
+                 oninput="this.value=formatCnpj(this.value)" onchange="updateEmpresaCadastro(${e.id},'cnpj',this.value)" />
+          <span class="contrato-cnpj-aviso" id="empresa-cadastro-cnpj-aviso-${e.id}">${(cnpjDigitos(e.cnpj) && !cnpjValido(e.cnpj)) ? 'CNPJ incompleto' : ''}</span>
+        </td>
+        <td><input type="text" value="${esc(e.responsavel)}" placeholder="Responsável" onchange="updateEmpresaCadastro(${e.id},'responsavel',this.value)" /></td>
+        <td><input type="text" value="${esc(e.telefone)}" placeholder="Telefone" onchange="updateEmpresaCadastro(${e.id},'telefone',this.value)" /></td>
+        <td><input type="text" value="${esc(e.email)}" placeholder="E-mail" onchange="updateEmpresaCadastro(${e.id},'email',this.value)" /></td>
+        <td><input type="text" value="${esc(e.observacoes)}" placeholder="Observações" onchange="updateEmpresaCadastro(${e.id},'observacoes',this.value)" /></td>
+        <td class="del-cell"><button class="action-btn danger" title="Remover" onclick="removeEmpresaCadastro(${e.id})">✕</button></td>
+      </tr>`;
+  }).join('') : `<tr class="empty-row"><td colspan="7"><span class="empty-icon">◌</span>${empresasCadastroBusca ? 'Nenhuma empresa encontrada pra essa busca.' : 'Nenhuma empresa cadastrada ainda. Clique em "+ Nova empresa" para começar.'}</td></tr>`;
+
+  return `
+    <div class="painel-equipe-nota" style="margin:0 0 12px;">
+      Cadastre aqui nome, CNPJ e contato de cada empresa. Ao digitar o nome de uma empresa cadastrada num lançamento
+      do Sistema (aba "Sistema"), o CNPJ é sugerido sozinho — sem precisar digitar tudo de novo todo mês.
+    </div>
+    <div class="search-row">
+      <input class="search-input" type="text" placeholder="🔍 Buscar por nome ou CNPJ..." value="${esc(empresasCadastroBusca)}" oninput="onEmpresaCadastroBuscaInput(this)" />
+    </div>
+    ${panel('empresas-cadastro', 'Empresas cadastradas', `
+      <div class="table-scroll">
+        <table class="table-plain">
+          <thead><tr>
+            <th style="min-width:260px;">Empresa</th><th style="min-width:160px;">CNPJ</th><th style="min-width:150px;">Responsável</th>
+            <th style="min-width:140px;">Telefone</th><th style="min-width:180px;">E-mail</th><th style="min-width:200px;">Observações</th><th></th>
+          </tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      </div>
+    `, {
+      flush: true,
+      meta: `<b>${empresasCadastro.length}</b> empresa${empresasCadastro.length===1?'':'s'} cadastrada${empresasCadastro.length===1?'':'s'}`,
+      actions: `<button class="btn-add" onclick="addEmpresaCadastro()">+ Nova empresa</button>`,
+    })}
+  `;
 }
 
 let sistemaSellersTimer = null;
@@ -8628,7 +8798,9 @@ function renderVendasSection(){
           ${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}
           ${isVendasRowDuplicate(row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo cliente neste mês — confira se não é duplicado">🔁 Duplicado</span>` : ''}
         </td>
-        <td class="cliente"><input type="text" data-id="${row.id}" data-field="cliente" value="${esc(row.cliente)}" placeholder="Cliente" oninput="onTextInput(this)" />${row.renovacao ? '<span class="selo-renovacao" title="Renovação: vale comissão, mas não conta no ranking de desempenho">♻️ Renovação</span>' : (row.novoContrato ? '<span class="selo-novo" title="Contrato novo: conta no ranking e nas comissões como qualquer venda">✨ Contrato novo</span>' : (row.upgrade ? '<span class="selo-upgrade" title="Upgrade: cliente que subiu de plano. É receita nova e conta no ranking">⬆️ Upgrade</span>' : ''))}</td>
+        <td class="cliente"><input type="text" list="empresas-datalist" data-id="${row.id}" data-field="cliente" value="${esc(row.cliente)}" placeholder="Cliente" oninput="onTextInput(this)" onchange="onClienteVendaEscolhido(this)" />${row.renovacao ? '<span class="selo-renovacao" title="Renovação: vale comissão, mas não conta no ranking de desempenho">♻️ Renovação</span>' : (row.novoContrato ? '<span class="selo-novo" title="Contrato novo: conta no ranking e nas comissões como qualquer venda">✨ Contrato novo</span>' : (row.upgrade ? '<span class="selo-upgrade" title="Upgrade: cliente que subiu de plano. É receita nova e conta no ranking">⬆️ Upgrade</span>' : ''))}
+          <input type="text" class="cliente-cnpj" placeholder="CNPJ (opcional)" value="${esc(formatCnpj(row.cnpj))}" data-id="${row.id}"
+                 oninput="this.value=formatCnpj(this.value)" onchange="onVendaCnpjChange(this)" /></td>
         <td class="venda">
           <select data-id="${row.id}" onchange="onVendaSelect(this)">
             <option value="">—</option>
@@ -8694,6 +8866,7 @@ function renderVendasSection(){
     </div>` : '';
 
   return `
+    ${empresasDatalistHtml()}
     ${avisoFalhaHtml('vendas', 'as vendas do Sistema')}
     ${avisoResp}
     ${kpiToggleHtml}
@@ -13538,6 +13711,7 @@ function render(){
     : activeTab === "painel" ? renderPainelSection()
     : activeTab === "renovacoes" ? renderPainelRenovacoes()
     : activeTab === "usuarios" ? renderUsuariosSection()
+    : activeTab === "empresas" ? renderEmpresasCadastroSection()
     : renderEntitySection(activeTab);
 
   const years = getKnownYears();
@@ -13641,6 +13815,7 @@ function boot(){
     tryLoadVendaProductsFromStorageAsync(),
     tryLoadSistemaSellersFromStorageAsync(),
     tryLoadPartnersFromStorageAsync(),
+    tryLoadEmpresasCadastroAsync(),
     tryLoadExtraYearsFromStorageAsync(),
     tryLoadEntityFromStorageAsync('consultoria'),
     tryLoadEntityFromStorageAsync('publicos'),
