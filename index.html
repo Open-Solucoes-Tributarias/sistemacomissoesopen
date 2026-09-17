@@ -5368,6 +5368,7 @@ function onPagamentoMesSelect(el, entityKey){
     return;
   }
   r.mesPagamento = el.value;
+  r.fechamentoMes = null;   // corrigir o mês de pagamento invalida uma trava antiga — sem isso, a nota fica presa no mês errado
   if(isFinanceiro && !isAdmin) corrigirMesPagamentoRPC(entityKey, r);
   else persistAfterPayment(entityKey);
 }
