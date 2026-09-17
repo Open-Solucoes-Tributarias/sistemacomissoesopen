@@ -764,6 +764,7 @@
     padding:22px;max-width:380px;width:100%;
   }
   .modal-box.modal-box-wide{max-width:640px;max-height:85vh;overflow-y:auto;}
+  .modal-box.modal-box-xwide{max-width:980px;max-height:85vh;overflow-y:auto;}
   .tabela-detalhe-scroll{max-height:50vh;overflow-y:auto;}
   .tabela-detalhe-scroll thead th{position:sticky;top:0;background:var(--surface);z-index:1;}
   .modal-textarea{
@@ -1312,8 +1313,12 @@
   .action-btn.ativo-incompany{background:#E0E7FF;color:#4338CA;}
   .selo-empresas{
     margin-left:6px;font-size:10px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
-    padding:2px 7px;border-radius:999px;background:#CFFAFE;border:1px solid #A5F3FC;color:#0E7490;cursor:default;
+    padding:2px 7px;border-radius:999px;background:#CFFAFE;border:1px solid #A5F3FC;color:#0E7490;
   }
+  button.selo-empresas{font-family:var(--font);cursor:pointer;}
+  button.selo-empresas:hover{background:#A5F3FC;}
+  .selo-empresas.selo-empresas-vazio{background:var(--border-soft);border-color:var(--border-soft);color:var(--ink-faint);}
+  .selo-empresas.selo-empresas-vazio:hover{background:var(--primary-soft);color:var(--primary);border-color:var(--ring);}
   .kpi-sub{font-size:11.5px;font-weight:700;color:var(--ink-faint);margin-top:2px;font-variant-numeric:tabular-nums;}
   .import-arquivo{display:block;margin:4px 0 10px;}
   .import-arquivo input{display:none;}
@@ -4452,7 +4457,7 @@ function renderModal(){
 
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
-        <div class="modal-box modal-box-wide">
+        <div class="modal-box modal-box-xwide">
           <div class="modal-msg">Empresas inscritas — ${esc(nome)}</div>
           <div class="divisao-explica">
             O faturamento deste curso é de <b>${fmtMoney(d.total)}</b>. Liste aqui cada empresa inscrita, com o
@@ -4462,7 +4467,7 @@ function renderModal(){
           <div class="table-scroll">
             <table class="table-plain">
               <thead><tr>
-                <th>Empresa</th><th>CNPJ</th><th>Responsável</th><th class="num">Valor</th><th>Nota fiscal</th>${isAdmin?'<th></th>':''}
+                <th style="min-width:340px;">Empresa</th><th style="min-width:140px;">CNPJ</th><th style="min-width:150px;">Responsável</th><th class="num" style="min-width:110px;">Valor</th><th style="min-width:120px;">Nota fiscal</th>${isAdmin?'<th></th>':''}
               </tr></thead>
               <tbody>${linhas}</tbody>
             </table>
@@ -4487,7 +4492,7 @@ function renderModal(){
     const previa = d ? d.itens.slice(0, 60) : [];
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
-        <div class="modal-box modal-box-wide">
+        <div class="modal-box modal-box-xwide">
           <div class="modal-msg">Importar empresas da planilha</div>
           <div class="painel-equipe-nota">
             Reconheço colunas com estes nomes (com ou sem acento, em qualquer ordem):
@@ -8901,9 +8906,13 @@ function renderEntitySection(key){
             const seloInCompany = (key === 'cursos' && fi === 0 && row.inCompany) ? '<span class="selo-incompany">🏢 In Company</span>' : '';
             const seloRenovacao = (fi === 0 && row.renovacao) ? '<span class="selo-renovacao" title="Renovação: vale comissão, mas não é contrato novo">♻️ Renovação</span>' : '';
             const seloUpgrade = (fi === 0 && row.upgrade) ? '<span class="selo-upgrade" title="Upgrade: cliente que subiu de plano">⬆️ Upgrade</span>' : '';
-            const dEmp = (cfg.hasEmpresas && fi === 0 && row.empresas && row.empresas.length) ? resumoEmpresas(row) : null;
-            const seloEmpresas = dEmp
-              ? `<span class="selo-empresas" title="${dEmp.fecha ? 'Soma das empresas confere com o valor total' : esc(dEmp.rotuloDiferenca)}">🧾 ${row.empresas.length} empresa${row.empresas.length===1?'':'s'}</span>` : '';
+            const temEmpresas = row.empresas && row.empresas.length;
+            const dEmp = (cfg.hasEmpresas && fi === 0 && temEmpresas) ? resumoEmpresas(row) : null;
+            const seloEmpresas = (cfg.hasEmpresas && fi === 0 && (isAdmin || isFinanceiro))
+              ? (dEmp
+                  ? `<button type="button" class="selo-empresas" title="${dEmp.fecha ? 'Soma das empresas confere com o valor total — clique pra ver' : esc(dEmp.rotuloDiferenca)+' — clique pra ver'}" onclick="abrirEmpresasCurso(${row.id})">🧾 ${row.empresas.length} empresa${row.empresas.length===1?'':'s'}</button>`
+                  : `<button type="button" class="selo-empresas selo-empresas-vazio" title="Nenhuma empresa cadastrada ainda — clique pra adicionar" onclick="abrirEmpresasCurso(${row.id})">🧾 empresas</button>`)
+              : '';
             cells += `<td${fi===0?' class="col-nome"':''}><input type="text" data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}${seloRenovacao}${seloUpgrade}${seloEmpresas}</td>`;
             if(f.key === "formaPagamento" && cfg.hasPagamento){
               cells += `<td class="pagamento-cell">
@@ -8959,7 +8968,6 @@ function renderEntitySection(key){
         cells += `<td class="del-cell">
           <div class="row-actions">
             ${key === 'cursos' ? `<button class="action-btn${row.inCompany?' ativo-incompany':''}" title="${row.inCompany?'Curso In Company — clique para desmarcar':'Marcar como curso In Company (entra no ranking)'}" onclick="toggleCursoInCompany(${row.id})">🏢</button>` : ''}
-            ${cfg.hasEmpresas && (isAdmin || isFinanceiro) ? `<button class="action-btn${row.empresas && row.empresas.length ? ' ativo' : ''}" title="Empresas inscritas neste curso — dados pra emitir nota fiscal" onclick="abrirEmpresasCurso(${row.id})">🧾</button>` : ''}
             <button class="action-btn" title="Adicionar mais um vendedor" onclick="addExtraVendedorSlot('${key}',${row.id})">➕</button>
             <button class="action-btn" title="Duplicar" onclick="duplicateEntityRow('${key}',${row.id})">⎘</button>
             <button class="action-btn" title="Parcelar em vários meses" onclick="parcelarEntityRow('${key}',${row.id})">🧩</button>
@@ -9908,7 +9916,16 @@ function persistEmpresaCurso(empresa, rowId){
           valor: numOrNull(empresa.valor), observacoes: empresa.observacoes||'',
         }], 'id');
         saveError = false;
-      }catch(e){ console.error('Falha ao salvar empresa do curso', e); saveError = true; }
+      }catch(e){
+        console.error('Falha ao salvar empresa do curso', e);
+        saveError = true;
+        // Diferente dos outros pontos de gravação: aqui o alerta é visível
+        // de propósito, não só o pontinho "erro ao salvar" — já aconteceu
+        // de um import inteiro "dar certo" na tela e nada ter sido gravado
+        // (id gerado pelo cliente contra uma coluna auto-incremento no
+        // banco), e isso só apareceu quando a página foi recarregada.
+        showAlert('Não consegui gravar "' + (empresa.nome || 'esta empresa') + '" no banco. Confira a internet e tente de novo — sem isso, ela some se a página recarregar.');
+      }
       finally{ saving = false; updateSaveStatus(); }
     })();
   }, 450);
