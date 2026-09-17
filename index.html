@@ -1319,6 +1319,14 @@
   button.selo-empresas:hover{background:#A5F3FC;}
   .selo-empresas.selo-empresas-vazio{background:var(--border-soft);border-color:var(--border-soft);color:var(--ink-faint);}
   .selo-empresas.selo-empresas-vazio:hover{background:var(--primary-soft);color:var(--primary);border-color:var(--ring);}
+  /* Dia combinado pra emitir nota de contrato Mensal/Plano Premium. */
+  button.selo-prazo{
+    margin-left:6px;font-family:var(--font);font-size:10px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
+    cursor:pointer;padding:2px 7px;border-radius:999px;background:#FEF3C7;border:1px solid #FCD34D;color:#B45309;
+  }
+  button.selo-prazo:hover{background:#FDE68A;}
+  button.selo-prazo.selo-prazo-vazio{background:var(--border-soft);border-color:var(--border-soft);color:var(--ink-faint);}
+  button.selo-prazo.selo-prazo-vazio:hover{background:var(--primary-soft);color:var(--primary);border-color:var(--ring);}
   .kpi-sub{font-size:11.5px;font-weight:700;color:var(--ink-faint);margin-top:2px;font-variant-numeric:tabular-nums;}
   .import-arquivo{display:block;margin:4px 0 10px;}
   .import-arquivo input{display:none;}
@@ -1354,6 +1362,11 @@
   .nota-btn:hover{border-color:var(--ink-faint);color:var(--ink-soft);}
   .nota-btn.on{background:#DCFCE7;border-color:#86EFAC;color:#15803D;}
   .nota-selo{font-size:11px;font-weight:800;color:#15803D;white-space:nowrap;}
+  .nota-editar-data{
+    margin-left:4px;font-size:11px;cursor:pointer;background:none;border:none;padding:2px;
+    opacity:.6;transition:opacity .15s;vertical-align:middle;
+  }
+  .nota-editar-data:hover{opacity:1;}
   /* Anexo do arquivo da nota fiscal: um pill compacto, com ou sem arquivo já anexado. */
   .anexo-upload{
     display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;
@@ -1373,6 +1386,14 @@
   }
   .notas-pendentes{color:#B45309;}
   .notas-ok{color:#15803D;}
+  /* Alerta de dia de emissão vencido — só aparece pro financeiro. */
+  .notas-alerta-prazo{
+    margin:12px 16px 0;padding:12px 14px;border-radius:var(--radius-sm);
+    background:var(--danger-soft);border:1px solid #FCA5A5;color:#991B1B;
+    font-size:12.5px;font-weight:700;line-height:1.5;
+  }
+  .notas-alerta-prazo ul{margin:6px 0 0;padding-left:18px;font-weight:600;}
+  .notas-alerta-prazo li{margin-top:2px;}
   .rent-btn.nao.on{background:var(--danger-soft);border-color:#FCA5A5;color:#B91C1C;}
   .rent-btn:disabled{cursor:default;}
   /* o valor do plano novo fica colado no valor da carteira: dá para ler
@@ -1523,6 +1544,9 @@ const ENTITIES = {
     // Um contrato de consultoria pode ter várias empresas dentro (grupo
     // econômico, por exemplo), cada uma com sua própria nota fiscal.
     hasEmpresas: true,
+    // Contrato Mensal/Plano Premium: o financeiro combina um dia fixo do
+    // mês pra emitir a nota, e o sistema lembra sozinho todo mês.
+    hasPrazoEmissao: true,
   },
   publicos: {
     tabLabel: "Consultorias e site para Órgãos Públicos",
@@ -1544,6 +1568,9 @@ const ENTITIES = {
     // Um órgão pode ter várias entidades/empresas dentro do mesmo
     // contrato, cada uma com sua própria nota fiscal.
     hasEmpresas: true,
+    // Contrato Mensal/Plano Premium: o financeiro combina um dia fixo do
+    // mês pra emitir a nota, e o sistema lembra sozinho todo mês.
+    hasPrazoEmissao: true,
   },
   cursos: {
     tabLabel: "Cursos",
@@ -1751,6 +1778,7 @@ let trafegoFilter = "Todos";
 let trafegoMetricaFoco = 'gasto';
 let closedMonths = [];
 let fechamentosMes = [];   // [{ano, mes, fechadoEm}] — quando cada mês foi fechado pra pagamento (não confundir com closedMonths, que é o mês fechado pra EDIÇÃO)
+let prazosEmissaoNota = [];   // [{id, entidade, nomeCliente, dia}] — dia fixo do mês combinado pra emitir a nota de um contrato Mensal/Plano Premium (lembrete só pro financeiro)
 let metas = [];      // regras de meta: gatilho da empresa que premia uma pessoa
 let metasNextId = 1;
 let pagamentosMonthFilter = "Todos";
@@ -4536,7 +4564,7 @@ function renderModal(){
                        title="${e.notaEmitida ? 'Nota emitida — clique para desmarcar' : 'Marcar que a nota foi emitida'}"
                        onclick="toggleNotaEmitida('lancamento_empresas',${e.id},'')">${
                  e.notaEmitida ? '✓ Emitida' + (dataCurta(e.notaEmitidaEm) ? ' · ' + dataCurta(e.notaEmitidaEm) : '') : 'Emitir'
-               }</button>`
+               }</button>${e.notaEmitida ? `<button type="button" class="nota-editar-data" title="Corrigir a data de emissão" onclick="editarDataEmissao('lancamento_empresas',${e.id},'')">✏️</button>` : ''}`
             : (e.notaEmitida ? '<span class="nota-selo">✓ Emitida</span>' : '—')}</td>
           <td>${podeVisar
             ? (e.notaArquivoPath
@@ -4640,6 +4668,47 @@ function renderModal(){
           </div>
         </div>
       </div>`;
+  }
+  if(m.type === 'relatorio-notas-emitidas'){
+    const anosDisponiveis = Array.from(new Set(todasAsNotasEmitidas().map(function(n){ return new Date(n.emitidaEm).getFullYear(); })));
+    if(anosDisponiveis.indexOf(m.ano) === -1) anosDisponiveis.push(m.ano);
+    anosDisponiveis.sort(function(a,b){ return b - a; });
+    const linhas = relatorioNotasEmitidasFiltrado(m.ano, m.mes, m.busca);
+    const total = linhas.reduce(function(a,l){ return a + l.valor; }, 0);
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-xwide">
+          <div class="modal-msg">Relatório de notas emitidas</div>
+          <div class="divisao-explica">
+            Lista as notas pela data em que foram de fato emitidas — não pelo mês do lançamento. Uma nota de um
+            mês emitida no mês seguinte entra no relatório de quando foi emitida.
+          </div>
+          <div class="filters-row" style="padding:10px 0 0;">
+            <select onchange="onRelatorioNotasAnoChange(this)">${anosDisponiveis.map(function(a){ return `<option value="${a}" ${m.ano===a?'selected':''}>${a}</option>`; }).join('')}</select>
+            <select onchange="onRelatorioNotasMesChange(this)">
+              <option value="Todos" ${m.mes==='Todos'?'selected':''}>Ano todo</option>
+              ${MONTHS.map(function(mm){ return `<option value="${mm}" ${m.mes===mm?'selected':''}>${mm}</option>`; }).join('')}
+            </select>
+            <input type="text" class="search-input" placeholder="🔍 Buscar cliente/empresa..." value="${esc(m.busca)}" oninput="onRelatorioNotasBuscaInput(this)" style="flex:1;min-width:180px;" />
+          </div>
+          <div class="table-scroll" style="margin-top:10px;max-height:400px;">
+            <table class="table-plain">
+              <thead><tr><th>Emitida em</th><th>Origem</th><th class="col-nome">Cliente/Empresa</th><th>Mês do lançamento</th><th class="num">Valor</th></tr></thead>
+              <tbody>${linhas.length ? linhas.map(function(l){
+                return `<tr><td>${esc(dataCurta(l.emitidaEm))}</td><td>${esc(l.origem)}</td><td class="col-nome">${esc(l.nome)}</td><td>${esc(monthShort(l.mesLancamento))}</td><td class="num">${fmtMoney(l.valor)}</td></tr>`;
+              }).join('') : `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhuma nota emitida neste filtro.</td></tr>`}</tbody>
+            </table>
+          </div>
+          <div class="divisao-conferencia ok">
+            <b>${linhas.length}</b> nota${linhas.length===1?'':'s'} · total emitido <b>${fmtMoney(total)}</b>
+          </div>
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Fechar</button>
+            <button class="modal-btn modal-btn-primary" onclick="imprimirRelatorioNotasEmitidas(${m.ano},'${escJs(m.mes)}','${escJs(m.busca)}')">🖨️ Gerar PDF</button>
+          </div>
+        </div>
+      </div>
+    `;
   }
   if(m.type === 'detalhe-fechamento'){
     const total = m.linhas.reduce(function(a,l){ return a + l.comissao; }, 0);
@@ -6934,6 +7003,17 @@ async function tryLoadFechamentosMesAsync(){
   }catch(e){ console.error(e); }
 }
 
+/* RLS só devolve linha pra admin/financeiro — pra quem mais não é, a
+   consulta volta vazia (não é erro), igual lancamento_empresas. */
+async function tryLoadPrazosEmissaoNotaAsync(){
+  try{
+    const db = await sbSelectOpcional('prazos_emissao_nota', 'select=*&order=id.asc', []);
+    carregouDoBanco['prazos-emissao'] = true;
+    prazosEmissaoNota = (db||[]).map(function(p){ return {id: p.id, entidade: p.entidade, nomeCliente: p.nome_cliente, dia: p.dia}; });
+    render();
+  }catch(e){ console.error(e); }
+}
+
 function persistFechamentoFora(){
   saving = true; updateSaveStatus();
   if(fechamentoForaTimer) clearTimeout(fechamentoForaTimer);
@@ -7997,6 +8077,204 @@ function notasDoAno(){
   });
 }
 
+/* ---------- Lembrete de dia fixo pra emitir nota (Mensal/Plano Premium) ----------
+   Contrato recorrente: o financeiro combina o dia UMA vez ("todo dia 10")
+   e isso vale pra sempre, mês a mês — sem precisar redigitar a cada novo
+   lançamento. Por isso o prazo fica preso ao NOME do cliente, não a um
+   lançamento específico (cada mês vira um lançamento novo). O alerta em
+   si (quem está atrasado) só aparece pro financeiro, na tela mesmo. */
+function prazoEmissaoPara(entKey, nomeCliente){
+  return prazosEmissaoNota.find(function(p){
+    return p.entidade === entKey && name_matches_client(p.nomeCliente, nomeCliente);
+  }) || null;
+}
+
+function definirPrazoEmissaoNota(entKey, nomeCliente){
+  if(!isAdmin && !isFinanceiro) return;
+  const atual = prazoEmissaoPara(entKey, nomeCliente);
+  showPrompt(
+    'Lembrar de emitir a nota de "' + nomeCliente + '" todo dia (1 a 28) do mês.'
+    + (atual ? ' Hoje está combinado o dia ' + atual.dia + ' — digite outro número pra mudar,' : ' Digite o dia,')
+    + ' ou deixe em branco pra remover o lembrete.',
+    function(v){
+      const texto = String(v||'').trim();
+      if(!texto){ removerPrazoEmissaoNota(entKey, nomeCliente); return; }
+      const dia = parseInt(texto, 10);
+      if(!dia || dia < 1 || dia > 28){ showAlert('Informe um dia entre 1 e 28, ou deixe em branco pra remover o lembrete.'); return; }
+      persistPrazoEmissaoNota(entKey, nomeCliente, dia, atual ? atual.id : null);
+    }
+  );
+}
+
+function persistPrazoEmissaoNota(entKey, nomeCliente, dia, idExistente){
+  const id = idExistente || Date.now();
+  const existente = prazosEmissaoNota.find(function(p){ return p.id === id; });
+  if(existente) existente.dia = dia;
+  else prazosEmissaoNota.push({id: id, entidade: entKey, nomeCliente: nomeCliente, dia: dia});
+  render();
+  saving = true; updateSaveStatus();
+  sbUpsert('prazos_emissao_nota', [{id: id, entidade: entKey, nome_cliente: nomeCliente, dia: dia}], 'id')
+    .then(function(){ saveError = false; })
+    .catch(function(e){
+      console.error('Falha ao gravar o dia de emissão', e);
+      saveError = true;
+      showAlert('Não consegui gravar o dia de emissão. Confira a internet e tente de novo.');
+    })
+    .finally(function(){ saving = false; updateSaveStatus(); });
+}
+
+function removerPrazoEmissaoNota(entKey, nomeCliente){
+  if(!isAdmin && !isFinanceiro) return;
+  const atual = prazoEmissaoPara(entKey, nomeCliente);
+  if(!atual) return;
+  prazosEmissaoNota = prazosEmissaoNota.filter(function(p){ return p.id !== atual.id; });
+  render();
+  sbDeleteAll('prazos_emissao_nota', 'id=eq.'+atual.id).catch(function(e){ console.error('Falha ao apagar o dia de emissão', e); });
+}
+
+/* Quem está com o dia combinado já passado, este mês, e ainda não
+   emitiu — só entram lançamentos Mensal/Plano Premium do mês corrente
+   (o mesmo lançamento não "carrega" atraso de mês anterior: cada mês é
+   um lançamento novo, e o que passou, passou). */
+function alertasEmissaoPendentes(){
+  const hoje = new Date();
+  const anoAtual = hoje.getFullYear();
+  const mesAtual = MONTHS[hoje.getMonth()];
+  const diaAtual = hoje.getDate();
+  const out = [];
+  ENTITY_KEYS.forEach(function(key){
+    if(!ENTITIES[key].hasPrazoEmissao) return;
+    const mainField = ENTITIES[key].fields[0].key;
+    state[key].rows.forEach(function(r){
+      if((r.ano||2026) !== anoAtual || r.mes !== mesAtual) return;
+      if(r.tipo !== 'Mensal' && r.tipo !== 'Plano Premium') return;
+      if(r.notaEmitida) return;
+      const prazo = prazoEmissaoPara(key, r[mainField]);
+      if(!prazo || diaAtual < prazo.dia) return;
+      out.push({ origem: ENTITIES[key].tabLabel, nome: r[mainField] || '—', dia: prazo.dia, atraso: diaAtual - prazo.dia });
+    });
+  });
+  return out;
+}
+
+/* ---------- Relatório de notas emitidas ----------
+   Diferente de notasDoAno() (que olha o mês/ano do LANÇAMENTO e é
+   sempre travado no yearFilter da tela), aqui o que importa é quando a
+   nota foi de fato emitida — pra fechar o ano, a Marli quer "as notas
+   que emiti em dezembro", não "os lançamentos de dezembro". Uma nota de
+   Novembro emitida em Dezembro entra no relatório de Dezembro. */
+function todasAsNotasEmitidas(){
+  const out = [];
+  rows.forEach(function(r){
+    if(!r.notaEmitida || !r.notaEmitidaEm) return;
+    out.push({ origem:'Sistema', nome:r.cliente || r.venda || '—', valor:Number(r.valor)||0,
+               emitidaEm:r.notaEmitidaEm, mesLancamento:r.mes, anoLancamento:r.ano||2026 });
+  });
+  ENTITY_KEYS.forEach(function(key){
+    const campo = ENTITIES[key].fields[0].key;
+    state[key].rows.forEach(function(r){
+      if(ENTITIES[key].hasEmpresas && Array.isArray(r.empresas) && r.empresas.length){
+        r.empresas.forEach(function(e){
+          if(!e.notaEmitida || !e.notaEmitidaEm) return;
+          out.push({ origem:ENTITIES[key].tabLabel,
+                     nome:(r[campo]||'—') + ' — ' + (e.nome||'empresa sem nome'),
+                     valor:Number(e.valor)||0, emitidaEm:e.notaEmitidaEm, mesLancamento:r.mes, anoLancamento:r.ano||2026 });
+        });
+        return;
+      }
+      if(!r.notaEmitida || !r.notaEmitidaEm) return;
+      out.push({ origem:ENTITIES[key].tabLabel, nome:r[campo] || '—', valor:Number(r.valorContrato)||0,
+                 emitidaEm:r.notaEmitidaEm, mesLancamento:r.mes, anoLancamento:r.ano||2026 });
+    });
+  });
+  return out;
+}
+
+function relatorioNotasEmitidasFiltrado(ano, mes, busca){
+  const buscaNorm = semAcento(busca||'').trim();
+  return todasAsNotasEmitidas().filter(function(n){
+    const d = new Date(n.emitidaEm);
+    if(d.getFullYear() !== ano) return false;
+    if(mes && mes !== 'Todos' && MONTHS[d.getMonth()] !== mes) return false;
+    if(buscaNorm && semAcento(n.nome).indexOf(buscaNorm) === -1) return false;
+    return true;
+  }).sort(function(a,b){
+    return String(a.nome).localeCompare(String(b.nome), 'pt-BR') || new Date(a.emitidaEm) - new Date(b.emitidaEm);
+  });
+}
+
+function abrirRelatorioNotasEmitidas(){
+  if(!isAdmin && !isFinanceiro) return;
+  const anos = todasAsNotasEmitidas().map(function(n){ return new Date(n.emitidaEm).getFullYear(); });
+  const anoPadrao = anos.length ? Math.max.apply(null, anos) : new Date().getFullYear();
+  modalState = { type:'relatorio-notas-emitidas', ano: anoPadrao, mes: 'Todos', busca: '' };
+  render();
+}
+function onRelatorioNotasAnoChange(el){ if(modalState) modalState.ano = parseInt(el.value,10); render(); }
+function onRelatorioNotasMesChange(el){ if(modalState) modalState.mes = el.value; render(); }
+function onRelatorioNotasBuscaInput(el){ if(modalState) modalState.busca = el.value; render(); }
+
+function montarRelatorioNotasEmitidas(ano, mes, busca){
+  const agora = new Date();
+  const emitido = agora.toLocaleDateString('pt-BR') + ' às ' + agora.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+  const linhas = relatorioNotasEmitidasFiltrado(ano, mes, busca);
+  const total = linhas.reduce(function(a,l){ return a + l.valor; }, 0);
+  const periodo = (mes && mes !== 'Todos' ? mes + ' de ' : 'ano de ') + ano;
+
+  const linhasHtml = linhas.map(function(l){
+    return `<tr><td>${esc(dataCurta(l.emitidaEm))}</td><td>${esc(l.origem)}</td><td>${esc(l.nome)}</td>
+      <td>${esc(monthShort(l.mesLancamento))}</td>
+      <td class="num destaque">${fmtMoney(l.valor)}</td></tr>`;
+  });
+
+  return `
+    <div class="rel-doc">
+      <header class="rel-faixa">
+        <div class="rel-faixa-globo">${logoGloboSvg(150, '#ffffff')}</div>
+        <div class="rel-marca">
+          ${marcaOpenHtml({tam:32, clara:true, cor:'#8FCBF5'})}
+          <div class="rel-divisor"></div>
+          <div>
+            <div class="rel-empresa">HUB Comercial · Painel Diretoria Comercial</div>
+            <h1>Relatório de notas emitidas</h1>
+          </div>
+        </div>
+        <div class="rel-emissao">
+          <div class="rel-emissao-tit">Notas emitidas em ${esc(periodo)}</div>
+          <div class="rel-emissao-sub">Emitido em ${esc(emitido)}</div>
+        </div>
+      </header>
+      <div class="rel-faixa-linha"></div>
+
+      <section class="rel-sec">
+        <div class="rel-cards">
+          <div class="rel-card rel-card-total"><span>${linhas.length} nota${linhas.length===1?'':'s'} emitida${linhas.length===1?'':'s'}</span><b>${fmtMoney(total)}</b></div>
+        </div>
+        ${relTabela(
+          [{label:'Emitida em'},{label:'Origem'},{label:'Cliente/Empresa'},{label:'Mês do lançamento'},{label:'Valor',num:true}],
+          linhasHtml, 'Nenhuma nota emitida em ' + periodo + (busca ? ' pra "' + busca + '"' : '') + '.')}
+      </section>
+    </div>
+  `;
+}
+
+function imprimirRelatorioNotasEmitidas(ano, mes, busca){
+  let div = document.getElementById('relatorio-print');
+  if(!div){
+    div = document.createElement('div');
+    div.id = 'relatorio-print';
+    document.body.appendChild(div);
+  }
+  div.innerHTML = montarRelatorioNotasEmitidas(ano, mes, busca);
+  document.body.classList.add('imprimindo-relatorio');
+  const limpar = function(){
+    document.body.classList.remove('imprimindo-relatorio');
+    window.removeEventListener('afterprint', limpar);
+  };
+  window.addEventListener('afterprint', limpar);
+  setTimeout(function(){ window.print(); setTimeout(limpar, 1500); }, 60);
+}
+
 /* ---------- O visto de "nota emitida" ----------
    É o único dado que a conta do financeiro escreve. Por isso ele não vai
    pelo caminho normal de gravação (a conta não tem permissão de escrever
@@ -8052,6 +8330,55 @@ async function toggleNotaEmitida(tabela, id, entKey){
   }
 }
 
+/* Corrigir a data em que a nota foi emitida — sem isso, uma nota que
+   precisa ser cancelada e reemitida em outro dia fica com a data errada
+   pra sempre, porque marcar/desmarcar "Emitida" sempre grava a data de
+   HOJE. Mesma porta estreita do visto (marcar_nota_emitida), só que
+   agora aceitando uma data específica em vez de "agora". */
+function editarDataEmissao(tabela, id, entKey){
+  if(!isAdmin && !isFinanceiro) return;
+  const alvo = acharAlvoNota(tabela, id, entKey);
+  if(!alvo || !alvo.notaEmitida) return;
+  showPrompt(
+    'Corrigir a data em que esta nota foi emitida. Data atual: ' + (dataCurta(alvo.notaEmitidaEm) || '—') + '. Digite no formato DD/MM/AAAA:',
+    function(v){
+      const iso = parseDataBr(v);
+      if(!iso){ showAlert('Data inválida. Use o formato DD/MM/AAAA, por exemplo 05/12/2026.'); return; }
+      gravarDataEmissao(tabela, id, entKey, iso);
+    }
+  );
+}
+
+function parseDataBr(texto){
+  const m = String(texto||'').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(!m) return null;
+  const dia = parseInt(m[1],10), mes = parseInt(m[2],10), ano = parseInt(m[3],10);
+  if(mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+  const d = new Date(ano, mes-1, dia, 12, 0, 0);
+  if(d.getFullYear() !== ano || d.getMonth() !== mes-1 || d.getDate() !== dia) return null;
+  return d.toISOString();
+}
+
+async function gravarDataEmissao(tabela, id, entKey, isoData){
+  const alvo = acharAlvoNota(tabela, id, entKey);
+  if(!alvo) return;
+  const anterior = alvo.notaEmitidaEm;
+  alvo.notaEmitidaEm = isoData;
+  render();
+  saving = true; updateSaveStatus();
+  try{
+    await sbRpc('marcar_nota_emitida', { p_tabela: tabela, p_id: id, p_emitida: true, p_quando: isoData });
+    saveError = false;
+  }catch(e){
+    console.error('Falha ao corrigir a data de emissão', e);
+    alvo.notaEmitidaEm = anterior;
+    saveError = true;
+    showAlert('Não consegui corrigir a data. Confira a internet e tente de novo.');
+  }finally{
+    saving = false; updateSaveStatus(); render();
+  }
+}
+
 function dataCurta(iso){
   if(!iso) return '';
   const d = new Date(iso);
@@ -8083,7 +8410,15 @@ function renderNotasPanel(){
     return `<button class="pill seller-pill${notaFiltro===f.k?' active':''}" onclick="setNotaFiltro('${f.k}')">${f.rot} · ${f.n}</button>`;
   }).join('');
 
+  const alertasPrazo = isFinanceiro ? alertasEmissaoPendentes() : [];
+
   const corpo = `
+    ${alertasPrazo.length ? `<div class="notas-alerta-prazo">
+      📅 <b>${alertasPrazo.length}</b> nota${alertasPrazo.length===1?'':'s'} mensal${alertasPrazo.length===1?'':'is'}/premium já passou do dia combinado pra emitir:
+      <ul>${alertasPrazo.map(function(a){
+        return `<li>${esc(a.origem)} · <b>${esc(a.nome)}</b> — dia ${a.dia}${a.atraso>0?' (há '+a.atraso+' dia'+(a.atraso===1?'':'s')+')':' (hoje)'}</li>`;
+      }).join('')}</ul>
+    </div>` : ''}
     <div class="filters-row" style="padding-top:0;"><div class="months">${pills}</div></div>
     ${pendentes.length ? `<div class="notas-pendentes">
       Faltam <b>${pendentes.length}</b> nota${pendentes.length===1?'':'s'} para emitir
@@ -8113,7 +8448,7 @@ function renderNotasPanel(){
                          title="${n.emitida ? 'Nota emitida — clique para desmarcar' : 'Marcar que a nota foi emitida'}"
                          onclick="toggleNotaEmitida('${n.tabela}',${n.id},'${escJs(n.entKey)}')">${
                    n.emitida ? '✓ Emitida' + (dataCurta(n.emitidaEm) ? ' · ' + dataCurta(n.emitidaEm) : '') : 'Emitir'
-                 }</button>`
+                 }</button>${n.emitida ? `<button type="button" class="nota-editar-data" title="Corrigir a data de emissão" onclick="editarDataEmissao('${n.tabela}',${n.id},'${escJs(n.entKey)}')">✏️</button>` : ''}`
               : (n.emitida ? '<span class="nota-selo">✓ Emitida</span>' : '—')}</td>
             <td>${podeVisar
               ? (n.notaArquivoPath
@@ -8135,6 +8470,7 @@ function renderNotasPanel(){
     flush: true,
     meta: `<b>${doPeriodo.length}</b> nota${doPeriodo.length===1?'':'s'} ${partnerMonthFilter==='Todos' ? 'no ano de '+yearFilter : 'em '+esc(partnerMonthFilter)}${
       doPeriodo.length ? ` · <b>${emitidas.length}</b> emitida${emitidas.length===1?'':'s'}` : ''}`,
+    actions: `<button class="eye-toggle" onclick="abrirRelatorioNotasEmitidas()">📊 Relatório de notas emitidas</button>`,
   });
 }
 
@@ -9040,7 +9376,12 @@ function renderEntitySection(key){
                   ? `<button type="button" class="selo-empresas" title="${dEmp.fecha ? 'Soma das empresas confere com o valor total — clique pra ver' : esc(dEmp.rotuloDiferenca)+' — clique pra ver'}" onclick="abrirEmpresasCurso('${key}',${row.id})">🧾 ${row.empresas.length} empresa${row.empresas.length===1?'':'s'}</button>`
                   : `<button type="button" class="selo-empresas selo-empresas-vazio" title="Nenhuma empresa cadastrada ainda — clique pra adicionar" onclick="abrirEmpresasCurso('${key}',${row.id})">🧾 empresas</button>`)
               : '';
-            cells += `<td${fi===0?' class="col-nome"':''}><input type="text" data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}${seloRenovacao}${seloUpgrade}${seloEmpresas}</td>`;
+            const mostraPrazo = cfg.hasPrazoEmissao && fi === 0 && (row.tipo === 'Mensal' || row.tipo === 'Plano Premium') && (isAdmin || isFinanceiro);
+            const prazoRow = mostraPrazo ? prazoEmissaoPara(key, row[f.key]) : null;
+            const seloPrazo = mostraPrazo
+              ? `<button type="button" class="selo-prazo${prazoRow?'':' selo-prazo-vazio'}" title="${prazoRow ? 'Lembrete de emissão todo dia '+prazoRow.dia+' — clique pra mudar' : 'Combinar um dia fixo do mês pra emitir a nota (Mensal/Plano Premium)'}" onclick="definirPrazoEmissaoNota('${key}','${escJs(row[f.key])}')">📅 ${prazoRow ? 'dia '+prazoRow.dia : 'definir dia'}</button>`
+              : '';
+            cells += `<td${fi===0?' class="col-nome"':''}><input type="text" data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}${seloRenovacao}${seloUpgrade}${seloEmpresas}${seloPrazo}</td>`;
             if(f.key === "formaPagamento" && cfg.hasPagamento){
               cells += `<td class="pagamento-cell">
                 <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" onchange="onPagamentoToggle(this,'${key}')" /><span>${row.pago?'Pago':'Pendente'}</span></label>
@@ -13264,6 +13605,7 @@ function boot(){
     tryLoadContratosNovosAsync(),
     tryLoadFechamentoForaAsync(),
     tryLoadFechamentosMesAsync(),
+    tryLoadPrazosEmissaoNotaAsync(),
     tryLoadRenovacaoPessoasAsync(),
     tryLoadRenovacoesAsync(),
   ];
