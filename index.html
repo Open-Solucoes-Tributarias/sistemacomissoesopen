@@ -6169,7 +6169,7 @@ function renderBonusSection(){
         ${celulaFechamento(l.pessoa, 'consultoria', 'Consultoria', l.consultoria, bonusFilter, dinheiro(l.consultoria), 'col-apoio', bonusValuesRevealed)}
         <td class="num" style="font-weight:800;">${dinheiro(l.aPagar)}</td>
         <td class="num col-apoio" title="Já ganhou, mas ainda espera o cliente pagar">${dinheiro(l.pendente)}</td>
-        <td class="del-cell">${bonusFilter!=="Todos" ? `<button class="action-btn" title="Gerar comprovante em PDF dos recebíveis de ${esc(l.pessoa)} em ${esc(bonusFilter)}" onclick="imprimirComprovanteFechamento('${escJs(l.pessoa)}','${escJs(bonusFilter)}')">📄</button>` : ''}</td>
+        <td class="del-cell">${bonusFilter!=="Todos" ? `<button class="action-btn" title="Gerar comprovante em PDF dos recebíveis de ${esc(l.pessoa)} em ${esc(bonusFilter)}" onclick="imprimirComprovanteFechamento('${escJs(l.pessoa)}','${escJs(bonusFilter)}')">🧾</button>` : ''}</td>
       </tr>`).join('');
 
   const editorFechamentoHtml = (isAdmin && fechamentoEditando) ? panel('bonus-fechamento-quem', 'Quem entra no fechamento', `
@@ -6871,7 +6871,7 @@ function renderParceirosSection(){
         ${celulaFechamento(l.pessoa, 'consultoria', 'Consultoria', l.consultoria, partnerMonthFilter, maskOr(l.consultoria), 'col-apoio', partnersValuesRevealed)}
         <td class="num" style="font-weight:800;">${maskOr(l.aPagar)}</td>
         <td class="num col-apoio" title="Já ganhou, mas ainda espera o cliente pagar">${maskOr(l.pendente)}</td>
-        <td class="del-cell">${partnerMonthFilter!=="Todos" ? `<button class="action-btn" title="Gerar comprovante em PDF dos recebíveis de ${esc(l.pessoa)} em ${esc(partnerMonthFilter)}" onclick="imprimirComprovanteFechamento('${escJs(l.pessoa)}','${escJs(partnerMonthFilter)}')">📄</button>` : ''}</td>
+        <td class="del-cell">${partnerMonthFilter!=="Todos" ? `<button class="action-btn" title="Gerar comprovante em PDF dos recebíveis de ${esc(l.pessoa)} em ${esc(partnerMonthFilter)}" onclick="imprimirComprovanteFechamento('${escJs(l.pessoa)}','${escJs(partnerMonthFilter)}')">🧾</button>` : ''}</td>
       </tr>`).join('');
 
   const sellerBreakdownRowsHtml = sellersForCurrentUser().map(s => {
