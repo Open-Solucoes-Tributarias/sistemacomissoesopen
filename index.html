@@ -1715,6 +1715,7 @@ let trafegoNextId = 1;
 let trafegoFilter = "Todos";
 let trafegoMetricaFoco = 'gasto';
 let closedMonths = [];
+let fechamentosMes = [];   // [{ano, mes, fechadoEm}] — quando cada mês foi fechado pra pagamento (não confundir com closedMonths, que é o mês fechado pra EDIÇÃO)
 let metas = [];      // regras de meta: gatilho da empresa que premia uma pessoa
 let metasNextId = 1;
 let pagamentosMonthFilter = "Todos";
@@ -5356,7 +5357,7 @@ function onPagamentoToggle(el, entityKey){
   r.pago = el.checked;
   if(r.pago){
     if(!r.mesPagamento) r.mesPagamento = mesPagamentoPadrao(r);
-    r.pagoEm = new Date().toISOString();   // marca AGORA — é a data que decide a janela de 01 do mês anterior a 16 do mês
+    r.pagoEm = new Date().toISOString();   // marca AGORA — é a data que decide em qual período de fechamento a nota cai
   } else {
     r.mesPagamento = null;
     r.pagoEm = null;
@@ -6264,14 +6265,15 @@ function renderBonusSection(){
         A liberação depende de quem ganhou: pra Rios, Angela, Soraya, Luciana e Uilma, Sistema, Órgãos Públicos,
         Cursos e Bônus liberam na hora, mesmo sem o cliente ter pago — só a Consultoria delas espera o pagamento.
         Pra todo mundo fora dessa lista (Arick, Gustavo, Matheus Costa e outros), tudo espera o cliente pagar,
-        não importa o produto. Pra quem espera pagamento, a nota entra no fechamento de um mês se foi paga entre
-        01 do mês anterior e 16 dele. O que ainda não liberou aparece em <b>Pendente</b>. Depois de mandar pagar,
-        use <b>🔒 Travar fechamento</b> pra essa nota não contar de novo no mês seguinte.
+        não importa o produto. Pra quem espera pagamento, a nota entra no fechamento do mês corrente enquanto ele
+        estiver aberto — tudo que for pago desde o último <b>🔒 Fechar</b> até agora. O que ainda não liberou
+        aparece em <b>Pendente</b>. Depois de mandar pagar, use <b>🔒 Fechar</b> pra esse mês virar definitivo —
+        o que for pago depois já entra automaticamente no próximo.
       </div>
     `, {
       flush: true,
       meta: `${bonusFilter !== "Todos" ? "em <b>"+esc(bonusFilter)+"</b>" : "no ano de <b>"+yearFilter+"</b>"}${fechamento.length ? ' · a pagar <b>'+(bonusValuesRevealed ? fmtMoney(somaCols.aPagar) : '••••')+'</b>' : ''}${fechamentoFora.length ? ' · <span title="'+esc(fechamentoFora.join(', '))+'">'+fechamentoFora.length+' fora</span>' : ''}`,
-      actions: `${(isAdmin && bonusFilter !== "Todos") ? `<button class="eye-toggle" onclick="travarFechamentoDoMes('${escJs(bonusFilter)}')">🔒 Travar fechamento de ${esc(bonusFilter)}</button>` : ''}${isAdmin ? `<button class="eye-toggle" onclick="setFechamentoEditando(${fechamentoEditando?'false':'true'})">${fechamentoEditando?'✕ Fechar':'👥 Quem entra'}</button>` : ''}<button class="eye-toggle" onclick="exportFechamentoCSV()">📊 Baixar CSV</button>`,
+      actions: `${fechamentoActionButtonHtml(bonusFilter)}${isAdmin ? `<button class="eye-toggle" onclick="setFechamentoEditando(${fechamentoEditando?'false':'true'})">${fechamentoEditando?'✕ Fechar':'👥 Quem entra'}</button>` : ''}<button class="eye-toggle" onclick="exportFechamentoCSV()">📊 Baixar CSV</button>`,
     })}
     ${editorFechamentoHtml}
 
@@ -6356,31 +6358,54 @@ function getSellerBreakdown(){
   return by;
 }
 
-/* Uma nota "espera pagamento" entra no fechamento de um mês M quando foi
-   paga entre o dia 1º do mês anterior a M e o dia 16 de M — a folga que a
-   Soraya pediu, pra pegar pagamentos confirmados só depois do fechamento
-   anterior já ter fechado. Essa janela se sobrepõe com a do mês seguinte
-   (os primeiros 16 dias de qualquer mês caem nas duas), então travarFechamentoDoMes
-   existe pra fixar em qual mês cada nota já entrou, e não contar de novo. */
-function dentroDaJanelaDePagamento(pagoEmIso, mes, ano){
+/* Uma nota "espera pagamento" entra no fechamento do mês em que foi
+   FECHADA — não num dia fixo do calendário. Cada mês fechado grava um
+   carimbo (fechamentosMes: quando o admin clicou "Fechar"), em ORDEM
+   DE TEMPO. Uma nota pertence ao período entre o fechamento anterior
+   (exclusive) e o fechamento deste mês (inclusive). O mês ainda não
+   fechado é o período "aberto": tudo pago desde o último fechamento
+   até agora é candidato dele — é só uma prévia, vira definitivo
+   quando alguém fechar.
+   Isso troca a regra antiga (01 do mês anterior a 16 do mês), que
+   vencia sozinha no dia 16 mesmo com o fechamento ainda em revisão —
+   foi o que fez a correção da Prefeitura de Catu (feita dia 17) cair
+   em Outubro por engano, quando devia valer pra Setembro. */
+function getFechamentoDoMes(ano, mes){
+  return fechamentosMes.find(f => f.ano === ano && f.mes === mes) || null;
+}
+function fechamentosMesEmOrdem(ano){
+  return fechamentosMes.filter(f => f.ano === ano).slice().sort((a,b) => new Date(a.fechadoEm) - new Date(b.fechadoEm));
+}
+function periodoDoFechamento(mes, ano){
+  const lista = fechamentosMesEmOrdem(ano);
+  const idx = lista.findIndex(f => f.mes === mes);
+  if(idx === -1){
+    // ainda não fechado: início é o último fechamento que já rolou (sem fim — é o período aberto agora)
+    const ultimo = lista.length ? lista[lista.length-1] : null;
+    return { inicio: ultimo ? new Date(ultimo.fechadoEm) : null, fim: null };
+  }
+  const anterior = idx > 0 ? lista[idx-1] : null;
+  return { inicio: anterior ? new Date(anterior.fechadoEm) : null, fim: new Date(lista[idx].fechadoEm) };
+}
+function dentroDoPeriodoDeFechamento(pagoEmIso, mes, ano){
   if(!pagoEmIso) return false;
-  const idx = MONTHS.indexOf(mes);
-  if(idx === -1) return false;
   const d = new Date(pagoEmIso);
   if(isNaN(d.getTime())) return false;
-  const inicio = new Date(ano, idx - 1, 1, 0, 0, 0);
-  const fim = new Date(ano, idx, 16, 23, 59, 59);
-  return d >= inicio && d <= fim;
+  const p = periodoDoFechamento(mes, ano);
+  if(p.inicio && d <= p.inicio) return false;
+  if(p.fim && d > p.fim) return false;
+  return true;
 }
 /* Só chega aqui quem já espera pagamento (Consultoria pra vendedora de
-   Sistema; tudo pra quem não é). Uma vez travada num mês, só conta
-   naquele — nunca mais entra em outro, mesmo caindo na janela dele
-   também. Sem trava ainda, vale a janela ao vivo. */
+   Sistema; tudo pra quem não é). r.fechamentoMes é uma trava manual
+   numa nota específica — exceção pra correção retroativa, feita direto
+   no banco quando um pagamento precisa contar num mês já fechado. Sem
+   essa trava, vale o período do fechamento do mês (fechamentosMes). */
 function elegivelNoFechamento(r, mes){
   if(!r.pago) return false;
   if(mes === "Todos" || !mes) return true;
   if(r.fechamentoMes) return r.fechamentoMes === mes;
-  if(r.pagoEm) return dentroDaJanelaDePagamento(r.pagoEm, mes, yearFilter);
+  if(r.pagoEm) return dentroDoPeriodoDeFechamento(r.pagoEm, mes, yearFilter);
   return (r.mesPagamento || r.mes) === mes;   // pago sem data exata ainda: melhor esforço, como antes
 }
 
@@ -6548,32 +6573,71 @@ function celulaFechamento(pessoa, origem, origemLabel, valorNum, mes, textoForma
   return `<td class="${classes} celula-clicavel" title="Ver o que está contando aqui" onclick="abrirDetalheFechamento('${escJs(pessoa)}','${origem}','${escJs(origemLabel)}','${escJs(mes)}')">${textoFormatado}</td>`;
 }
 
-/* Trava no mês escolhido toda nota "espera pagamento" que caiu na janela
-   dele e ainda não tinha sido travada em nenhum outro mês. Depois disso
-   ela para de responder à janela ao vivo — fica só naquele mês, mesmo
-   que o mês seguinte também alcance a mesma data de pagamento. É o que
-   evita pagar a mesma comissão duas vezes por causa da sobreposição. */
+/* Fecha o mês: grava só um carimbo de tempo (fechamentosMes), não mexe
+   em nenhuma nota. É esse carimbo que passa a valer como fronteira do
+   período — tudo pago até agora é definitivo neste mês; tudo pago
+   depois vira candidato do próximo, sem precisar travar nota por nota. */
 function travarFechamentoDoMes(mes){
-  if(!mes || mes === 'Todos'){ showAlert('Escolha um mês específico antes de travar o fechamento.'); return; }
+  if(!mes || mes === 'Todos'){ showAlert('Escolha um mês específico antes de fechar.'); return; }
+  if(getFechamentoDoMes(yearFilter, mes)){ showAlert('Os recebíveis de ' + mes + ' já estão fechados.'); return; }
   showConfirm(
-    'Travar o fechamento de ' + mes + '? As notas pagas entre 01 do mês anterior e 16 de ' + mes
-      + ' que ainda não foram travadas por nenhum outro mês ficam marcadas como já incluídas aqui — não contam de novo em nenhum fechamento futuro.',
+    'Fechar os recebíveis de ' + mes + '? A partir de agora, tudo que for marcado como pago passa a contar pro PRÓXIMO fechamento — '
+      + mes + ' fica definitivo, com tudo que já foi pago até este momento.',
     function(){
-      let travadas = 0;
-      const travar = function(r){
-        if(r.pago && !r.fechamentoMes && (r.ano||2026) === yearFilter && dentroDaJanelaDePagamento(r.pagoEm, mes, yearFilter)){
-          r.fechamentoMes = mes;
-          travadas++;
-        }
-      };
-      rows.forEach(travar);
-      persist();
-      ENTITY_KEYS.forEach(function(key){ state[key].rows.forEach(travar); persistEntityRows(key); });
+      persistFechamentoDoMes(yearFilter, mes);
       closeModal();
-      showAlert(travadas ? (travadas + ' lançamento' + (travadas===1?'':'s') + ' travado' + (travadas===1?'':'s') + ' no fechamento de ' + mes + '.') : 'Nada novo pra travar em ' + mes + '.');
     },
-    'Travar'
+    'Fechar'
   );
+}
+
+async function persistFechamentoDoMes(ano, mes){
+  saving = true; updateSaveStatus();
+  try{
+    const fechadoEm = new Date().toISOString();
+    await sbUpsert('fechamentos_mes', [{ano, mes, fechado_em: fechadoEm}], 'ano,mes');
+    fechamentosMes.push({ano, mes, fechadoEm});
+    saveError = false;
+  }catch(e){ console.error('Falha ao fechar o mês', e); saveError = true; }
+  finally{ saving = false; updateSaveStatus(); render(); }
+}
+
+/* Desfaz um fechamento — só quando foi engano. Reabrir NÃO desfaz as
+   travas manuais (fechamentoMes) que alguém já tenha posto em notas
+   específicas; é só o carimbo do mês em si. */
+function reabrirFechamentoDoMes(mes){
+  const f = getFechamentoDoMes(yearFilter, mes);
+  if(!f) return;
+  showConfirm(
+    'Reabrir ' + mes + '? Ele volta a valer como o período aberto, junto com o que vier depois — não é pra desfazer sem motivo.',
+    async function(){
+      saving = true; updateSaveStatus();
+      try{
+        await sbDeleteAll('fechamentos_mes', 'ano=eq.'+yearFilter+'&mes=eq.'+encodeURIComponent(mes));
+        fechamentosMes = fechamentosMes.filter(x => !(x.ano === yearFilter && x.mes === mes));
+        saveError = false;
+      }catch(e){ console.error('Falha ao reabrir o fechamento', e); saveError = true; }
+      finally{ saving = false; updateSaveStatus(); closeModal(); render(); }
+    },
+    'Reabrir'
+  );
+}
+
+/* Botão de ação do painel de Fechamento: fecha o mês (se ainda aberto)
+   ou mostra quando fechou + opção de reabrir (se já fechado). Usado
+   nos dois lugares que mostram a tabela de Fechamento (Bônus e Resumo
+   Geral), pra não desalinhar os dois. */
+function fechamentoActionButtonHtml(mes){
+  if(!isAdmin || !mes || mes === "Todos") return '';
+  const f = getFechamentoDoMes(yearFilter, mes);
+  /* Rótulo bem diferente do outro botão "🔒 Fechar Agosto" que já existe
+     (esse aqui é o mês fechado pra EDIÇÃO, toggleMonthClosed) — os dois
+     aparecem juntos na mesma tela e não podem se confundir. */
+  if(f){
+    const dataFmt = new Date(f.fechadoEm).toLocaleDateString('pt-BR');
+    return `<button class="eye-toggle" title="Reabrir volta os recebíveis de ${esc(mes)} a valer como período em aberto" onclick="reabrirFechamentoDoMes('${escJs(mes)}')">🔓 Recebíveis de ${esc(mes)} fechados em ${esc(dataFmt)} — reabrir</button>`;
+  }
+  return `<button class="eye-toggle" onclick="travarFechamentoDoMes('${escJs(mes)}')">🔒 Fechar recebíveis de ${esc(mes)}</button>`;
 }
 
 /* getSellerBreakdown lê o filtro de mês do Resumo Geral. Para usar o
@@ -6600,6 +6664,15 @@ async function tryLoadFechamentoForaAsync(){
     const db = await sbSelect('entity_vendors', 'select=vendor_name&entidade=eq.fechamento_fora&order=id.asc');
     carregouDoBanco['fechamento-fora'] = true;
     if(db) fechamentoFora = db.map(function(v){ return v.vendor_name; });
+    render();
+  }catch(e){ console.error(e); }
+}
+
+async function tryLoadFechamentosMesAsync(){
+  try{
+    const db = await sbSelect('fechamentos_mes', 'select=ano,mes,fechado_em&order=fechado_em.asc');
+    carregouDoBanco['fechamentos-mes'] = true;
+    if(db) fechamentosMes = db.map(function(f){ return {ano: f.ano, mes: f.mes, fechadoEm: f.fechado_em}; });
     render();
   }catch(e){ console.error(e); }
 }
@@ -7053,13 +7126,13 @@ function renderParceirosSection(){
         Luciana e Uilma liberam Sistema, Órgãos Públicos, Cursos e Bônus na hora, mesmo sem o cliente ter pago —
         só a Consultoria delas espera o pagamento. Arick, Gustavo, Matheus Costa e quem mais aparecer fora dessa
         lista: tudo espera o cliente pagar, não importa o produto. Pra quem espera pagamento, uma nota entra no
-        fechamento de um mês se foi paga entre o dia 01 do mês anterior e o dia 16 dele — dá folga pra pagamento
-        confirmado depois do fechamento passado já ter fechado. <b>Pendente</b> é o que já foi ganho mas ainda
-        aguarda esse pagamento. Use <b>🔒 Travar fechamento</b> depois de mandar pagar, pra essa nota não contar
-        de novo no mês seguinte (a janela se sobrepõe).
+        fechamento do mês corrente enquanto ele estiver aberto — tudo que for pago desde o último
+        <b>🔒 Fechar</b> até agora. <b>Pendente</b> é o que já foi ganho mas ainda aguarda esse pagamento. Use
+        <b>🔒 Fechar</b> depois de mandar pagar, pra esse mês virar definitivo — o que for pago depois já entra
+        automaticamente no próximo.
       </div>
     `, {flush: true, meta: `${partnerMonthFilter !== "Todos" ? "em <b>"+esc(partnerMonthFilter)+"</b>" : "no ano de <b>"+yearFilter+"</b>"}${fechamento.length ? ' · a pagar <b>'+(partnersValuesRevealed ? fmtMoney(fechamentoSomaCols.aPagar) : '••••')+'</b>' : ''}`,
-      actions: (isAdmin && partnerMonthFilter !== "Todos") ? `<button class="eye-toggle" onclick="travarFechamentoDoMes('${escJs(partnerMonthFilter)}')">🔒 Travar fechamento de ${esc(partnerMonthFilter)}</button>` : ''})}
+      actions: fechamentoActionButtonHtml(partnerMonthFilter)})}
 
     ${panel('resumo-vendedoras', 'Vendedoras — ganhos totais', `
       <div class="kpis" style="margin:0 16px 14px;">${sellerKpiCardsHtml}</div>
@@ -12554,6 +12627,7 @@ function boot(){
     tryLoadPainelContratosAsync(),
     tryLoadContratosNovosAsync(),
     tryLoadFechamentoForaAsync(),
+    tryLoadFechamentosMesAsync(),
     tryLoadRenovacaoPessoasAsync(),
     tryLoadRenovacoesAsync(),
   ];
