@@ -1354,6 +1354,20 @@
   .nota-btn:hover{border-color:var(--ink-faint);color:var(--ink-soft);}
   .nota-btn.on{background:#DCFCE7;border-color:#86EFAC;color:#15803D;}
   .nota-selo{font-size:11px;font-weight:800;color:#15803D;white-space:nowrap;}
+  /* Anexo do arquivo da nota fiscal: um pill compacto, com ou sem arquivo já anexado. */
+  .anexo-upload{
+    display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;
+    padding:5px 10px;border-radius:999px;border:1px dashed var(--border);color:var(--ink-faint);transition:all .15s;
+  }
+  .anexo-upload:hover{border-color:var(--ink-faint);color:var(--ink-soft);}
+  .anexo-upload input{display:none;}
+  .anexo-arquivo{display:inline-flex;align-items:center;gap:6px;font-size:11px;}
+  .anexo-link{
+    font-family:var(--font);font-weight:700;cursor:pointer;white-space:nowrap;max-width:120px;overflow:hidden;
+    text-overflow:ellipsis;color:var(--primary);background:none;border:none;padding:0;text-decoration:underline;
+  }
+  .anexo-remover{font-size:12px;line-height:1;cursor:pointer;color:var(--ink-faint);background:none;border:none;padding:0;}
+  .anexo-remover:hover{color:#B91C1C;}
   .notas-pendentes,.notas-ok{
     font-size:12.5px;font-weight:700;line-height:1.5;padding:10px 16px 0;
   }
@@ -2187,6 +2201,64 @@ function sbSelect(table, query){
 function sbRpc(fn, args){
   return sb('/rest/v1/rpc/' + fn, { method: 'POST', body: args || {} });
 }
+
+/* ---------- Supabase Storage (anexo de nota fiscal) ----------
+   Só isso usa Storage no sistema todo — o resto é banco de dados puro.
+   Não reaproveita sb() porque o corpo aqui é o arquivo em si (binário),
+   não JSON. */
+async function sbUploadFile(bucket, path, file){
+  const token = await ensureFreshToken();
+  if(!token) throw new Error('Sessão expirada. Faça login novamente.');
+  const res = await fetch(SUPABASE_URL + '/storage/v1/object/' + bucket + '/' + path, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer ' + token,
+      'Content-Type': file.type || 'application/octet-stream',
+      'x-upsert': 'true',
+    },
+    body: file,
+  });
+  if(!res.ok){
+    const text = await res.text().catch(function(){ return ''; });
+    throw new Error('Supabase Storage ' + res.status + ': ' + text);
+  }
+  return path;
+}
+/* URL assinada, válida por pouco tempo — o bucket é privado, então não
+   dá pra só montar o link direto: precisa desse passo toda vez que for
+   abrir o anexo. */
+async function sbSignedUrl(bucket, path, expiresIn){
+  const token = await ensureFreshToken();
+  if(!token) throw new Error('Sessão expirada. Faça login novamente.');
+  const res = await fetch(SUPABASE_URL + '/storage/v1/object/sign/' + bucket + '/' + path, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer ' + token,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ expiresIn: expiresIn || 60 }),
+  });
+  if(!res.ok){
+    const text = await res.text().catch(function(){ return ''; });
+    throw new Error('Supabase Storage ' + res.status + ': ' + text);
+  }
+  const data = await res.json();
+  return SUPABASE_URL + '/storage/v1' + data.signedURL;
+}
+async function sbDeleteFile(bucket, path){
+  const token = await ensureFreshToken();
+  if(!token) throw new Error('Sessão expirada. Faça login novamente.');
+  const res = await fetch(SUPABASE_URL + '/storage/v1/object/' + bucket + '/' + path, {
+    method: 'DELETE',
+    headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + token },
+  });
+  if(!res.ok){
+    const text = await res.text().catch(function(){ return ''; });
+    throw new Error('Supabase Storage ' + res.status + ': ' + text);
+  }
+}
 /* O PostgREST devolve no máximo 1000 linhas por chamada (o limite "Max
    rows" do projeto). Passar disso NÃO dá erro: ele simplesmente corta o
    resultado. Foi o que aconteceu com vendas_comissoes ao passar de 1.200
@@ -2483,6 +2555,7 @@ async function tryLoadEntityFromStorageAsync(key){
           id: e.id, nome: e.nome||'', cnpj: e.cnpj||'', responsavel: e.responsavel||'',
           valor: e.valor, observacoes: e.observacoes||'',
           notaEmitida: !!e.nota_emitida, notaEmitidaEm: e.nota_emitida_em || null,
+          notaArquivoPath: e.nota_arquivo_path || null, notaArquivoNome: e.nota_arquivo_nome || null,
         });
       });
       state[key].rows = dbRows.map(function(d){
@@ -4451,9 +4524,19 @@ function renderModal(){
                  e.notaEmitida ? '✓ Emitida' + (dataCurta(e.notaEmitidaEm) ? ' · ' + dataCurta(e.notaEmitidaEm) : '') : 'Emitir'
                }</button>`
             : (e.notaEmitida ? '<span class="nota-selo">✓ Emitida</span>' : '—')}</td>
+          <td>${podeVisar
+            ? (e.notaArquivoPath
+              ? `<span class="anexo-arquivo">
+                   <button type="button" class="anexo-link" title="${esc(e.notaArquivoNome||'')}" onclick="verNotaAnexada(${e.id})">📎 ${esc(e.notaArquivoNome||'arquivo')}</button>
+                   <button type="button" class="anexo-remover" title="Remover anexo" onclick="removerNotaAnexada(${e.id})">✕</button>
+                 </span>`
+              : `<label class="anexo-upload" title="Anexar PDF ou imagem da nota">
+                   📎 Anexar<input type="file" accept="application/pdf,image/*" onchange="anexarNotaEmpresa(${e.id},this)" />
+                 </label>`)
+            : (e.notaArquivoPath ? `<button type="button" class="anexo-link" title="${esc(e.notaArquivoNome||'')}" onclick="verNotaAnexada(${e.id})">📎 ${esc(e.notaArquivoNome||'arquivo')}</button>` : '—')}</td>
           ${isAdmin ? `<td><button class="action-btn danger" title="Remover" onclick="removeEmpresaCurso(${e.id})">✕</button></td>` : ''}
         </tr>`;
-    }).join('') : `<tr class="empty-row"><td colspan="${isAdmin?6:5}"><span class="empty-icon">◌</span>Nenhuma empresa cadastrada ainda.</td></tr>`;
+    }).join('') : `<tr class="empty-row"><td colspan="${isAdmin?7:6}"><span class="empty-icon">◌</span>Nenhuma empresa cadastrada ainda.</td></tr>`;
 
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
@@ -4467,7 +4550,7 @@ function renderModal(){
           <div class="table-scroll">
             <table class="table-plain">
               <thead><tr>
-                <th style="min-width:340px;">Empresa</th><th style="min-width:140px;">CNPJ</th><th style="min-width:150px;">Responsável</th><th class="num" style="min-width:110px;">Valor</th><th style="min-width:120px;">Nota fiscal</th>${isAdmin?'<th></th>':''}
+                <th style="min-width:340px;">Empresa</th><th style="min-width:140px;">CNPJ</th><th style="min-width:150px;">Responsável</th><th class="num" style="min-width:110px;">Valor</th><th style="min-width:120px;">Nota fiscal</th><th style="min-width:130px;">Anexo</th>${isAdmin?'<th></th>':''}
               </tr></thead>
               <tbody>${linhas}</tbody>
             </table>
@@ -9929,6 +10012,66 @@ function persistEmpresaCurso(empresa, rowId){
       finally{ saving = false; updateSaveStatus(); }
     })();
   }, 450);
+}
+
+/* Anexo da nota fiscal em si (PDF/imagem), não só o visto de "emitida".
+   Vai pro Storage (bucket privado notas-fiscais) e grava o caminho via
+   RPC — mesma porta estreita do visto, porque o financeiro não tem (nem
+   deve ter) permissão de UPDATE direto na tabela. */
+async function anexarNotaEmpresa(empresaId, input){
+  if(!isAdmin && !isFinanceiro) return;
+  const arq = input.files && input.files[0];
+  if(!arq) return;
+  const empresa = acharEmpresaPorId(empresaId);
+  if(!empresa) return;
+  saving = true; updateSaveStatus();
+  try{
+    const nomeLimpo = arq.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    const path = 'empresa-' + empresaId + '/' + Date.now() + '-' + nomeLimpo;
+    await sbUploadFile('notas-fiscais', path, arq);
+    await sbRpc('anexar_nota_arquivo', { p_id: empresaId, p_path: path, p_nome: arq.name });
+    empresa.notaArquivoPath = path;
+    empresa.notaArquivoNome = arq.name;
+    saveError = false;
+  }catch(e){
+    console.error('Falha ao anexar nota fiscal', e);
+    saveError = true;
+    showAlert('Não consegui anexar o arquivo. Confira a internet e tente de novo.');
+  }finally{
+    saving = false; updateSaveStatus(); input.value = ''; render();
+  }
+}
+async function verNotaAnexada(empresaId){
+  const empresa = acharEmpresaPorId(empresaId);
+  if(!empresa || !empresa.notaArquivoPath) return;
+  try{
+    const url = await sbSignedUrl('notas-fiscais', empresa.notaArquivoPath, 120);
+    window.open(url, '_blank');
+  }catch(e){
+    console.error('Falha ao abrir a nota anexada', e);
+    showAlert('Não consegui abrir o arquivo anexado. Tente de novo.');
+  }
+}
+function removerNotaAnexada(empresaId){
+  if(!isAdmin && !isFinanceiro) return;
+  const empresa = acharEmpresaPorId(empresaId);
+  if(!empresa || !empresa.notaArquivoPath) return;
+  showConfirm(
+    'Remover o anexo "' + (empresa.notaArquivoNome || 'arquivo') + '"? Isso não desmarca "Emitida", só tira o arquivo.',
+    async function(){
+      const caminho = empresa.notaArquivoPath;
+      empresa.notaArquivoPath = null; empresa.notaArquivoNome = null;
+      closeModal(); render();
+      try{
+        await sbRpc('anexar_nota_arquivo', { p_id: empresaId, p_path: null, p_nome: null });
+        sbDeleteFile('notas-fiscais', caminho).catch(function(e){ console.error('Falha ao apagar arquivo do storage', e); });
+      }catch(e){
+        console.error('Falha ao remover o anexo', e);
+        showAlert('Não consegui remover o anexo no banco. Tente de novo.');
+      }
+    },
+    'Remover'
+  );
 }
 
 function addEmpresaCurso(){
