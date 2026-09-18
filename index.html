@@ -46,6 +46,19 @@
   }
   *{box-sizing:border-box;}
   body,#root{margin:0;padding:0;}
+  /* Banner fixo de "versão nova" — precisa ficar visível não importa em
+     que tela/rolagem a pessoa esteja, por isso position:fixed e um
+     z-index bem alto, acima até dos modais. */
+  .versao-nova-aviso{
+    position:fixed;top:0;left:0;right:0;z-index:9999;
+    background:var(--navy);color:#fff;font-family:var(--font);font-size:13px;font-weight:700;
+    padding:10px 16px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.25);
+  }
+  .versao-nova-aviso button{
+    margin-left:10px;font-family:var(--font);font-size:12.5px;font-weight:800;cursor:pointer;
+    padding:5px 14px;border-radius:999px;border:1px solid #8FCBF5;background:#8FCBF5;color:var(--navy);
+  }
+  .versao-nova-aviso button:hover{background:#fff;}
   #root{
     /* Fundo com dois halos suaves da própria paleta: dá profundidade sem
        tirar a leitura das tabelas, que continuam sobre branco. */
@@ -1790,6 +1803,7 @@ let closedMonths = [];
 let fechamentosMes = [];   // [{ano, mes, fechadoEm}] — quando cada mês foi fechado pra pagamento (não confundir com closedMonths, que é o mês fechado pra EDIÇÃO)
 let prazosEmissaoNota = [];   // [{id, entidade, nomeCliente, dia}] — dia fixo do mês combinado pra emitir a nota de um contrato Mensal/Plano Premium (lembrete só pro financeiro)
 let atualizandoNotas = false;   // "↻ Atualizar" do quadro de notas — busca de novo do banco, sem recarregar a página inteira
+let novaVersaoDisponivel = false;   // true quando checkForNewVersion() percebe que o HTML publicado mudou — ver checkForNewVersion()
 let metas = [];      // regras de meta: gatilho da empresa que premia uma pessoa
 let metasNextId = 1;
 let pagamentosMonthFilter = "Todos";
@@ -1930,6 +1944,13 @@ async function apagarMarcados(tabela, coluna){
 }
 const SUPABASE_URL = "https://ogkrrlssdrtctdyyvkql.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9na3JybHNzZHJ0Y3RkeXl2a3FsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2MDAzNTUsImV4cCI6MjEwMzE3NjM1NX0.Jsgu02MUoYbFNPVilrdK0tbDDdRxRb9cPkGPWkg8lyA";
+
+/* Muda a cada deploy — não precisa ser exato, só diferente do anterior.
+   Ver checkForNewVersion() logo abaixo: é assim que a tela avisa sozinha
+   quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
+   recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
+   F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
+const APP_BUILD = '2026-09-18-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -2161,6 +2182,12 @@ function renderAuthScreen(){
     `;
   }
   root.innerHTML = `
+    ${novaVersaoDisponivel ? `
+      <div class="versao-nova-aviso">
+        🔄 Tem uma versão mais nova do sistema.
+        <button onclick="recarregarPagina()">Atualizar agora</button>
+      </div>
+    ` : ''}
     <div class="auth-screen">
       <div class="auth-globo">${logoGloboSvg(620, '#ffffff')}</div>
       <div class="auth-card">
@@ -13723,6 +13750,12 @@ function render(){
   const abaAtual = TABS.find(t => t.key === activeTab);
 
   root.innerHTML = `
+    ${novaVersaoDisponivel ? `
+      <div class="versao-nova-aviso">
+        🔄 Tem uma versão mais nova do sistema. Esta aba está desatualizada — o que outras pessoas mudarem pode não aparecer aqui até atualizar.
+        <button onclick="recarregarPagina()">Atualizar agora</button>
+      </div>
+    ` : ''}
     <div class="shell${isAdmin ? '' : ' read-only-mode'}">
       <aside class="sidebar">
         <div class="brand">
@@ -13851,6 +13884,33 @@ function boot(){
   render();
 }
 
+/* ---------- Aviso de versão nova ----------
+   O problema real que isso resolve: uma aba deixada aberta por dias não
+   busca HTML novo sozinha (nem um F5 comum garante isso — o navegador
+   pode servir do cache). Foi exatamente isso que aconteceu com o
+   financeiro: a conta ficou presa numa versão de véspera, sem nenhum dos
+   recursos lançados depois, e "peça pra recarregar" não é uma correção —
+   é confiar que a pessoa vai lembrar disso sozinha.
+
+   Em vez disso, a própria tela confere de tempos em tempos se o HTML
+   publicado mudou (buscando ele de novo com cache:"no-store", que força
+   ida à rede) e avisa com um banner fixo, sem forçar o recarregamento —
+   quem está no meio de editar algo não perde nada. */
+async function checkForNewVersion(){
+  if(novaVersaoDisponivel) return;
+  try{
+    const res = await fetch(window.location.pathname + '?_=' + Date.now(), { cache: 'no-store' });
+    if(!res.ok) return;
+    const texto = await res.text();
+    const m = texto.match(/const APP_BUILD = '([^']+)'/);
+    if(m && m[1] !== APP_BUILD){
+      novaVersaoDisponivel = true;
+      render();
+    }
+  }catch(e){ /* rede instável não deve incomodar ninguém com isso */ }
+}
+function recarregarPagina(){ window.location.reload(); }
+
 /* Link de recuperação de senha do Supabase volta com #access_token=...&type=recovery */
 (function initAuth(){
   const hash = window.location.hash;
@@ -13867,6 +13927,17 @@ function boot(){
   if(authSession) boot();
   else renderAuthScreen();
 })();
+
+/* Primeira conferência logo cedo (pra quem já está com a aba aberta
+   numa versão velha agora mesmo não esperar 15 minutos pra saber), depois
+   a cada 15 minutos, e também sempre que a aba volta a ficar visível —
+   é assim que alguém que só alterna de aba (sem nunca fechar ou
+   recarregar) acaba sendo avisado mesmo assim. */
+setTimeout(checkForNewVersion, 60 * 1000);
+setInterval(checkForNewVersion, 15 * 60 * 1000);
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible') checkForNewVersion();
+});
 </script>
 </body>
 </html>
