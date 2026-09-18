@@ -684,11 +684,6 @@
     background:var(--primary-soft);box-shadow:inset 0 0 0 2px var(--ring);border-radius:6px;
   }
   td.cliente input{min-width:230px;}
-  td.cliente .cliente-cnpj{
-    display:block;margin-top:3px;min-width:230px;font-size:11px;padding:3px 8px;
-    color:var(--ink-faint);border-color:var(--border-soft);background:var(--border-soft);
-  }
-  td.cliente .cliente-cnpj:focus{color:var(--ink);}
   td.venda select{min-width:150px;}
   /* Larguras das colunas das tabelas de lançamento.
      Como a tabela é larga e rola na horizontal, o navegador encolhe cada
@@ -1959,7 +1954,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-18-09';
+const APP_BUILD = '2026-09-18-10';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -4069,14 +4064,6 @@ function onClienteVendaEscolhido(el){
   row.cnpj = match.cnpj;
   persist();
   render();
-}
-
-function onVendaCnpjChange(el){
-  const id = Number(el.dataset.id);
-  const row = rows.find(function(r){ return r.id === id; });
-  if(!row) return;
-  row.cnpj = cnpjDigitos(el.value);
-  persist();
 }
 
 function renderEmpresasCadastroSection(){
@@ -9040,9 +9027,7 @@ function renderVendasSection(){
           ${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}
           ${isVendasRowDuplicate(row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo cliente, mês e valor — confira se não é duplicado">🔁 Duplicado</span>` : ''}
         </td>
-        <td class="cliente"><input type="text" list="empresas-datalist" data-id="${row.id}" data-field="cliente" value="${esc(row.cliente)}" placeholder="Cliente" oninput="onTextInput(this)" onchange="onClienteVendaEscolhido(this)" />${row.renovacao ? '<span class="selo-renovacao" title="Renovação: vale comissão, mas não conta no ranking de desempenho">♻️ Renovação</span>' : (row.novoContrato ? '<span class="selo-novo" title="Contrato novo: conta no ranking e nas comissões como qualquer venda">✨ Contrato novo</span>' : (row.upgrade ? '<span class="selo-upgrade" title="Upgrade: cliente que subiu de plano. É receita nova e conta no ranking">⬆️ Upgrade</span>' : ''))}
-          <input type="text" class="cliente-cnpj" placeholder="CNPJ (opcional)" value="${esc(formatCnpj(row.cnpj))}" data-id="${row.id}"
-                 oninput="this.value=formatCnpj(this.value)" onchange="onVendaCnpjChange(this)" /></td>
+        <td class="cliente"><input type="text" list="empresas-datalist" data-id="${row.id}" data-field="cliente" value="${esc(row.cliente)}" placeholder="Cliente" oninput="onTextInput(this)" onchange="onClienteVendaEscolhido(this)" />${row.renovacao ? '<span class="selo-renovacao" title="Renovação: vale comissão, mas não conta no ranking de desempenho">♻️ Renovação</span>' : (row.novoContrato ? '<span class="selo-novo" title="Contrato novo: conta no ranking e nas comissões como qualquer venda">✨ Contrato novo</span>' : (row.upgrade ? '<span class="selo-upgrade" title="Upgrade: cliente que subiu de plano. É receita nova e conta no ranking">⬆️ Upgrade</span>' : ''))}</td>
         <td class="venda">
           <select data-id="${row.id}" onchange="onVendaSelect(this)">
             <option value="">—</option>
