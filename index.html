@@ -1345,6 +1345,8 @@
   button.selo-prazo:hover{background:#FDE68A;}
   button.selo-prazo.selo-prazo-vazio{background:var(--border-soft);border-color:var(--border-soft);color:var(--ink-faint);}
   button.selo-prazo.selo-prazo-vazio:hover{background:var(--primary-soft);color:var(--primary);border-color:var(--ring);}
+  button.selo-prazo.selo-prazo-avista{background:#DCFCE7;border-color:#86EFAC;color:#15803D;}
+  button.selo-prazo.selo-prazo-avista:hover{background:#BBF7D0;}
   .kpi-sub{font-size:11.5px;font-weight:700;color:var(--ink-faint);margin-top:2px;font-variant-numeric:tabular-nums;}
   .import-arquivo{display:block;margin:4px 0 10px;}
   .import-arquivo input{display:none;}
@@ -1769,7 +1771,7 @@ let naturezaFilter = 'Todas';   // 'Todas' | 'novo' | 'renov' | 'sem'
 let searchParceiro = "";
 let searchColaborador = "";
 let vendaProducts = [];
-let empresasCadastro = [];   // [{id, nome, cnpj, responsavel, telefone, email, observacoes}] — cadastro central de empresas, pra sugerir nome/CNPJ nos lançamentos
+let empresasCadastro = [];   // [{id, nome, cnpj, responsavel, telefone, email, observacoes, vendedorResponsavel}] — cadastro central de empresas, pra sugerir nome/CNPJ nos lançamentos
 let empresasCadastroNextId = 1;
 let empresasCadastroBusca = '';
 let partners = [];
@@ -1801,7 +1803,7 @@ let trafegoFilter = "Todos";
 let trafegoMetricaFoco = 'gasto';
 let closedMonths = [];
 let fechamentosMes = [];   // [{ano, mes, fechadoEm}] — quando cada mês foi fechado pra pagamento (não confundir com closedMonths, que é o mês fechado pra EDIÇÃO)
-let prazosEmissaoNota = [];   // [{id, entidade, nomeCliente, dia}] — dia fixo do mês combinado pra emitir a nota de um contrato Mensal/Plano Premium (lembrete só pro financeiro)
+let prazosEmissaoNota = [];   // [{id, entidade, nomeCliente, dia, avista}] — dia fixo do mês combinado pra emitir a nota de um contrato Mensal/Plano Premium (lembrete só pro financeiro); avista=true marca "pago à vista, sem nota recorrente" (dia fica null)
 let atualizandoNotas = false;   // "↻ Atualizar" do quadro de notas — busca de novo do banco, sem recarregar a página inteira
 let novaVersaoDisponivel = false;   // true quando checkForNewVersion() percebe que o HTML publicado mudou — ver checkForNewVersion()
 let metas = [];      // regras de meta: gatilho da empresa que premia uma pessoa
@@ -1950,7 +1952,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-18-04';
+const APP_BUILD = '2026-09-18-06';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -3972,7 +3974,8 @@ async function tryLoadEmpresasCadastroAsync(){
     carregouDoBanco['empresas-cadastro'] = true;
     empresasCadastro = (dbRows||[]).map(function(e){
       return { id:e.id, nome:e.nome||'', cnpj:e.cnpj||'', responsavel:e.responsavel||'',
-               telefone:e.telefone||'', email:e.email||'', observacoes:e.observacoes||'' };
+               telefone:e.telefone||'', email:e.email||'', observacoes:e.observacoes||'',
+               vendedorResponsavel:e.vendedor_responsavel||'' };
     });
     empresasCadastroNextId = empresasCadastro.length ? Math.max.apply(null, empresasCadastro.map(function(e){ return e.id||0; })) + 1 : 1;
     render();
@@ -3981,7 +3984,7 @@ async function tryLoadEmpresasCadastroAsync(){
 
 function addEmpresaCadastro(){
   if(!isAdmin) return;
-  empresasCadastro.unshift({ id: empresasCadastroNextId++, nome:'', cnpj:'', responsavel:'', telefone:'', email:'', observacoes:'' });
+  empresasCadastro.unshift({ id: empresasCadastroNextId++, nome:'', cnpj:'', responsavel:'', telefone:'', email:'', observacoes:'', vendedorResponsavel:'' });
   persistEmpresasCadastro();
   render();
 }
@@ -4021,7 +4024,8 @@ function persistEmpresasCadastro(){
       try{
         const dbRows = empresasCadastro.map(function(e){
           return { id:e.id, nome:e.nome||'', cnpj:cnpjDigitos(e.cnpj), responsavel:e.responsavel||'',
-                   telefone:e.telefone||'', email:e.email||'', observacoes:e.observacoes||'' };
+                   telefone:e.telefone||'', email:e.email||'', observacoes:e.observacoes||'',
+                   vendedor_responsavel:e.vendedorResponsavel||'' };
         });
         if(dbRows.length) await sbUpsert('empresas_cadastro', dbRows, 'id');
         saveError = false;
@@ -4090,7 +4094,12 @@ function renderEmpresasCadastroSection(){
         <td><input type="text" value="${esc(e.responsavel)}" placeholder="Responsável" onchange="updateEmpresaCadastro(${e.id},'responsavel',this.value)" /></td>
         <td><input type="text" value="${esc(e.telefone)}" placeholder="Telefone" onchange="updateEmpresaCadastro(${e.id},'telefone',this.value)" /></td>
         <td><input type="text" value="${esc(e.email)}" placeholder="E-mail" onchange="updateEmpresaCadastro(${e.id},'email',this.value)" /></td>
-        <td><input type="text" value="${esc(e.observacoes)}" placeholder="Observações" onchange="updateEmpresaCadastro(${e.id},'observacoes',this.value)" /></td>
+        <td>
+          <select onchange="updateEmpresaCadastro(${e.id},'vendedorResponsavel',this.value)">
+            <option value="">—</option>
+            ${SELLERS.map(function(s){ return `<option value="${esc(s.label)}" ${e.vendedorResponsavel===s.label?'selected':''}>${esc(s.label)}</option>`; }).join('')}
+          </select>
+        </td>
         <td class="del-cell"><button class="action-btn danger" title="Remover" onclick="removeEmpresaCadastro(${e.id})">✕</button></td>
       </tr>`;
   }).join('') : `<tr class="empty-row"><td colspan="7"><span class="empty-icon">◌</span>${empresasCadastroBusca ? 'Nenhuma empresa encontrada pra essa busca.' : 'Nenhuma empresa cadastrada ainda. Clique em "+ Nova empresa" para começar.'}</td></tr>`;
@@ -4109,7 +4118,7 @@ function renderEmpresasCadastroSection(){
         <table class="table-plain">
           <thead><tr>
             <th style="min-width:260px;">Empresa</th><th style="min-width:160px;">CNPJ</th><th style="min-width:150px;">Responsável</th>
-            <th style="min-width:140px;">Telefone</th><th style="min-width:180px;">E-mail</th><th style="min-width:200px;">Observações</th><th></th>
+            <th style="min-width:140px;">Telefone</th><th style="min-width:180px;">E-mail</th><th style="min-width:170px;">Vendedor Responsável</th><th></th>
           </tr></thead>
           <tbody>${linhas}</tbody>
         </table>
@@ -4117,9 +4126,123 @@ function renderEmpresasCadastroSection(){
     `, {
       flush: true,
       meta: `<b>${empresasCadastro.length}</b> empresa${empresasCadastro.length===1?'':'s'} cadastrada${empresasCadastro.length===1?'':'s'}`,
-      actions: `<button class="btn-add" onclick="addEmpresaCadastro()">+ Nova empresa</button>`,
+      actions: `<button class="btn-add btn-secondary" onclick="abrirImportarEmpresasCadastro()">📄 Importar planilha</button><button class="btn-add" onclick="addEmpresaCadastro()">+ Nova empresa</button>`,
     })}
   `;
+}
+
+/* ---------- Importar o cadastro de empresas de uma planilha ----------
+   Mesmo mecanismo de colar/soltar arquivo já usado em "Empresas por
+   lançamento", só que aqui alimenta direto o cadastro central — sem
+   precisar redigitar empresa por empresa quando já existe uma planilha
+   pronta (por exemplo, exportada de outro sistema). */
+function mapearColunasEmpresasCadastro(linhas){
+  const cab = linhas[0] || [];
+  const rotulos = cab.map(semAcento);
+  const acha = function(re){ return rotulos.findIndex(function(r){ return re.test(r); }); };
+  const nome = acha(/empresa|razao|nome/);
+  const cnpj = acha(/cnpj/);
+  const telefone = acha(/telefone|fone|celular/);
+  const email = acha(/e-?mail/);
+  const vendedorResponsavel = rotulos.findIndex(function(r){ return /vended/.test(r); });
+  if(nome >= 0 && (cnpj >= 0 || telefone >= 0 || email >= 0)){
+    return {
+      temCabecalho: true, nome: nome, cnpj: cnpj,
+      responsavel: rotulos.findIndex(function(r){ return /respons/.test(r) && !/vended/.test(r); }),
+      telefone: telefone, email: email,
+      vendedorResponsavel: vendedorResponsavel,
+    };
+  }
+  return { temCabecalho: false, nome: 0, cnpj: 1, responsavel: 2, telefone: 3, email: 4, vendedorResponsavel: 5 };
+}
+
+function prepararImportacaoEmpresasCadastro(linhas){
+  if(!linhas.length) throw new Error('A planilha veio vazia.');
+  const cols = mapearColunasEmpresasCadastro(linhas);
+  const corpo = cols.temCabecalho ? linhas.slice(1) : linhas;
+  const celula = function(l, idx){ return idx >= 0 && l[idx] !== null && l[idx] !== undefined ? String(l[idx]).trim() : ''; };
+
+  const existentes = {};
+  empresasCadastro.forEach(function(e){
+    existentes[semAcento(e.nome) + '|' + cnpjDigitos(e.cnpj)] = true;
+  });
+
+  const itens = [];
+  corpo.forEach(function(l){
+    const nome = celula(l, cols.nome);
+    if(!nome) return;
+    const cnpj = celula(l, cols.cnpj);
+    const chave = semAcento(nome) + '|' + cnpjDigitos(cnpj);
+    const duplicada = !!existentes[chave];
+    if(!duplicada) existentes[chave] = true;
+    itens.push({
+      nome: nome, cnpj: cnpj, responsavel: celula(l, cols.responsavel),
+      telefone: celula(l, cols.telefone), email: celula(l, cols.email),
+      vendedorResponsavel: celula(l, cols.vendedorResponsavel),
+      duplicada: duplicada,
+      aviso: duplicada ? 'já cadastrada' : (cnpj && !cnpjValido(cnpj) ? 'CNPJ incompleto' : ''),
+    });
+  });
+  if(!itens.length) throw new Error('Não achei nenhuma empresa na planilha. Confira se a coluna de nome tem dado.');
+  return { itens: itens, cols: cols };
+}
+
+function abrirImportarEmpresasCadastro(){
+  if(!isAdmin) return;
+  modalState = { type:'import-empresas-cadastro', dados:null, erro:'', lendo:false };
+  render();
+}
+async function onArquivoEmpresasCadastro(input){
+  const arq = input.files && input.files[0];
+  if(!arq) return;
+  modalState.lendo = true; modalState.erro = ''; render();
+  try{
+    let linhas;
+    if(/\.(csv|txt|tsv)$/i.test(arq.name)){
+      let texto = await arq.text();
+      if(texto.indexOf('�') >= 0){
+        texto = new TextDecoder('iso-8859-1').decode(await arq.arrayBuffer());
+      }
+      linhas = linhasDeTexto(texto);
+    } else {
+      linhas = await linhasDoXlsx(await arq.arrayBuffer());
+    }
+    modalState.dados = prepararImportacaoEmpresasCadastro(linhas);
+    modalState.erro = '';
+  }catch(e){
+    console.error(e);
+    modalState.dados = null;
+    modalState.erro = e && e.message ? e.message : 'Não consegui ler esse arquivo.';
+  }
+  modalState.lendo = false;
+  render();
+}
+function onColarEmpresasCadastro(el){
+  const texto = el.value;
+  if(!String(texto).trim()){ modalState.dados = null; modalState.erro = ''; render(); return; }
+  try{
+    modalState.dados = prepararImportacaoEmpresasCadastro(linhasDeTexto(texto));
+    modalState.erro = '';
+  }catch(e){
+    modalState.dados = null;
+    modalState.erro = e && e.message ? e.message : 'Não consegui ler o que foi colado.';
+  }
+  render();
+}
+function confirmarImportacaoEmpresasCadastro(){
+  const m = modalState;
+  if(!m || !m.dados) return;
+  const novos = m.dados.itens.filter(function(i){ return !i.duplicada; });
+  if(!novos.length){ showAlert('Não há nada novo para importar.'); return; }
+  novos.forEach(function(i){
+    empresasCadastro.push({
+      id: empresasCadastroNextId++, nome: i.nome, cnpj: i.cnpj, responsavel: i.responsavel,
+      telefone: i.telefone, email: i.email, observacoes: '', vendedorResponsavel: i.vendedorResponsavel,
+    });
+  });
+  persistEmpresasCadastro();
+  closeModal();
+  showAlert(novos.length + (novos.length === 1 ? ' empresa importada.' : ' empresas importadas.'));
 }
 
 let sistemaSellersTimer = null;
@@ -4862,6 +4985,63 @@ function renderModal(){
           <div class="modal-actions">
             <button class="modal-btn modal-btn-ghost" onclick="voltarParaEmpresasCurso('${m.entKey}',${m.rowId})">Voltar</button>
             <button class="modal-btn modal-btn-primary" ${novos.length ? '' : 'disabled'} onclick="confirmarImportacaoEmpresas()">
+              ${novos.length ? 'Importar ' + novos.length + (novos.length===1?' empresa':' empresas') : 'Importar'}
+            </button>
+          </div>
+        </div>
+      </div>`;
+  }
+  if(m.type === 'import-empresas-cadastro'){
+    const d = m.dados;
+    const novos = d ? d.itens.filter(function(i){ return !i.duplicada; }) : [];
+    const problemas = d ? d.itens.filter(function(i){ return i.aviso; }) : [];
+    const previa = d ? d.itens.slice(0, 60) : [];
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-xwide">
+          <div class="modal-msg">Importar empresas da planilha</div>
+          <div class="painel-equipe-nota">
+            Reconheço colunas com estes nomes (com ou sem acento, em qualquer ordem):
+            <b>Empresa</b>, <b>CNPJ</b>, <b>Responsável</b>, <b>Telefone</b>, <b>E-mail</b> e <b>Vendedor Responsável</b> (todas opcionais, menos Empresa). Sem
+            cabeçalho reconhecido, uso essa mesma ordem. Aceito <b>.xlsx</b> e <b>.csv</b>; se preferir,
+            selecione as células no Excel, copie com Ctrl+C e cole no campo de baixo.
+          </div>
+          <label class="import-arquivo">
+            <input type="file" accept=".xlsx,.csv,.txt,.tsv" onchange="onArquivoEmpresasCadastro(this)" />
+            <span>📄 Escolher arquivo da planilha</span>
+          </label>
+          <textarea class="modal-textarea" style="min-height:90px;" placeholder="…ou cole aqui as células copiadas do Excel"
+                    oninput="onColarEmpresasCadastro(this)"></textarea>
+          ${m.lendo ? `<div class="modal-msg" style="margin:10px 0 0;">Lendo a planilha…</div>` : ''}
+          ${m.erro ? `<div class="modal-error">${esc(m.erro)}</div>` : ''}
+          ${d ? `
+            <div class="import-resumo">
+              <b>${novos.length}</b> empresa${novos.length===1?'':'s'} nova${novos.length===1?'':'s'} de <b>${d.itens.length}</b> linha${d.itens.length===1?'':'s'} lida${d.itens.length===1?'':'s'}
+              ${problemas.length ? ` · <span class="import-alerta">${problemas.length} com aviso</span>` : ''}
+              ${d.cols.temCabecalho ? ' · cabeçalho reconhecido' : ' · sem cabeçalho, usei a ordem empresa / CNPJ / responsável / telefone / e-mail / vendedor responsável'}
+            </div>
+            <div class="table-scroll import-previa">
+              <table class="table-plain">
+                <thead><tr><th>Empresa</th><th>CNPJ</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th>Vendedor Responsável</th><th></th></tr></thead>
+                <tbody>${previa.map(function(i){
+                  return `<tr class="${i.aviso ? 'row-pending' : ''}">
+                    <td>${esc(i.nome)}</td>
+                    <td>${esc(formatCnpj(i.cnpj)) || '—'}</td>
+                    <td>${esc(i.responsavel) || '—'}</td>
+                    <td>${esc(i.telefone) || '—'}</td>
+                    <td>${esc(i.email) || '—'}</td>
+                    <td>${esc(i.vendedorResponsavel) || '—'}</td>
+                    <td>${i.aviso ? `<span class="import-alerta">${esc(i.aviso)}</span>` : '✓'}</td>
+                  </tr>`;
+                }).join('')}</tbody>
+              </table>
+            </div>
+            ${d.itens.length > previa.length ? `<div class="import-resumo">…e mais ${d.itens.length - previa.length} linha${d.itens.length - previa.length === 1 ? '' : 's'}.</div>` : ''}
+            ${problemas.length ? `<div class="import-resumo import-alerta">Linhas duplicadas (mesma empresa e CNPJ já cadastrados) não são importadas de novo; CNPJ incompleto importa mesmo assim, pra corrigir depois.</div>` : ''}
+          ` : ''}
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Voltar</button>
+            <button class="modal-btn modal-btn-primary" ${novos.length ? '' : 'disabled'} onclick="confirmarImportacaoEmpresasCadastro()">
               ${novos.length ? 'Importar ' + novos.length + (novos.length===1?' empresa':' empresas') : 'Importar'}
             </button>
           </div>
@@ -5788,8 +5968,13 @@ function isEntityRowPending(r){
   if(r.vendedor2 && !(Number(r.comissaoPercent2) > 0)) return true;
   if(r.vendedor3 && !(Number(r.comissaoPercent3) > 0)) return true;
   if(r.parceiro && !(Number(r.participacao) > 0)) return true;
-  if(r.professor && !(Number(r.honorarioProfessor) > 0)) return true;
-  if(r.professor2 && !(Number(r.honorarioProfessor2) > 0)) return true;
+  /* Honorário do professor pode ser zero de propósito (aula sem custo
+     extra) — o que falta marcar como pendente é NUNCA ter respondido,
+     não ter respondido "zero". Por isso aqui olha se o campo foi
+     preenchido (não é null/undefined/vazio), em vez de exigir > 0 como
+     nos campos de comissão, onde 0% não faz sentido nenhum. */
+  if(r.professor && (r.honorarioProfessor === null || r.honorarioProfessor === undefined || r.honorarioProfessor === '')) return true;
+  if(r.professor2 && (r.honorarioProfessor2 === null || r.honorarioProfessor2 === undefined || r.honorarioProfessor2 === '')) return true;
   if(Array.isArray(r.extraVendedores) && r.extraVendedores.some(ev => ev.vendedor && !(Number(ev.percent) > 0))) return true;
   return false;
 }
@@ -7216,7 +7401,7 @@ async function tryLoadPrazosEmissaoNotaAsync(){
   try{
     const db = await sbSelectOpcional('prazos_emissao_nota', 'select=*&order=id.asc', []);
     carregouDoBanco['prazos-emissao'] = true;
-    prazosEmissaoNota = (db||[]).map(function(p){ return {id: p.id, entidade: p.entidade, nomeCliente: p.nome_cliente, dia: p.dia}; });
+    prazosEmissaoNota = (db||[]).map(function(p){ return {id: p.id, entidade: p.entidade, nomeCliente: p.nome_cliente, dia: p.dia, avista: !!p.avista}; });
     render();
   }catch(e){ console.error(e); }
 }
@@ -8301,26 +8486,31 @@ function definirPrazoEmissaoNota(entKey, nomeCliente){
   const atual = prazoEmissaoPara(entKey, nomeCliente);
   showPrompt(
     'Lembrar de emitir a nota de "' + nomeCliente + '" todo dia (1 a 28) do mês.'
-    + (atual ? ' Hoje está combinado o dia ' + atual.dia + ' — digite outro número pra mudar,' : ' Digite o dia,')
+    + (atual ? (atual.avista ? ' Hoje está marcado como "à vista, sem lembrete"' : ' Hoje está combinado o dia ' + atual.dia) + ' — digite outro número pra mudar,' : ' Digite o dia,')
+    + ' digite "avista" se o contrato foi pago à vista (não tem mais nota recorrente pra emitir),'
     + ' ou deixe em branco pra remover o lembrete.',
     function(v){
       const texto = String(v||'').trim();
       if(!texto){ removerPrazoEmissaoNota(entKey, nomeCliente); return; }
+      if(semAcento(texto).replace(/\s+/g,'') === 'avista'){
+        persistPrazoEmissaoNota(entKey, nomeCliente, null, atual ? atual.id : null, true);
+        return;
+      }
       const dia = parseInt(texto, 10);
-      if(!dia || dia < 1 || dia > 28){ showAlert('Informe um dia entre 1 e 28, ou deixe em branco pra remover o lembrete.'); return; }
-      persistPrazoEmissaoNota(entKey, nomeCliente, dia, atual ? atual.id : null);
+      if(!dia || dia < 1 || dia > 28){ showAlert('Informe um dia entre 1 e 28, digite "avista" pra marcar pago à vista, ou deixe em branco pra remover o lembrete.'); return; }
+      persistPrazoEmissaoNota(entKey, nomeCliente, dia, atual ? atual.id : null, false);
     }
   );
 }
 
-function persistPrazoEmissaoNota(entKey, nomeCliente, dia, idExistente){
+function persistPrazoEmissaoNota(entKey, nomeCliente, dia, idExistente, avista){
   const id = idExistente || Date.now();
   const existente = prazosEmissaoNota.find(function(p){ return p.id === id; });
-  if(existente) existente.dia = dia;
-  else prazosEmissaoNota.push({id: id, entidade: entKey, nomeCliente: nomeCliente, dia: dia});
+  if(existente){ existente.dia = dia; existente.avista = !!avista; }
+  else prazosEmissaoNota.push({id: id, entidade: entKey, nomeCliente: nomeCliente, dia: dia, avista: !!avista});
   render();
   saving = true; updateSaveStatus();
-  sbUpsert('prazos_emissao_nota', [{id: id, entidade: entKey, nome_cliente: nomeCliente, dia: dia}], 'id')
+  sbUpsert('prazos_emissao_nota', [{id: id, entidade: entKey, nome_cliente: nomeCliente, dia: dia, avista: !!avista}], 'id')
     .then(function(){ saveError = false; })
     .catch(function(e){
       console.error('Falha ao gravar o dia de emissão', e);
@@ -8357,7 +8547,7 @@ function alertasEmissaoPendentes(){
       if(r.tipo !== 'Mensal' && r.tipo !== 'Plano Premium') return;
       if(r.notaEmitida) return;
       const prazo = prazoEmissaoPara(key, r[mainField]);
-      if(!prazo || diaAtual < prazo.dia) return;
+      if(!prazo || prazo.avista || diaAtual < prazo.dia) return;
       out.push({ origem: ENTITIES[key].tabLabel, nome: r[mainField] || '—', dia: prazo.dia, atraso: diaAtual - prazo.dia });
     });
   });
@@ -8821,8 +9011,9 @@ function renderVendasSection(){
   const emptyMsg = sellerFilter !== "Todas"
     ? `Nenhuma venda com comissão de ${SELLERS.find(s=>s.key===sellerFilter).label} neste filtro.`
     : `Nenhuma venda neste mês ainda. Clique em "+ Nova venda" para lançar a primeira.`;
+  const podeVisar = isAdmin || isFinanceiro;
   const rowsHtml = visible.length === 0
-    ? `<tr class="empty-row"><td colspan="${11+visibleSellers.length}"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
+    ? `<tr class="empty-row"><td colspan="${13+visibleSellers.length}"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
     : visible.map(row => `
       <tr class="${isVendasRowPending(row) ? 'row-pending' : ''}${isMonthClosed(row.ano||2026,row.mes) ? ' row-locked' : ''}${isVendasRowDuplicate(row) ? ' row-duplicate' : ''}">
         <td>
@@ -8864,6 +9055,23 @@ function renderVendasSection(){
                   title="${pagoEmOutroMes(row) ? 'Nota de ' + esc(row.mes) + ' paga em ' + esc(row.mesPagamento) + ' — a comissão libera em ' + esc(row.mesPagamento) : 'Mês em que o cliente pagou'}"
                   onchange="onPagamentoMesSelect(this)">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>` : ''}
         </td>
+        <td>${podeVisar
+          ? `<button type="button" class="nota-btn${row.notaEmitida?' on':''}"
+                     title="${row.notaEmitida ? 'Nota emitida — clique para desmarcar' : 'Marcar que a nota foi emitida'}"
+                     onclick="toggleNotaEmitida('vendas',${row.id},'')">${
+               row.notaEmitida ? '✓ Emitida' + (dataCurta(row.notaEmitidaEm) ? ' · ' + dataCurta(row.notaEmitidaEm) : '') : 'Emitir'
+             }</button>${row.notaEmitida ? `<button type="button" class="nota-editar-data" title="Corrigir a data de emissão" onclick="editarDataEmissao('vendas',${row.id},'')">✏️</button>` : ''}`
+          : (row.notaEmitida ? '<span class="nota-selo">✓ Emitida</span>' : '—')}</td>
+        <td>${podeVisar
+          ? (row.notaArquivoPath
+            ? `<span class="anexo-arquivo">
+                 <button type="button" class="anexo-link" title="${esc(row.notaArquivoNome||'')}" onclick="verNotaAnexada('vendas',${row.id},'')">📎 ${esc(row.notaArquivoNome||'arquivo')}</button>
+                 <button type="button" class="anexo-remover" title="Remover anexo" onclick="removerNotaAnexada('vendas',${row.id},'')">✕</button>
+               </span>`
+            : `<label class="anexo-upload" title="Anexar PDF ou imagem da nota">
+                 📎 Anexar<input type="file" accept="application/pdf,image/*" onchange="anexarNotaArquivo('vendas',${row.id},'',this)" />
+               </label>`)
+          : (row.notaArquivoPath ? `<button type="button" class="anexo-link" title="${esc(row.notaArquivoNome||'')}" onclick="verNotaAnexada('vendas',${row.id},'')">📎 ${esc(row.notaArquivoNome||'arquivo')}</button>` : '—')}</td>
         <td class="obs-cell"><input type="text" data-id="${row.id}" data-field="observacoes" value="${esc(row.observacoes)}" placeholder="Anotação livre..." oninput="onTextInput(this)" /></td>
         ${visibleSellers.map(s => {
           const pct = (row.comissaoPercents||{})[s.key];
@@ -8936,6 +9144,8 @@ function renderVendasSection(){
               <th>Participação</th>
               <th>Forma de Pagamento</th>
               <th style="width:110px">Pagamento</th>
+              <th>Nota fiscal</th>
+              <th>Anexo</th>
               <th>Observações</th>
               ${visibleSellers.map(s => `<th class="num">${thDot(s.color)}${esc(s.label)}</th>`).join('')}
               <th></th>
@@ -9603,13 +9813,13 @@ function renderEntitySection(key){
             const dEmp = (cfg.hasEmpresas && fi === 0 && temEmpresas) ? resumoEmpresas(row) : null;
             const seloEmpresas = (cfg.hasEmpresas && fi === 0 && (isAdmin || isFinanceiro))
               ? (dEmp
-                  ? `<button type="button" class="selo-empresas" title="${dEmp.fecha ? 'Soma das empresas confere com o valor total — clique pra ver' : esc(dEmp.rotuloDiferenca)+' — clique pra ver'}" onclick="abrirEmpresasCurso('${key}',${row.id})">🧾 ${row.empresas.length} empresa${row.empresas.length===1?'':'s'}</button>`
-                  : `<button type="button" class="selo-empresas selo-empresas-vazio" title="Nenhuma empresa cadastrada ainda — clique pra adicionar" onclick="abrirEmpresasCurso('${key}',${row.id})">🧾 empresas</button>`)
+                  ? `<button type="button" class="selo-empresas" title="${dEmp.fecha ? 'Soma das empresas confere com o valor total — clique pra ver' : esc(dEmp.rotuloDiferenca)+' — clique pra ver'}" onclick="abrirEmpresasCurso('${key}',${row.id})">🧾 Emissão NF (${row.empresas.length})</button>`
+                  : `<button type="button" class="selo-empresas selo-empresas-vazio" title="Nenhuma empresa cadastrada ainda — clique pra adicionar" onclick="abrirEmpresasCurso('${key}',${row.id})">🧾 Emissão NF</button>`)
               : '';
             const mostraPrazo = cfg.hasPrazoEmissao && fi === 0 && (row.tipo === 'Mensal' || row.tipo === 'Plano Premium') && (isAdmin || isFinanceiro);
             const prazoRow = mostraPrazo ? prazoEmissaoPara(key, row[f.key]) : null;
             const seloPrazo = mostraPrazo
-              ? `<button type="button" class="selo-prazo${prazoRow?'':' selo-prazo-vazio'}" title="${prazoRow ? 'Lembrete de emissão todo dia '+prazoRow.dia+' — clique pra mudar' : 'Combinar um dia fixo do mês pra emitir a nota (Mensal/Plano Premium)'}" onclick="definirPrazoEmissaoNota('${key}','${escJs(row[f.key])}')">📅 ${prazoRow ? 'dia '+prazoRow.dia : 'definir dia'}</button>`
+              ? `<button type="button" class="selo-prazo${prazoRow?(prazoRow.avista?' selo-prazo-avista':''):' selo-prazo-vazio'}" title="${prazoRow ? (prazoRow.avista ? 'Pago à vista — sem nota recorrente pra emitir. Clique pra mudar' : 'Lembrete de emissão todo dia '+prazoRow.dia+' — clique pra mudar') : 'Combinar um dia fixo do mês pra emitir a nota (Mensal/Plano Premium)'}" onclick="definirPrazoEmissaoNota('${key}','${escJs(row[f.key])}')">${prazoRow && prazoRow.avista ? '💰 à vista' : '📅 ' + (prazoRow ? 'dia '+prazoRow.dia : 'definir dia')}</button>`
               : '';
             cells += `<td${fi===0?' class="col-nome"':''}><input type="text" ${fi===0?'list="empresas-datalist"':''} data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}${seloRenovacao}${seloUpgrade}${seloEmpresas}${seloPrazo}</td>`;
             if(f.key === "formaPagamento" && cfg.hasPagamento){
