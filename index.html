@@ -1952,7 +1952,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-18-06';
+const APP_BUILD = '2026-09-18-07';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -7943,7 +7943,7 @@ function onResponsavelSelect(el){
 
 function vendasSemResponsavel(){
   return rows.filter(function(r){
-    return (r.ano||2026) === yearFilter && !String(r.vendedorResponsavel||'').trim();
+    return (r.ano||2026) === yearFilter && !r.renovacao && !String(r.vendedorResponsavel||'').trim();
   });
 }
 
@@ -9036,8 +9036,8 @@ function renderVendasSection(){
           </select>
         </td>
         <td class="resp-cell">
-          <select class="${(row.vendedorResponsavel||'').trim() ? '' : 'sem-resp'}" data-id="${row.id}" onchange="onResponsavelSelect(this)"
-                  title="Quem efetivamente fez esta venda — é essa pessoa que o Relatório de Desempenho conta">
+          <select class="${(row.vendedorResponsavel||'').trim() || row.renovacao ? '' : 'sem-resp'}" data-id="${row.id}" onchange="onResponsavelSelect(this)"
+                  title="${row.renovacao ? 'Renovação não conta no Relatório de Desempenho — "quem vendeu" é opcional aqui' : 'Quem efetivamente fez esta venda — é essa pessoa que o Relatório de Desempenho conta'}">
             <option value="">— quem vendeu?</option>
             ${SELLERS.map(sv => `<option value="${esc(sv.label)}" ${name_matches_client(row.vendedorResponsavel, sv.label)?'selected':''}>${esc(sv.label)}</option>`).join('')}
           </select>
@@ -9770,8 +9770,8 @@ function renderEntitySection(key){
         cfg.fields.forEach((f, fi) => {
           if(fi === 1 && cfg.hasVendedorResponsavel && !isFinanceiro){
             cells += `<td class="resp-cell">
-              <select class="${(row.vendedorResponsavel||'').trim() ? '' : 'sem-resp'}" data-entity="${key}" data-id="${row.id}" data-field="vendedorResponsavel" onchange="onEntitySelectField(this)"
-                      title="Quem efetivamente fez esta venda — é essa pessoa que o Relatório de Desempenho conta">
+              <select class="${(row.vendedorResponsavel||'').trim() || row.renovacao ? '' : 'sem-resp'}" data-entity="${key}" data-id="${row.id}" data-field="vendedorResponsavel" onchange="onEntitySelectField(this)"
+                      title="${row.renovacao ? 'Renovação não conta no Relatório de Desempenho — "quem vendeu" é opcional aqui' : 'Quem efetivamente fez esta venda — é essa pessoa que o Relatório de Desempenho conta'}">
                 <option value="">— quem vendeu?</option>
                 ${entityVendorsForCurrentUser(key).map(v => `<option value="${esc(v)}" ${row.vendedorResponsavel===v?'selected':''}>${esc(v)}</option>`).join('')}
               </select>
