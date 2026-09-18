@@ -1950,7 +1950,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-18-01';
+const APP_BUILD = '2026-09-18-02';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -4097,8 +4097,9 @@ function renderEmpresasCadastroSection(){
 
   return `
     <div class="painel-equipe-nota" style="margin:0 0 12px;">
-      Cadastre aqui nome, CNPJ e contato de cada empresa. Ao digitar o nome de uma empresa cadastrada num lançamento
-      do Sistema (aba "Sistema"), o CNPJ é sugerido sozinho — sem precisar digitar tudo de novo todo mês.
+      Cadastre aqui nome, CNPJ e contato de cada empresa. Em qualquer lançamento — Sistema, Consultoria, Órgãos
+      Públicos ou Cursos —, o nome de uma empresa cadastrada aparece como sugestão ao digitar (evita nomes
+      diferentes pra mesma empresa mês a mês); no Sistema, o CNPJ também é preenchido sozinho.
     </div>
     <div class="search-row">
       <input class="search-input" type="text" placeholder="🔍 Buscar por nome ou CNPJ..." value="${esc(empresasCadastroBusca)}" oninput="onEmpresaCadastroBuscaInput(this)" />
@@ -9602,7 +9603,7 @@ function renderEntitySection(key){
             const seloPrazo = mostraPrazo
               ? `<button type="button" class="selo-prazo${prazoRow?'':' selo-prazo-vazio'}" title="${prazoRow ? 'Lembrete de emissão todo dia '+prazoRow.dia+' — clique pra mudar' : 'Combinar um dia fixo do mês pra emitir a nota (Mensal/Plano Premium)'}" onclick="definirPrazoEmissaoNota('${key}','${escJs(row[f.key])}')">📅 ${prazoRow ? 'dia '+prazoRow.dia : 'definir dia'}</button>`
               : '';
-            cells += `<td${fi===0?' class="col-nome"':''}><input type="text" data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}${seloRenovacao}${seloUpgrade}${seloEmpresas}${seloPrazo}</td>`;
+            cells += `<td${fi===0?' class="col-nome"':''}><input type="text" ${fi===0?'list="empresas-datalist"':''} data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}${seloRenovacao}${seloUpgrade}${seloEmpresas}${seloPrazo}</td>`;
             if(f.key === "formaPagamento" && cfg.hasPagamento){
               cells += `<td class="pagamento-cell">
                 <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" onchange="onPagamentoToggle(this,'${key}')" /><span>${row.pago?'Pago':'Pendente'}</span></label>
@@ -9679,6 +9680,7 @@ function renderEntitySection(key){
     </div>` : '';
 
   return `
+    ${empresasDatalistHtml()}
     ${avisoFalhaHtml('lanc-'+key, 'os lançamentos desta aba')}
     ${avisoRespEnt}
     ${kpiToggleHtml}
