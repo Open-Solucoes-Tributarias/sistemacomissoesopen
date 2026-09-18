@@ -1334,6 +1334,8 @@
   button.selo-empresas:hover{background:#A5F3FC;}
   .selo-empresas.selo-empresas-vazio{background:var(--border-soft);border-color:var(--border-soft);color:var(--ink-faint);}
   .selo-empresas.selo-empresas-vazio:hover{background:var(--primary-soft);color:var(--primary);border-color:var(--ring);}
+  .selo-empresas.selo-empresas-emitida{background:#DCFCE7;border-color:#86EFAC;color:#15803D;}
+  .selo-empresas.selo-empresas-emitida:hover{background:#BBF7D0;}
   /* Dia combinado pra emitir nota de contrato Mensal/Plano Premium. */
   button.selo-prazo{
     margin-left:6px;font-family:var(--font);font-size:10px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
@@ -1964,7 +1966,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-18-11';
+const APP_BUILD = '2026-09-18-12';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -9881,9 +9883,14 @@ function renderEntitySection(key){
             const seloUpgrade = (fi === 0 && row.upgrade) ? '<span class="selo-upgrade" title="Upgrade: cliente que subiu de plano">⬆️ Upgrade</span>' : '';
             const temEmpresas = row.empresas && row.empresas.length;
             const dEmp = (cfg.hasEmpresas && fi === 0 && temEmpresas) ? resumoEmpresas(row) : null;
+            // Fica verde quando TODAS as empresas do lançamento já têm a
+            // nota emitida — não basta a soma bater (dEmp.fecha), senão o
+            // selo ficaria verde só de conferir o valor, sem a nota ter
+            // saído de verdade.
+            const todasEmitidas = temEmpresas && row.empresas.every(function(e){ return e.notaEmitida; });
             const seloEmpresas = (cfg.hasEmpresas && fi === 0 && (isAdmin || isFinanceiro))
               ? (dEmp
-                  ? `<button type="button" class="selo-empresas" title="${dEmp.fecha ? 'Soma das empresas confere com o valor total — clique pra ver' : esc(dEmp.rotuloDiferenca)+' — clique pra ver'}" onclick="abrirEmpresasCurso('${key}',${row.id})">🧾 Emissão NF (${row.empresas.length})</button>`
+                  ? `<button type="button" class="selo-empresas${todasEmitidas?' selo-empresas-emitida':''}" title="${(todasEmitidas ? 'Nota emitida — ' : '') + (dEmp.fecha ? 'Soma das empresas confere com o valor total — clique pra ver' : esc(dEmp.rotuloDiferenca)+' — clique pra ver')}" onclick="abrirEmpresasCurso('${key}',${row.id})">🧾 Emissão NF (${row.empresas.length})</button>`
                   : `<button type="button" class="selo-empresas selo-empresas-vazio" title="Nenhuma empresa cadastrada ainda — clique pra adicionar" onclick="abrirEmpresasCurso('${key}',${row.id})">🧾 Emissão NF</button>`)
               : '';
             const mostraPrazo = cfg.hasPrazoEmissao && fi === 0 && (row.tipo === 'Mensal' || row.tipo === 'Plano Premium') && (isAdmin || isFinanceiro);
