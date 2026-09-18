@@ -1950,7 +1950,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-18-03';
+const APP_BUILD = '2026-09-18-04';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5762,16 +5762,24 @@ function isVendasRowPending(r){
   if(r.parceiro && !(Number(r.participacao) > 0)) return true;
   return false;
 }
+/* "Duplicado" precisa considerar o valor também: a mesma empresa pode
+   ter mais de uma nota de verdade no mesmo mês, com valores diferentes
+   (contratos distintos, por exemplo) — isso não é engano de digitação,
+   é só coincidência de nome e mês. Só sinaliza quando nome, mês, ano E
+   valor batem todos juntos, que é o retrato de um lançamento colado
+   duas vezes sem querer. */
 function isVendasRowDuplicate(r){
   if(!r.cliente || !r.cliente.trim()) return false;
   const name = r.cliente.trim().toLowerCase();
-  return rows.some(x => x.id !== r.id && x.mes === r.mes && (x.ano||2026) === (r.ano||2026) && x.cliente && x.cliente.trim().toLowerCase() === name);
+  const valor = Number(r.valor)||0;
+  return rows.some(x => x.id !== r.id && x.mes === r.mes && (x.ano||2026) === (r.ano||2026) && x.cliente && x.cliente.trim().toLowerCase() === name && (Number(x.valor)||0) === valor);
 }
 function isEntityRowDuplicate(key, r){
   const mainField = ENTITIES[key].fields[0].key;
   if(!r[mainField] || !r[mainField].trim()) return false;
   const name = r[mainField].trim().toLowerCase();
-  return state[key].rows.some(x => x.id !== r.id && x.mes === r.mes && (x.ano||2026) === (r.ano||2026) && x[mainField] && x[mainField].trim().toLowerCase() === name);
+  const valor = Number(r.valorContrato)||0;
+  return state[key].rows.some(x => x.id !== r.id && x.mes === r.mes && (x.ano||2026) === (r.ano||2026) && x[mainField] && x[mainField].trim().toLowerCase() === name && (Number(x.valorContrato)||0) === valor);
 }
 function isEntityRowPending(r){
   const mainVal = Object.values(r).some(v => typeof v === 'string' && v.trim());
@@ -8824,7 +8832,7 @@ function renderVendasSection(){
           ${isVendasRowPending(row) ? '<span class="pending-badge" title="Lançamento incompleto: falta valor ou percentual">⚠️</span>' : ''}
           ${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}
           ${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}
-          ${isVendasRowDuplicate(row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo cliente neste mês — confira se não é duplicado">🔁 Duplicado</span>` : ''}
+          ${isVendasRowDuplicate(row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo cliente, mês e valor — confira se não é duplicado">🔁 Duplicado</span>` : ''}
         </td>
         <td class="cliente"><input type="text" list="empresas-datalist" data-id="${row.id}" data-field="cliente" value="${esc(row.cliente)}" placeholder="Cliente" oninput="onTextInput(this)" onchange="onClienteVendaEscolhido(this)" />${row.renovacao ? '<span class="selo-renovacao" title="Renovação: vale comissão, mas não conta no ranking de desempenho">♻️ Renovação</span>' : (row.novoContrato ? '<span class="selo-novo" title="Contrato novo: conta no ranking e nas comissões como qualquer venda">✨ Contrato novo</span>' : (row.upgrade ? '<span class="selo-upgrade" title="Upgrade: cliente que subiu de plano. É receita nova e conta no ranking">⬆️ Upgrade</span>' : ''))}
           <input type="text" class="cliente-cnpj" placeholder="CNPJ (opcional)" value="${esc(formatCnpj(row.cnpj))}" data-id="${row.id}"
@@ -9548,7 +9556,7 @@ function renderEntitySection(key){
   const rowsHtml = visible.length === 0
     ? `<tr class="empty-row"><td colspan="${colCount}"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
     : visible.map(row => {
-        let cells = `<td class="col-mes"><select data-entity="${key}" data-id="${row.id}" onchange="onEntityMonthSelect(this)" title="${esc(row.mes)}">${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>${isEntityRowPending(row) ? '<span class="pending-badge" title="Lançamento incompleto: falta valor ou percentual">⚠️</span>' : ''}${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}${isEntityRowDuplicate(key,row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo nome neste mês — confira se não é duplicado">🔁 Duplicado</span>` : ''}</td>`;
+        let cells = `<td class="col-mes"><select data-entity="${key}" data-id="${row.id}" onchange="onEntityMonthSelect(this)" title="${esc(row.mes)}">${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>${isEntityRowPending(row) ? '<span class="pending-badge" title="Lançamento incompleto: falta valor ou percentual">⚠️</span>' : ''}${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}${isEntityRowDuplicate(key,row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo nome, mês e valor — confira se não é duplicado">🔁 Duplicado</span>` : ''}</td>`;
         cfg.fields.forEach((f, fi) => {
           if(fi === 1 && cfg.hasVendedorResponsavel && !isFinanceiro){
             cells += `<td class="resp-cell">
