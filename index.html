@@ -1287,6 +1287,8 @@
   /* Colunas de apoio: estão ali para conferência, não para competir com o
      total. Ficam em cinza para o olho ir primeiro no número que importa. */
   table.table-plain td.col-apoio, thead th.col-apoio{color:var(--ink-faint);}
+  .col-apoio-nota{font-weight:600;font-size:10px;text-transform:none;letter-spacing:0;}
+  .fechamento-datas{font-size:11px;font-weight:600;color:var(--ink-faint);margin-top:2px;font-variant-numeric:tabular-nums;}
   table.table-plain td.celula-clicavel{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;}
   table.table-plain td.celula-clicavel:hover{background:var(--primary-soft);}
   .totais-nota{padding:12px 16px 16px;font-size:12px;color:var(--ink-soft);font-weight:600;line-height:1.55;}
@@ -1376,7 +1378,15 @@
   }
   .nota-btn:hover{border-color:var(--ink-faint);color:var(--ink-soft);}
   .nota-btn.on{background:#DCFCE7;border-color:#86EFAC;color:#15803D;}
+  .pode-emitir-btn{
+    font-family:var(--font);font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;
+    padding:5px 11px;border-radius:999px;border:1px solid var(--border);
+    background:var(--surface);color:var(--ink-faint);transition:all .15s;margin-right:5px;
+  }
+  .pode-emitir-btn:hover{border-color:var(--ink-faint);color:var(--ink-soft);}
+  .pode-emitir-btn.on{background:#FEF3C7;border-color:#FCD34D;color:#B45309;}
   .nota-selo{font-size:11px;font-weight:800;color:#15803D;white-space:nowrap;}
+  .nota-selo-pode{color:#B45309;}
   .nota-editar-data{
     margin-left:4px;font-size:11px;cursor:pointer;background:none;border:none;padding:2px;
     opacity:.6;transition:opacity .15s;vertical-align:middle;
@@ -1954,7 +1964,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-18-10';
+const APP_BUILD = '2026-09-18-11';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -2403,6 +2413,7 @@ function persist(){
             // vai junto de propósito: upsert que não manda a coluna a
             // devolve para o padrão, e o visto do financeiro sumiria
             nota_emitida: !!r.notaEmitida, nota_emitida_em: r.notaEmitidaEm || null,
+            pode_emitir: !!r.podeEmitir, pode_emitir_em: r.podeEmitirEm || null,
           };
         });
         await sbUpsert('vendas', dbRows, 'id');
@@ -2460,6 +2471,7 @@ async function tryLoadFromStorageAsync(){
           parcelaLabel: d.parcela_label,
           vendedorResponsavel: d.vendedor_responsavel || '',
           notaEmitida: !!d.nota_emitida, notaEmitidaEm: d.nota_emitida_em || null,
+          podeEmitir: !!d.pode_emitir, podeEmitirEm: d.pode_emitir_em || null,
           notaArquivoPath: d.nota_arquivo_path || null, notaArquivoNome: d.nota_arquivo_nome || null,
         };
         SELLERS.forEach(function(s){ r[s.key] = null; });
@@ -2503,6 +2515,7 @@ function persistEntityRows(key){
             forma_pagamento:'', colaborador:'', observacoes:'',
             pago:false, mes_pagamento:null, pago_em: r.pagoEm || null, fechamento_mes: r.fechamentoMes || null,
             nota_emitida: !!r.notaEmitida, nota_emitida_em: r.notaEmitidaEm || null,
+            pode_emitir: !!r.podeEmitir, pode_emitir_em: r.podeEmitirEm || null,
             in_company: !!r.inCompany, renovacao: !!r.renovacao, upgrade: !!r.upgrade,
             vendedor_responsavel: cfg.hasVendedorResponsavel ? (r.vendedorResponsavel || '') : null,
             professor: r.professor||'', honorario_professor: numOrNull(r.honorarioProfessor),
@@ -2635,6 +2648,7 @@ async function tryLoadEntityFromStorageAsync(key){
           id: e.id, nome: e.nome||'', cnpj: e.cnpj||'', responsavel: e.responsavel||'',
           valor: e.valor, observacoes: e.observacoes||'',
           notaEmitida: !!e.nota_emitida, notaEmitidaEm: e.nota_emitida_em || null,
+          podeEmitir: !!e.pode_emitir, podeEmitirEm: e.pode_emitir_em || null,
           notaArquivoPath: e.nota_arquivo_path || null, notaArquivoNome: e.nota_arquivo_nome || null,
         });
       });
@@ -2647,6 +2661,7 @@ async function tryLoadEntityFromStorageAsync(key){
           extraVendedores: extrasByLanc[d.id] || [],
           parcelaLabel: d.parcela_label,
           notaEmitida: !!d.nota_emitida, notaEmitidaEm: d.nota_emitida_em || null,
+          podeEmitir: !!d.pode_emitir, podeEmitirEm: d.pode_emitir_em || null,
           notaArquivoPath: d.nota_arquivo_path || null, notaArquivoNome: d.nota_arquivo_nome || null,
           inCompany: !!d.in_company, renovacao: !!d.renovacao, upgrade: !!d.upgrade,
           parceiro: d.parceiro||'', participacao: d.participacao,
@@ -4875,13 +4890,7 @@ function renderModal(){
                      oninput="onEmpresaValorInput(this,${e.id})" onchange="updateEmpresaCurso(${e.id},'valor',this.value)" />
             </div>
           </td>
-          <td>${podeVisar
-            ? `<button type="button" class="nota-btn${e.notaEmitida?' on':''}"
-                       title="${e.notaEmitida ? 'Nota emitida — clique para desmarcar' : 'Marcar que a nota foi emitida'}"
-                       onclick="toggleNotaEmitida('lancamento_empresas',${e.id},'')">${
-                 e.notaEmitida ? '✓ Emitida' + (dataCurta(e.notaEmitidaEm) ? ' · ' + dataCurta(e.notaEmitidaEm) : '') : 'Emitir'
-               }</button>${e.notaEmitida ? `<button type="button" class="nota-editar-data" title="Corrigir a data de emissão" onclick="editarDataEmissao('lancamento_empresas',${e.id},'')">✏️</button>` : ''}`
-            : (e.notaEmitida ? '<span class="nota-selo">✓ Emitida</span>' : '—')}</td>
+          <td>${notaEmissaoBotoesHtml('lancamento_empresas', e.id, '', e.podeEmitir, e.podeEmitirEm, e.notaEmitida, e.notaEmitidaEm, podeVisar)}</td>
           <td>${podeVisar
             ? (e.notaArquivoPath
               ? `<span class="anexo-arquivo">
@@ -6615,7 +6624,13 @@ function getPartnerEntries(){
     src.list.forEach(r => {
       if(!r.parceiro) return;
       if((r.ano||2026) !== yearFilter) return;
-      if(partnerMonthFilter !== "Todos" && r.mes !== partnerMonthFilter) return;
+      /* Comissão de parceiro só entra depois que o cliente PAGOU — o mesmo
+         padrão que já vale pra comissão de vendedora (elegivelNoFechamento).
+         Antes contava assim que o lançamento era feito, sem esperar
+         pagamento nenhum, o que inflava o "ganho" do parceiro com contas
+         ainda pendentes (foi o caso do Clebeson: Cesob de Fev e Mai ainda
+         não pagas entravam no total junto com a de Ago, já paga). */
+      if(!elegivelNoFechamento(r, partnerMonthFilter)) return;
       const valorContrato = Number(r[src.valorField])||0;
       const pct = parsePercent(r.participacao);
       const honorario = valorContrato * (pct/100);
@@ -7523,8 +7538,8 @@ function getPartnerBreakdown(){
 
   rows.forEach(r => {
     if((r.ano||2026) !== yearFilter) return;
-    if(partnerMonthFilter !== "Todos" && r.mes !== partnerMonthFilter) return;
     if(!r.parceiro) return;
+    if(!elegivelNoFechamento(r, partnerMonthFilter)) return;
     ensure(r.parceiro);
     by[r.parceiro].sistema += (Number(r.valor)||0) * (parsePercent(r.participacao)/100);
   });
@@ -7532,8 +7547,8 @@ function getPartnerBreakdown(){
   ENTITY_KEYS.forEach(key => {
     state[key].rows.forEach(r => {
       if((r.ano||2026) !== yearFilter) return;
-      if(partnerMonthFilter !== "Todos" && r.mes !== partnerMonthFilter) return;
       if(!r.parceiro) return;
+      if(!elegivelNoFechamento(r, partnerMonthFilter)) return;
       ensure(r.parceiro);
       by[r.parceiro][key] += (Number(r.valorContrato)||0) * (parsePercent(r.participacao)/100);
     });
@@ -7701,6 +7716,15 @@ function renderParceirosSection(){
   const fechamento = fechamentoPagamentos(partnerMonthFilter);
   const fechamentoSomaCols = {sistema:0, publicos:0, cursos:0, bonus:0, salario:0, aPagar:0, consultoria:0, pendente:0};
   fechamento.forEach(l => { Object.keys(fechamentoSomaCols).forEach(k => { fechamentoSomaCols[k] += l[k]; }); });
+  /* Consultoria paga em data própria (dia 15 do mesmo mês), separada do
+     resto da folha (dia 05 do mês seguinte) — sem isso "Total a pagar"
+     misturava as duas datas num número só, escondendo que uma parte já
+     saiu antes e o resto ainda espera o próximo ciclo. */
+  const fechamentoProximoMes = partnerMonthFilter !== "Todos" ? MONTHS[(MONTHS.indexOf(partnerMonthFilter) + 1) % 12] : null;
+  const datasFechamentoHtml = function(consultoria, aPagar){
+    if(partnerMonthFilter === "Todos" || !consultoria) return '';
+    return `<div class="fechamento-datas">dia 15: ${maskOr(consultoria)} · dia 05/${fechamentoProximoMes.slice(0,3)}: ${maskOr(aPagar - consultoria)}</div>`;
+  };
   const fechamentoRowsHtml = fechamento.map(l => `
       <tr>
         <td><span class="th-dot" style="background:${esc(l.cor)}"></span>${esc(l.pessoa)}</td>
@@ -7710,7 +7734,7 @@ function renderParceirosSection(){
         ${celulaFechamento(l.pessoa, 'bonus', 'Bônus', l.bonus, partnerMonthFilter, maskOr(l.bonus), null, partnersValuesRevealed)}
         ${celulaFechamento(l.pessoa, 'salario', 'Salário fixo', l.salario, partnerMonthFilter, maskOr(l.salario), null, partnersValuesRevealed)}
         ${celulaFechamento(l.pessoa, 'consultoria', 'Consultoria', l.consultoria, partnerMonthFilter, maskOr(l.consultoria), 'col-apoio', partnersValuesRevealed)}
-        <td class="num" style="font-weight:800;">${maskOr(l.aPagar)}</td>
+        <td class="num" style="font-weight:800;">${maskOr(l.aPagar)}${datasFechamentoHtml(l.consultoria, l.aPagar)}</td>
         <td class="num col-apoio" title="Já ganhou, mas ainda espera o cliente pagar">${maskOr(l.pendente)}</td>
         <td class="del-cell">${partnerMonthFilter!=="Todos" ? `<button class="action-btn" title="Gerar comprovante em PDF dos recebíveis de ${esc(l.pessoa)} em ${esc(partnerMonthFilter)}" onclick="imprimirComprovanteFechamento('${escJs(l.pessoa)}','${escJs(partnerMonthFilter)}')">🧾</button>` : ''}</td>
       </tr>`).join('');
@@ -7785,7 +7809,7 @@ function renderParceirosSection(){
 
   const emptyMsg = partners.length === 0
     ? 'Nenhum parceiro cadastrado ainda. Clique em "+ Parceiro" para cadastrar o primeiro.'
-    : 'Nenhum honorário neste filtro — confira se o percentual do parceiro está preenchido em alguma venda/lançamento.';
+    : 'Nenhum honorário neste filtro — a comissão de parceiro só conta depois que o cliente paga; confira se há algum lançamento pago com o percentual do parceiro preenchido.';
 
   const rowsHtml = entries.length === 0
     ? `<tr class="empty-row"><td colspan="7"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
@@ -7831,7 +7855,7 @@ function renderParceirosSection(){
               <th class="num">Cursos</th>
               <th class="num">Bônus</th>
               <th class="num">Salário fixo</th>
-              <th class="num col-apoio">Consultoria</th>
+              <th class="num col-apoio" title="Consultoria paga em data própria — dia 15 deste mês, separado do resto da folha">Consultoria <span class="col-apoio-nota">(dia 15)</span></th>
               <th class="num">Total a pagar</th>
               <th class="num col-apoio">Pendente</th>
               <th style="width:40px"></th>
@@ -7846,7 +7870,7 @@ function renderParceirosSection(){
             <td class="num">${maskOr(fechamentoSomaCols.bonus)}</td>
             <td class="num">${maskOr(fechamentoSomaCols.salario)}</td>
             <td class="num col-apoio">${maskOr(fechamentoSomaCols.consultoria)}</td>
-            <td class="num">${maskOr(fechamentoSomaCols.aPagar)}</td>
+            <td class="num">${maskOr(fechamentoSomaCols.aPagar)}${datasFechamentoHtml(fechamentoSomaCols.consultoria, fechamentoSomaCols.aPagar)}</td>
             <td class="num col-apoio">${maskOr(fechamentoSomaCols.pendente)}</td>
             <td></td>
           </tr></tfoot>` : ''}
@@ -8202,6 +8226,7 @@ function executarMoverVendaParaPublicos(id){
     extraVendedores: comissoes.slice(3).map(function(c, i){ return {id: Date.now()+i, vendedor: c.vendedor, percent: c.percent}; }),
     pago: !!r.pago, mesPagamento: r.mesPagamento || null,
     notaEmitida: !!r.notaEmitida, notaEmitidaEm: r.notaEmitidaEm || null,
+    podeEmitir: !!r.podeEmitir, podeEmitirEm: r.podeEmitirEm || null,
   });
 
   marcarParaApagar('vendas', id);
@@ -8442,6 +8467,7 @@ function notasDoAno(){
     out.push({mes:r.mes, origem:'Sistema', nome:r.cliente || r.venda || '—', valor:Number(r.valor)||0,
               pago:r.pago, mesPagamento:r.mesPagamento, forma:r.formaPagamento||'',
               tabela:'vendas', entKey:'', id:r.id, emitida:!!r.notaEmitida, emitidaEm:r.notaEmitidaEm||null,
+              podeEmitir:!!r.podeEmitir, podeEmitirEm:r.podeEmitirEm||null,
               notaArquivoPath:r.notaArquivoPath||null, notaArquivoNome:r.notaArquivoNome||null});
   });
   ENTITY_KEYS.forEach(function(key){
@@ -8455,6 +8481,7 @@ function notasDoAno(){
                     nome:(r[campo]||'—') + ' — ' + (e.nome||'empresa sem nome') + (e.cnpj ? ' (CNPJ ' + formatCnpj(e.cnpj) + ')' : ''),
                     valor:Number(e.valor)||0, pago:r.pago, mesPagamento:r.mesPagamento, forma:r.formaPagamento||'',
                     tabela:'lancamento_empresas', entKey:'', id:e.id, emitida:!!e.notaEmitida, emitidaEm:e.notaEmitidaEm||null,
+                    podeEmitir:!!e.podeEmitir, podeEmitirEm:e.podeEmitirEm||null,
                     notaArquivoPath:e.notaArquivoPath||null, notaArquivoNome:e.notaArquivoNome||null});
         });
         return;
@@ -8462,6 +8489,7 @@ function notasDoAno(){
       out.push({mes:r.mes, origem:ENTITIES[key].tabLabel, nome:r[campo] || '—', valor:Number(r.valorContrato)||0,
                 pago:r.pago, mesPagamento:r.mesPagamento, forma:r.formaPagamento||'',
                 tabela:'lancamentos', entKey:key, id:r.id, emitida:!!r.notaEmitida, emitidaEm:r.notaEmitidaEm||null,
+                podeEmitir:!!r.podeEmitir, podeEmitirEm:r.podeEmitirEm||null,
                 notaArquivoPath:r.notaArquivoPath||null, notaArquivoNome:r.notaArquivoNome||null});
     });
   });
@@ -8729,6 +8757,58 @@ async function toggleNotaEmitida(tabela, id, entKey){
   }
 }
 
+/* "Pode emitir" é um visto à parte de "Emitida" — libera pro financeiro
+   que aquele lançamento já está conferido e pronto pra gerar a nota,
+   sem precisar já marcar como emitida (que é o passo seguinte, quando a
+   nota sai de fato). As duas travas ficam independentes de propósito:
+   nada aqui impede marcar "Emitida" sem "Pode emitir" antes, é só um
+   sinal a mais na tela. */
+async function togglePodeEmitir(tabela, id, entKey){
+  if(!isAdmin && !isFinanceiro) return;
+  const alvo = acharAlvoNota(tabela, id, entKey);
+  if(!alvo) return;
+  const novo = !alvo.podeEmitir;
+  alvo.podeEmitir = novo;
+  alvo.podeEmitirEm = novo ? new Date().toISOString() : null;
+  render();
+  saving = true; updateSaveStatus();
+  try{
+    const quando = await sbRpc('marcar_pode_emitir', { p_tabela: tabela, p_id: id, p_pode: novo });
+    alvo.podeEmitirEm = novo ? (quando || alvo.podeEmitirEm) : null;
+    saveError = false;
+  }catch(e){
+    console.error(e);
+    alvo.podeEmitir = !novo;
+    alvo.podeEmitirEm = null;
+    saveError = true;
+    showAlert('Não consegui gravar "Pode emitir". Confira a internet e tente de novo.');
+  }finally{
+    saving = false; updateSaveStatus(); render();
+  }
+}
+
+/* Monta os dois botões da coluna "Nota fiscal" — "Pode emitir" e
+   "Emitida" — de um jeito só, reaproveitado nas 3 telas que mostram
+   nota fiscal (Sistema, Empresas por lançamento e o quadro
+   consolidado "Notas lançadas"). entKeyLiteral já deve vir pronto pra
+   entrar direto no onclick (aspas simples, escapado se precisar). */
+function notaEmissaoBotoesHtml(tabela, id, entKeyLiteral, podeEmitir, podeEmitirEm, notaEmitida, notaEmitidaEm, podeVisar){
+  if(!podeVisar){
+    if(notaEmitida) return '<span class="nota-selo">✓ Emitida</span>';
+    if(podeEmitir) return '<span class="nota-selo nota-selo-pode">Pode emitir</span>';
+    return '—';
+  }
+  const podeBtn = `<button type="button" class="pode-emitir-btn${podeEmitir?' on':''}"
+                     title="${podeEmitir ? 'Liberada para emitir — clique para desmarcar' : 'Marcar que este lançamento já está conferido e pronto pra emitir a nota'}"
+                     onclick="togglePodeEmitir('${tabela}',${id},'${entKeyLiteral}')">${podeEmitir ? '✓ Pode emitir' : 'Pode emitir'}</button>`;
+  const emitirBtn = `<button type="button" class="nota-btn${notaEmitida?' on':''}"
+                     title="${notaEmitida ? 'Nota emitida — clique para desmarcar' : 'Marcar que a nota foi emitida'}"
+                     onclick="toggleNotaEmitida('${tabela}',${id},'${entKeyLiteral}')">${
+                 notaEmitida ? '✓ Emitida' + (dataCurta(notaEmitidaEm) ? ' · ' + dataCurta(notaEmitidaEm) : '') : 'Emitir'
+               }</button>${notaEmitida ? `<button type="button" class="nota-editar-data" title="Corrigir a data de emissão" onclick="editarDataEmissao('${tabela}',${id},'${entKeyLiteral}')">✏️</button>` : ''}`;
+  return podeBtn + emitirBtn;
+}
+
 /* Corrigir a data em que a nota foi emitida — sem isso, uma nota que
    precisa ser cancelada e reemitida em outro dia fica com a data errada
    pra sempre, porque marcar/desmarcar "Emitida" sempre grava a data de
@@ -8861,13 +8941,7 @@ function renderNotasPanel(){
             <td>${esc(n.forma || '—')}</td>
             <td>${n.pago ? 'Pago' + (n.mesPagamento ? ' · ' + esc(monthShort(n.mesPagamento)) : '') : 'Pendente'}</td>
             <td class="num col-valor-larga">${fmtMoney(n.valor)}</td>
-            <td>${podeVisar
-              ? `<button type="button" class="nota-btn${n.emitida?' on':''}"
-                         title="${n.emitida ? 'Nota emitida — clique para desmarcar' : 'Marcar que a nota foi emitida'}"
-                         onclick="toggleNotaEmitida('${n.tabela}',${n.id},'${escJs(n.entKey)}')">${
-                   n.emitida ? '✓ Emitida' + (dataCurta(n.emitidaEm) ? ' · ' + dataCurta(n.emitidaEm) : '') : 'Emitir'
-                 }</button>${n.emitida ? `<button type="button" class="nota-editar-data" title="Corrigir a data de emissão" onclick="editarDataEmissao('${n.tabela}',${n.id},'${escJs(n.entKey)}')">✏️</button>` : ''}`
-              : (n.emitida ? '<span class="nota-selo">✓ Emitida</span>' : '—')}</td>
+            <td>${notaEmissaoBotoesHtml(n.tabela, n.id, escJs(n.entKey), n.podeEmitir, n.podeEmitirEm, n.emitida, n.emitidaEm, podeVisar)}</td>
             <td>${podeVisar
               ? (n.notaArquivoPath
                 ? `<span class="anexo-arquivo">
@@ -9056,13 +9130,7 @@ function renderVendasSection(){
                   title="${pagoEmOutroMes(row) ? 'Nota de ' + esc(row.mes) + ' paga em ' + esc(row.mesPagamento) + ' — a comissão libera em ' + esc(row.mesPagamento) : 'Mês em que o cliente pagou'}"
                   onchange="onPagamentoMesSelect(this)">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>` : ''}
         </td>
-        <td>${podeVisar
-          ? `<button type="button" class="nota-btn${row.notaEmitida?' on':''}"
-                     title="${row.notaEmitida ? 'Nota emitida — clique para desmarcar' : 'Marcar que a nota foi emitida'}"
-                     onclick="toggleNotaEmitida('vendas',${row.id},'')">${
-               row.notaEmitida ? '✓ Emitida' + (dataCurta(row.notaEmitidaEm) ? ' · ' + dataCurta(row.notaEmitidaEm) : '') : 'Emitir'
-             }</button>${row.notaEmitida ? `<button type="button" class="nota-editar-data" title="Corrigir a data de emissão" onclick="editarDataEmissao('vendas',${row.id},'')">✏️</button>` : ''}`
-          : (row.notaEmitida ? '<span class="nota-selo">✓ Emitida</span>' : '—')}</td>
+        <td>${notaEmissaoBotoesHtml('vendas', row.id, '', row.podeEmitir, row.podeEmitirEm, row.notaEmitida, row.notaEmitidaEm, podeVisar)}</td>
         <td>${podeVisar
           ? (row.notaArquivoPath
             ? `<span class="anexo-arquivo">
@@ -10837,6 +10905,7 @@ async function refrescarEmpresasDoLancamento(entKey, rowId){
         id: e.id, nome: e.nome||'', cnpj: e.cnpj||'', responsavel: e.responsavel||'',
         valor: e.valor, observacoes: e.observacoes||'',
         notaEmitida: !!e.nota_emitida, notaEmitidaEm: e.nota_emitida_em || null,
+        podeEmitir: !!e.pode_emitir, podeEmitirEm: e.pode_emitir_em || null,
         notaArquivoPath: e.nota_arquivo_path || null, notaArquivoNome: e.nota_arquivo_nome || null,
       };
       if(porId[e.id]) Object.assign(porId[e.id], doServidor);
