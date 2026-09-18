@@ -1966,7 +1966,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-18-12';
+const APP_BUILD = '2026-09-18-13';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -11022,22 +11022,36 @@ function removerNotaAnexada(tabela, id, entKey){
   );
 }
 
-/* Na imensa maioria dos lançamentos só existe UMA empresa (a própria
-   Consultoria/Órgão/Curso é a empresa em si — "empresas" só serve pra
-   separar quando são várias). Nesse caso comum, forçar a pessoa a
-   redigitar nome, CNPJ e valor que já estão ali do lado — o nome do
-   lançamento, o cadastro de Empresas e o próprio valor do contrato —
-   é retrabalho sem necessidade. Por isso a PRIMEIRA empresa nasce
-   pré-preenchida com o que já se sabe; a pessoa só confere e corrige se
-   for o caso. A partir da segunda, não tem o que copiar — nasce em
-   branco como sempre. */
+/* Na imensa maioria dos lançamentos só existe UMA empresa (em
+   Consultoria/Órgãos Públicos, a própria Consultoria/Órgão já é a
+   empresa em si — "empresas" só serve pra separar quando são várias.
+   Em Cursos é diferente: o lançamento é o CURSO, e quem paga a nota é
+   outra coisa, cadastrada aqui dentro). Nesse caso comum, forçar a
+   pessoa a redigitar nome, CNPJ e valor que já estão ali do lado — o
+   nome do lançamento (quando já é o da empresa), o cadastro de
+   Empresas e o próprio valor do contrato — é retrabalho sem
+   necessidade. Por isso a PRIMEIRA empresa nasce pré-preenchida com o
+   que já se sabe; a pessoa só confere e corrige se for o caso. A
+   partir da segunda, não tem o que copiar — nasce em branco como
+   sempre. */
 function addEmpresaCurso(){
   const r = empresasRowAtual();
   if(!r || !isAdmin) return;
   if(!Array.isArray(r.empresas)) r.empresas = [];
   const ehPrimeira = r.empresas.length === 0;
-  const mainField = ENTITIES[modalState.entKey].fields[0].key;
-  const nomeLancamento = ehPrimeira ? (r[mainField] || '') : '';
+  const cfg = ENTITIES[modalState.entKey];
+  const mainField = cfg.fields[0].key;
+  /* Em Consultoria e Órgãos Públicos, o nome do lançamento JÁ É o nome da
+     empresa — dá pra herdar e puxar o CNPJ do cadastro de cara. Em Cursos
+     não: o campo principal é o nome do CURSO ("RTO Presencial", por
+     exemplo), não de quem vai receber a nota. Herdar esse nome ali
+     enganava — a caixa aparecia com "algo preenchido" (o título do
+     curso), então ninguém corrigia, e como esse texto nunca bate com
+     nenhuma empresa cadastrada, o CNPJ nunca vinha sozinho. Por isso só
+     herda o nome do lançamento quando o campo principal é mesmo uma
+     empresa (hasVendasPorVendedor é a marca de "isso aqui é produto, não
+     empresa" — hoje só Cursos). */
+  const nomeLancamento = (ehPrimeira && !cfg.hasVendasPorVendedor) ? (r[mainField] || '') : '';
   const cadastro = nomeLancamento ? empresasCadastro.find(function(e){ return name_matches_client(e.nome, nomeLancamento); }) : null;
   const nova = {
     id: Date.now() + r.empresas.length,
