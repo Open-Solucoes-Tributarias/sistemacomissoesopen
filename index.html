@@ -1966,7 +1966,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-18-13';
+const APP_BUILD = '2026-09-18-14';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -8713,7 +8713,7 @@ function imprimirRelatorioNotasEmitidas(ano, mes, busca){
    A tela muda na hora e desfaz se a gravação falhar: um visto que aparece
    marcado sem ter sido gravado é pior do que visto nenhum — ela passaria
    para a próxima nota achando que aquela já estava resolvida. */
-let notaFiltro = 'Todas';   // 'Todas' | 'Pendentes' | 'Emitidas'
+let notaFiltro = 'Todas';   // 'Todas' | 'Pendentes' | 'Emitidas' | 'PodeEmitir'
 function setNotaFiltro(f){ notaFiltro = f; render(); }
 
 function acharEmpresaPorId(id){
@@ -8894,18 +8894,23 @@ function renderNotasPanel(){
   });
   const emitidas  = doPeriodo.filter(function(n){ return n.emitida; });
   const pendentes = doPeriodo.filter(function(n){ return !n.emitida; });
+  // "Pode emitir" já liberada mas ainda não emitida — é a fila de quem
+  // vai gerar a nota: já foi conferida, só falta sair de fato.
+  const podeEmitirPendentes = doPeriodo.filter(function(n){ return n.podeEmitir && !n.emitida; });
   const notas = doPeriodo.filter(function(n){
-    if(notaFiltro === 'Emitidas')  return n.emitida;
-    if(notaFiltro === 'Pendentes') return !n.emitida;
+    if(notaFiltro === 'Emitidas')    return n.emitida;
+    if(notaFiltro === 'Pendentes')   return !n.emitida;
+    if(notaFiltro === 'PodeEmitir')  return n.podeEmitir && !n.emitida;
     return true;
   });
   const total = notas.reduce(function(a,n){ return a + n.valor; }, 0);
   const podeVisar = isAdmin || isFinanceiro;
 
   const pills = [
-    {k:'Todas',     rot:'Todas',      n:doPeriodo.length},
-    {k:'Pendentes', rot:'A emitir',   n:pendentes.length},
-    {k:'Emitidas',  rot:'✓ Emitidas', n:emitidas.length},
+    {k:'Todas',      rot:'Todas',           n:doPeriodo.length},
+    {k:'Pendentes',  rot:'A emitir',        n:pendentes.length},
+    {k:'PodeEmitir', rot:'🟡 Pode emitir',  n:podeEmitirPendentes.length},
+    {k:'Emitidas',   rot:'✓ Emitidas',      n:emitidas.length},
   ].map(function(f){
     return `<button class="pill seller-pill${notaFiltro===f.k?' active':''}" onclick="setNotaFiltro('${f.k}')">${f.rot} · ${f.n}</button>`;
   }).join('');
@@ -8925,6 +8930,11 @@ function renderNotasPanel(){
       ${partnerMonthFilter==='Todos' ? 'no ano de ' + yearFilter : 'em ' + esc(partnerMonthFilter)},
       somando <b>${fmtMoney(pendentes.reduce(function(a,n){ return a + n.valor; }, 0))}</b>.
     </div>` : (doPeriodo.length ? `<div class="notas-ok">✓ Todas as notas ${partnerMonthFilter==='Todos' ? 'do ano' : 'de ' + esc(partnerMonthFilter)} estão emitidas.</div>` : '')}
+    ${podeEmitirPendentes.length ? `<div class="notas-pendentes">
+      🟡 <b>${podeEmitirPendentes.length}</b> nota${podeEmitirPendentes.length===1?'':'s'} já liberada${podeEmitirPendentes.length===1?'':'s'} com "Pode emitir", esperando sair
+      ${partnerMonthFilter==='Todos' ? 'no ano de ' + yearFilter : 'em ' + esc(partnerMonthFilter)},
+      somando <b>${fmtMoney(podeEmitirPendentes.reduce(function(a,n){ return a + n.valor; }, 0))}</b> — clique em "🟡 Pode emitir" acima pra ver só elas.
+    </div>` : ''}
     <div class="table-scroll">
       <table class="table-plain">
         <thead><tr>
