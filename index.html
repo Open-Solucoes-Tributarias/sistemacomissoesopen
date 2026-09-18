@@ -1950,7 +1950,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-18-02';
+const APP_BUILD = '2026-09-18-03';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -4743,8 +4743,8 @@ function renderModal(){
     const linhas = d.lista.length ? d.lista.map(function(e){
       return `
         <tr>
-          <td><input type="text" value="${esc(e.nome)}" placeholder="Razão social" ${isAdmin?'':'disabled'}
-                 onchange="updateEmpresaCurso(${e.id},'nome',this.value)" /></td>
+          <td><input type="text" list="empresas-datalist" value="${esc(e.nome)}" placeholder="Razão social" ${isAdmin?'':'disabled'}
+                 onchange="onEmpresaCursoNomeChange(this,${e.id})" /></td>
           <td>
             <input type="text" value="${esc(formatCnpj(e.cnpj))}" placeholder="00.000.000/0000-00" ${isAdmin?'':'disabled'}
                    oninput="this.value=formatCnpj(this.value)" onchange="updateEmpresaCurso(${e.id},'cnpj',this.value)" />
@@ -10726,11 +10726,31 @@ function removerNotaAnexada(tabela, id, entKey){
   );
 }
 
+/* Na imensa maioria dos lançamentos só existe UMA empresa (a própria
+   Consultoria/Órgão/Curso é a empresa em si — "empresas" só serve pra
+   separar quando são várias). Nesse caso comum, forçar a pessoa a
+   redigitar nome, CNPJ e valor que já estão ali do lado — o nome do
+   lançamento, o cadastro de Empresas e o próprio valor do contrato —
+   é retrabalho sem necessidade. Por isso a PRIMEIRA empresa nasce
+   pré-preenchida com o que já se sabe; a pessoa só confere e corrige se
+   for o caso. A partir da segunda, não tem o que copiar — nasce em
+   branco como sempre. */
 function addEmpresaCurso(){
   const r = empresasRowAtual();
   if(!r || !isAdmin) return;
   if(!Array.isArray(r.empresas)) r.empresas = [];
-  const nova = { id: Date.now() + r.empresas.length, nome:'', cnpj:'', responsavel:'', valor:null, observacoes:'', notaEmitida:false, notaEmitidaEm:null };
+  const ehPrimeira = r.empresas.length === 0;
+  const mainField = ENTITIES[modalState.entKey].fields[0].key;
+  const nomeLancamento = ehPrimeira ? (r[mainField] || '') : '';
+  const cadastro = nomeLancamento ? empresasCadastro.find(function(e){ return name_matches_client(e.nome, nomeLancamento); }) : null;
+  const nova = {
+    id: Date.now() + r.empresas.length,
+    nome: nomeLancamento,
+    cnpj: cadastro ? cadastro.cnpj : '',
+    responsavel: cadastro ? cadastro.responsavel : '',
+    valor: ehPrimeira ? r.valorContrato : null,
+    observacoes: '', notaEmitida: false, notaEmitidaEm: null,
+  };
   r.empresas.push(nova);
   persistEmpresaCurso(nova, r.id);
   render();
@@ -10756,6 +10776,22 @@ function updateEmpresaCurso(empresaId, campo, valor){
     const aviso = document.getElementById('empresa-cnpj-aviso-'+empresaId);
     if(aviso) aviso.textContent = (cnpjDigitos(item.cnpj) && !cnpjValido(item.cnpj)) ? 'CNPJ incompleto' : '';
   }
+}
+
+/* Igual ao que já acontece no Sistema: se o nome digitado bate com uma
+   empresa do cadastro, CNPJ e responsável vêm sozinhos — só quando
+   ainda estão vazios, pra nunca sobrescrever o que a pessoa já tinha
+   corrigido ali de propósito. */
+function onEmpresaCursoNomeChange(el, empresaId){
+  updateEmpresaCurso(empresaId, 'nome', el.value);
+  const r = empresasRowAtual();
+  const item = r && (r.empresas||[]).find(function(x){ return x.id === empresaId; });
+  if(!item) return;
+  const cadastro = empresasCadastro.find(function(e){ return name_matches_client(e.nome, item.nome); });
+  if(!cadastro) return;
+  if(!item.cnpj && cadastro.cnpj) updateEmpresaCurso(empresaId, 'cnpj', cadastro.cnpj);
+  if(!item.responsavel && cadastro.responsavel) updateEmpresaCurso(empresaId, 'responsavel', cadastro.responsavel);
+  render();
 }
 
 /* Enquanto digita o valor, só atualiza o rodapé de conferência — sem
