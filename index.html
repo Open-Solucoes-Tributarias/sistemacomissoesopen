@@ -1959,7 +1959,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-18-08';
+const APP_BUILD = '2026-09-18-09';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5971,9 +5971,18 @@ function isEntityRowDuplicate(key, r){
 function isEntityRowPending(r){
   const mainVal = Object.values(r).some(v => typeof v === 'string' && v.trim());
   if(!r.valorContrato || Number(r.valorContrato) <= 0) return true;
-  if(r.vendedor && !(Number(r.comissaoPercent) > 0)) return true;
-  if(r.vendedor2 && !(Number(r.comissaoPercent2) > 0)) return true;
-  if(r.vendedor3 && !(Number(r.comissaoPercent3) > 0)) return true;
+  /* A view lancamentos_safe mostra pro financeiro o NOME de quem vendeu,
+     mas esconde o percentual de comissão de quem não é ela mesma (não é
+     assunto dela) — então "vendedor preenchido, % vazio" é o normal pro
+     financeiro, não um lançamento incompleto. Sem essa guarda, praticamente
+     todo lançamento aparecia com o selo de incompleto pra ela, mesmo
+     quando pro admin (que vê tudo) estava certinho. */
+  if(!isFinanceiro){
+    if(r.vendedor && !(Number(r.comissaoPercent) > 0)) return true;
+    if(r.vendedor2 && !(Number(r.comissaoPercent2) > 0)) return true;
+    if(r.vendedor3 && !(Number(r.comissaoPercent3) > 0)) return true;
+    if(Array.isArray(r.extraVendedores) && r.extraVendedores.some(ev => ev.vendedor && !(Number(ev.percent) > 0))) return true;
+  }
   if(r.parceiro && !(Number(r.participacao) > 0)) return true;
   /* Honorário do professor pode ser zero de propósito (aula sem custo
      extra) — o que falta marcar como pendente é NUNCA ter respondido,
@@ -5982,7 +5991,6 @@ function isEntityRowPending(r){
      nos campos de comissão, onde 0% não faz sentido nenhum. */
   if(r.professor && (r.honorarioProfessor === null || r.honorarioProfessor === undefined || r.honorarioProfessor === '')) return true;
   if(r.professor2 && (r.honorarioProfessor2 === null || r.honorarioProfessor2 === undefined || r.honorarioProfessor2 === '')) return true;
-  if(Array.isArray(r.extraVendedores) && r.extraVendedores.some(ev => ev.vendedor && !(Number(ev.percent) > 0))) return true;
   return false;
 }
 function isBonusRowPending(r){
