@@ -1966,7 +1966,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-18-14';
+const APP_BUILD = '2026-09-18-15';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -2649,6 +2649,7 @@ async function tryLoadEntityFromStorageAsync(key){
         empresasByLanc[e.lancamento_id].push({
           id: e.id, nome: e.nome||'', cnpj: e.cnpj||'', responsavel: e.responsavel||'',
           valor: e.valor, observacoes: e.observacoes||'',
+          telefone: e.telefone||'', email: e.email||'',
           notaEmitida: !!e.nota_emitida, notaEmitidaEm: e.nota_emitida_em || null,
           podeEmitir: !!e.pode_emitir, podeEmitirEm: e.pode_emitir_em || null,
           notaArquivoPath: e.nota_arquivo_path || null, notaArquivoNome: e.nota_arquivo_nome || null,
@@ -4886,6 +4887,10 @@ function renderModal(){
           </td>
           <td><input type="text" value="${esc(e.responsavel)}" placeholder="Responsável pela nota" ${isAdmin?'':'disabled'}
                  onchange="updateEmpresaCurso(${e.id},'responsavel',this.value)" /></td>
+          <td><input type="text" value="${esc(e.telefone)}" placeholder="Telefone" ${isAdmin?'':'disabled'}
+                 onchange="updateEmpresaCurso(${e.id},'telefone',this.value)" /></td>
+          <td><input type="text" value="${esc(e.email)}" placeholder="E-mail" ${isAdmin?'':'disabled'}
+                 onchange="updateEmpresaCurso(${e.id},'email',this.value)" /></td>
           <td class="col-valor">
             <div class="currency-wrap"><span class="currency-prefix">R$</span>
               <input class="num" type="number" step="0.01" value="${e.valor===null||e.valor===undefined?'':e.valor}" ${isAdmin?'':'disabled'}
@@ -4905,7 +4910,7 @@ function renderModal(){
             : (e.notaArquivoPath ? `<button type="button" class="anexo-link" title="${esc(e.notaArquivoNome||'')}" onclick="verNotaAnexada('lancamento_empresas',${e.id},'')">📎 ${esc(e.notaArquivoNome||'arquivo')}</button>` : '—')}</td>
           ${isAdmin ? `<td><button class="action-btn danger" title="Remover" onclick="removeEmpresaCurso(${e.id})">✕</button></td>` : ''}
         </tr>`;
-    }).join('') : `<tr class="empty-row"><td colspan="${isAdmin?7:6}"><span class="empty-icon">◌</span>Nenhuma empresa cadastrada ainda.</td></tr>`;
+    }).join('') : `<tr class="empty-row"><td colspan="${isAdmin?9:8}"><span class="empty-icon">◌</span>Nenhuma empresa cadastrada ainda.</td></tr>`;
 
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
@@ -4919,7 +4924,7 @@ function renderModal(){
           <div class="table-scroll">
             <table class="table-plain">
               <thead><tr>
-                <th style="min-width:340px;">Empresa</th><th style="min-width:140px;">CNPJ</th><th style="min-width:150px;">Responsável</th><th class="num" style="min-width:110px;">Valor</th><th style="min-width:120px;">Nota fiscal</th><th style="min-width:130px;">Anexo</th>${isAdmin?'<th></th>':''}
+                <th style="min-width:340px;">Empresa</th><th style="min-width:140px;">CNPJ</th><th style="min-width:150px;">Responsável</th><th style="min-width:140px;">Telefone</th><th style="min-width:180px;">E-mail</th><th class="num" style="min-width:110px;">Valor</th><th style="min-width:120px;">Nota fiscal</th><th style="min-width:130px;">Anexo</th>${isAdmin?'<th></th>':''}
               </tr></thead>
               <tbody>${linhas}</tbody>
             </table>
@@ -4949,7 +4954,7 @@ function renderModal(){
           <div class="modal-msg">Importar empresas da planilha</div>
           <div class="painel-equipe-nota">
             Reconheço colunas com estes nomes (com ou sem acento, em qualquer ordem):
-            <b>Empresa</b>, <b>CNPJ</b>, <b>Responsável</b> e <b>Valor</b>${temVendasPorVendedor ? ', e <b>Vendedora</b> (opcional)' : ''}. Sem
+            <b>Empresa</b>, <b>CNPJ</b>, <b>Responsável</b>, <b>Telefone</b>, <b>E-mail</b> e <b>Valor</b>${temVendasPorVendedor ? ', e <b>Vendedora</b> (opcional)' : ''}. Sem
             cabeçalho reconhecido, uso essa mesma ordem. Aceito <b>.xlsx</b> e <b>.csv</b>; se preferir,
             selecione as células no Excel, copie com Ctrl+C e cole no campo de baixo.
             ${temVendasPorVendedor ? 'Trazendo a vendedora, o valor de cada empresa já soma em "Vendas por vendedora" — e o ' : 'O '}valor total
@@ -4967,16 +4972,18 @@ function renderModal(){
             <div class="import-resumo">
               <b>${novos.length}</b> empresa${novos.length===1?'':'s'} nova${novos.length===1?'':'s'} de <b>${d.itens.length}</b> linha${d.itens.length===1?'':'s'} lida${d.itens.length===1?'':'s'}
               ${problemas.length ? ` · <span class="import-alerta">${problemas.length} com aviso</span>` : ''}
-              ${d.cols.temCabecalho ? ' · cabeçalho reconhecido' : ' · sem cabeçalho, usei a ordem empresa / CNPJ / responsável / valor / vendedora'}
+              ${d.cols.temCabecalho ? ' · cabeçalho reconhecido' : ' · sem cabeçalho, usei a ordem empresa / CNPJ / responsável / valor / vendedora / telefone / e-mail'}
             </div>
             <div class="table-scroll import-previa">
               <table class="table-plain">
-                <thead><tr><th>Empresa</th><th>CNPJ</th><th>Responsável</th><th class="num">Valor</th>${temVendasPorVendedor ? '<th>Vendedora</th>' : ''}<th></th></tr></thead>
+                <thead><tr><th>Empresa</th><th>CNPJ</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th class="num">Valor</th>${temVendasPorVendedor ? '<th>Vendedora</th>' : ''}<th></th></tr></thead>
                 <tbody>${previa.map(function(i){
                   return `<tr class="${i.aviso ? 'row-pending' : ''}">
                     <td>${esc(i.nome)}</td>
                     <td>${esc(formatCnpj(i.cnpj)) || '—'}</td>
                     <td>${esc(i.responsavel) || '—'}</td>
+                    <td>${esc(i.telefone) || '—'}</td>
+                    <td>${esc(i.email) || '—'}</td>
                     <td class="num">${i.valor === null ? '—' : fmtMoney(i.valor)}</td>
                     ${temVendasPorVendedor ? `<td>${esc(i.vendedora) || '—'}</td>` : ''}
                     <td>${i.aviso ? `<span class="import-alerta">${esc(i.aviso)}</span>` : '✓'}</td>
@@ -10921,6 +10928,7 @@ async function refrescarEmpresasDoLancamento(entKey, rowId){
       const doServidor = {
         id: e.id, nome: e.nome||'', cnpj: e.cnpj||'', responsavel: e.responsavel||'',
         valor: e.valor, observacoes: e.observacoes||'',
+        telefone: e.telefone||'', email: e.email||'',
         notaEmitida: !!e.nota_emitida, notaEmitidaEm: e.nota_emitida_em || null,
         podeEmitir: !!e.pode_emitir, podeEmitirEm: e.pode_emitir_em || null,
         notaArquivoPath: e.nota_arquivo_path || null, notaArquivoNome: e.nota_arquivo_nome || null,
@@ -10946,6 +10954,7 @@ function persistEmpresaCurso(empresa, rowId){
           id: empresa.id, lancamento_id: rowId,
           nome: empresa.nome||'', cnpj: cnpjDigitos(empresa.cnpj), responsavel: empresa.responsavel||'',
           valor: numOrNull(empresa.valor), observacoes: empresa.observacoes||'',
+          telefone: empresa.telefone||'', email: empresa.email||'',
         }], 'id');
         saveError = false;
       }catch(e){
@@ -11068,6 +11077,8 @@ function addEmpresaCurso(){
     nome: nomeLancamento,
     cnpj: cadastro ? cadastro.cnpj : '',
     responsavel: cadastro ? cadastro.responsavel : '',
+    telefone: cadastro ? cadastro.telefone : '',
+    email: cadastro ? cadastro.email : '',
     valor: ehPrimeira ? r.valorContrato : null,
     observacoes: '', notaEmitida: false, notaEmitidaEm: null,
   };
@@ -11099,9 +11110,9 @@ function updateEmpresaCurso(empresaId, campo, valor){
 }
 
 /* Igual ao que já acontece no Sistema: se o nome digitado bate com uma
-   empresa do cadastro, CNPJ e responsável vêm sozinhos — só quando
-   ainda estão vazios, pra nunca sobrescrever o que a pessoa já tinha
-   corrigido ali de propósito. */
+   empresa do cadastro, CNPJ, responsável, telefone e e-mail vêm sozinhos
+   — só quando ainda estão vazios, pra nunca sobrescrever o que a pessoa
+   já tinha corrigido ali de propósito. */
 function onEmpresaCursoNomeChange(el, empresaId){
   updateEmpresaCurso(empresaId, 'nome', el.value);
   const r = empresasRowAtual();
@@ -11111,6 +11122,8 @@ function onEmpresaCursoNomeChange(el, empresaId){
   if(!cadastro) return;
   if(!item.cnpj && cadastro.cnpj) updateEmpresaCurso(empresaId, 'cnpj', cadastro.cnpj);
   if(!item.responsavel && cadastro.responsavel) updateEmpresaCurso(empresaId, 'responsavel', cadastro.responsavel);
+  if(!item.telefone && cadastro.telefone) updateEmpresaCurso(empresaId, 'telefone', cadastro.telefone);
+  if(!item.email && cadastro.email) updateEmpresaCurso(empresaId, 'email', cadastro.email);
   render();
 }
 
@@ -11143,12 +11156,14 @@ function mapearColunasEmpresas(linhas){
     return {
       temCabecalho: true, nome: nome, cnpj: cnpj,
       responsavel: acha(/respons/),
+      telefone: acha(/telefone|fone|celular/),
+      email: acha(/e-?mail/),
       valor: acha(/valor|mensalidade|contrato/),
       vendedora: acha(/vended/),
       observacoes: acha(/observa/),
     };
   }
-  return { temCabecalho: false, nome: 0, cnpj: 1, responsavel: 2, valor: 3, vendedora: 4, observacoes: 5 };
+  return { temCabecalho: false, nome: 0, cnpj: 1, responsavel: 2, valor: 3, vendedora: 4, observacoes: 5, telefone: 6, email: 7 };
 }
 
 function prepararImportacaoEmpresas(linhas, entKey, rowId){
@@ -11173,6 +11188,7 @@ function prepararImportacaoEmpresas(linhas, entKey, rowId){
     if(!duplicada) existentes[chave] = true;
     itens.push({
       nome: nome, cnpj: cnpj, responsavel: celula(l, cols.responsavel),
+      telefone: celula(l, cols.telefone), email: celula(l, cols.email),
       valor: cols.valor >= 0 ? valorDaPlanilha(l[cols.valor]) : null,
       vendedora: celula(l, cols.vendedora),
       observacoes: celula(l, cols.observacoes),
@@ -11249,6 +11265,7 @@ function confirmarImportacaoEmpresas(){
   novos.forEach(function(i, idx){
     const nova = {
       id: Date.now() + r.empresas.length + idx, nome: i.nome, cnpj: i.cnpj, responsavel: i.responsavel,
+      telefone: i.telefone||'', email: i.email||'',
       valor: i.valor, observacoes: i.observacoes, notaEmitida: false, notaEmitidaEm: null,
     };
     r.empresas.push(nova);
