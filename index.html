@@ -374,6 +374,13 @@
   }
   tr.row-duplicate{background:#F5F3FF;}
   tr.row-duplicate:hover{background:#EDE9FE;}
+  .atraso-badge{
+    display:inline-block;font-size:11px;font-weight:700;
+    background:#FEE2E2;color:#B91C1C;padding:2px 8px;border-radius:999px;white-space:nowrap;
+  }
+  .inadimplente-grupo{margin-bottom:18px;}
+  .inadimplente-grupo:last-child{margin-bottom:0;}
+  .inadimplente-grupo-titulo{font-weight:800;font-size:13px;padding:0 16px 8px;color:var(--ink-soft);}
 
   .pagamento-cell{padding:8px 10px !important;}
   .pay-toggle{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink-soft);cursor:pointer;white-space:nowrap;}
@@ -1966,7 +1973,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-19-03';
+const APP_BUILD = '2026-09-19-04';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5013,6 +5020,65 @@ function renderModal(){
         </div>
       </div>`;
   }
+  if(m.type === 'regularizar-pagamentos'){
+    const candidatos = candidatosRegularizacao();
+    const selecionados = candidatos.filter(function(c){ return m.selecionados[c.chave]; });
+    const selecionadosCount = selecionados.length;
+    const totalSelecionado = selecionados.reduce(function(s,c){ return s+c.valor; }, 0);
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-xwide">
+          <div class="modal-msg">Regularizar pagamentos antigos</div>
+          <div class="divisao-explica">
+            Marca vários lançamentos antigos como <b>pago</b> de uma vez, sem afetar as contas deste mês. Cada um
+            recebe o mês de pagamento escolhido na tabela (por padrão, o próprio mês do lançamento) — a comissão
+            libera nesse mês antigo, não no mês atual.
+          </div>
+          <div class="filters-row" style="margin:0 0 12px;gap:10px;">
+            <select onchange="setRegularizarProduto(this.value)">
+              <option value="Todos" ${m.produto==='Todos'?'selected':''}>Todos os produtos</option>
+              <option value="vendas" ${m.produto==='vendas'?'selected':''}>Sistema</option>
+              <option value="consultoria" ${m.produto==='consultoria'?'selected':''}>${esc(ENTITIES.consultoria.tabLabel)}</option>
+              <option value="publicos" ${m.produto==='publicos'?'selected':''}>${esc(ENTITIES.publicos.tabLabel)}</option>
+            </select>
+            <label style="display:flex;align-items:center;gap:6px;">até
+              <select onchange="setRegularizarAteMes(this.value)">
+                ${MONTHS.map(function(mm){ return `<option value="${mm}" ${m.ateMes===mm?'selected':''}>${monthShort(mm)}</option>`; }).join('')}
+              </select>
+            </label>
+          </div>
+          ${candidatos.length === 0 ? `<div class="meta-empty" style="padding:6px 0;">Nenhum lançamento não pago encontrado com esse filtro.</div>` : `
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <button class="modal-btn modal-btn-ghost" onclick="marcarTodosRegularizacao(true)">Marcar todos</button>
+              <button class="modal-btn modal-btn-ghost" onclick="marcarTodosRegularizacao(false)">Desmarcar todos</button>
+            </div>
+            <div class="table-scroll" style="max-height:360px;">
+              <table class="table-plain">
+                <thead><tr><th></th><th>Origem</th><th>Cliente / Empresa / Órgão</th><th>Mês do lançamento</th><th class="num">Valor</th><th>Mês de pagamento</th></tr></thead>
+                <tbody>${candidatos.map(function(c){
+                  const marcado = !!m.selecionados[c.chave];
+                  const mesEscolhido = m.mesEscolhido[c.chave] || c.mes;
+                  return `<tr>
+                    <td><input type="checkbox" ${marcado?'checked':''} onchange="toggleSelecaoRegularizacao('${c.chave}', this.checked)" /></td>
+                    <td>${esc(c.origem)}</td>
+                    <td>${esc(c.cliente)}</td>
+                    <td>${monthShort(c.mes)}/${c.ano}</td>
+                    <td class="num">${fmtMoney(c.valor)}</td>
+                    <td><select onchange="setMesPagamentoRegularizacao('${c.chave}', this.value)">${MONTHS.map(function(mm){ return `<option value="${mm}" ${mesEscolhido===mm?'selected':''}>${monthShort(mm)}</option>`; }).join('')}</select></td>
+                  </tr>`;
+                }).join('')}</tbody>
+              </table>
+            </div>
+            <div class="divisao-conferencia" style="margin-top:10px;">Selecionados: <b>${selecionadosCount}</b> · ${fmtMoney(totalSelecionado)}</div>
+          `}
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
+            <button class="modal-btn modal-btn-primary" ${selecionadosCount?'':'disabled'} onclick="confirmarRegularizarPagamentos()">Marcar ${selecionadosCount||''} como pago${selecionadosCount===1?'':'s'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
   if(m.type === 'import-empresas-cadastro'){
     const d = m.dados;
     const novos = d ? d.itens.filter(function(i){ return !i.duplicada; }) : [];
@@ -6349,6 +6415,147 @@ function renderComissoesAguardando(){
   });
 }
 
+/* ---------------- Inadimplência (mais de 3 meses sem pagar) ----------------
+   Sistema, Consultoria e Órgãos Públicos são assinatura mensal — dá pra
+   ficar meses sem pagar. "Inadimplente" aqui é objetivo: lançamento não
+   pago (pago=false) cujo mês já passou de 3 meses atrás. Cursos fica de
+   fora — é por matrícula avulsa, não tem "Pago" pra travar. */
+const INADIMPLENCIA_LIMITE_MESES = 3;
+function mesesEmAtraso(ano, mes){
+  const hoje = new Date();
+  const idxMes = MONTHS.indexOf(mes);
+  if(idxMes === -1) return 0;
+  return (hoje.getFullYear() - (ano||2026)) * 12 + (hoje.getMonth() - idxMes);
+}
+const INADIMPLENTES_PRODUTOS = [
+  { key:'vendas', label:'Sistema' },
+  { key:'consultoria', label:ENTITIES.consultoria.tabLabel },
+  { key:'publicos', label:ENTITIES.publicos.tabLabel },
+];
+function getInadimplentesPorProduto(produtoKey){
+  if(produtoKey === 'vendas'){
+    return rows.filter(function(r){ return !r.pago && (r.ano||2026) === yearFilter && mesesEmAtraso(r.ano, r.mes) > INADIMPLENCIA_LIMITE_MESES; })
+      .map(function(r){ return { id:r.id, cliente:r.cliente||r.venda||'—', mes:r.mes, ano:r.ano||2026, valor:Number(r.valor)||0, atraso:mesesEmAtraso(r.ano,r.mes) }; });
+  }
+  const mainField = ENTITIES[produtoKey].fields[0].key;
+  return state[produtoKey].rows.filter(function(r){ return !r.pago && (r.ano||2026) === yearFilter && mesesEmAtraso(r.ano, r.mes) > INADIMPLENCIA_LIMITE_MESES; })
+    .map(function(r){ return { id:r.id, cliente:r[mainField]||'—', mes:r.mes, ano:r.ano||2026, valor:Number(r.valorContrato)||0, atraso:mesesEmAtraso(r.ano,r.mes) }; });
+}
+function renderInadimplentesPanel(){
+  const grupos = INADIMPLENTES_PRODUTOS.map(function(p){ return { key:p.key, label:p.label, itens: getInadimplentesPorProduto(p.key) }; }).filter(function(g){ return g.itens.length; });
+  const totalItens = grupos.reduce(function(s,g){ return s + g.itens.length; }, 0);
+  const totalValor = grupos.reduce(function(s,g){ return s + g.itens.reduce(function(a,i){ return a+i.valor; }, 0); }, 0);
+
+  const corpo = grupos.length === 0
+    ? `<div class="meta-empty" style="padding:6px 16px 10px;">Ninguém com mais de ${INADIMPLENCIA_LIMITE_MESES} meses sem pagar em ${yearFilter}. 🎉</div>`
+    : grupos.map(function(g){
+        const itensOrdenados = g.itens.slice().sort(function(a,b){ return b.atraso - a.atraso; });
+        return `
+        <div class="inadimplente-grupo">
+          <div class="inadimplente-grupo-titulo">${esc(g.label)} — ${g.itens.length} lançamento${g.itens.length===1?'':'s'}</div>
+          <div class="table-scroll">
+            <table class="table-plain">
+              <thead><tr><th>Cliente / Empresa / Órgão</th><th>Mês do lançamento</th><th class="num">Meses em atraso</th><th class="num">Valor</th></tr></thead>
+              <tbody>${itensOrdenados.map(function(i){ return `
+                <tr>
+                  <td>${esc(i.cliente)}</td>
+                  <td>${monthShort(i.mes)}/${i.ano}</td>
+                  <td class="num"><span class="atraso-badge">${i.atraso} meses</span></td>
+                  <td class="num col-valor">${fmtMoney(i.valor)}</td>
+                </tr>
+              `; }).join('')}</tbody>
+            </table>
+          </div>
+        </div>
+      `; }).join('');
+
+  return panel('inadimplentes', '⚠️ Inadimplentes — mais de 3 meses sem pagar', corpo, {
+    flush: true,
+    meta: totalItens ? `<b>${totalItens}</b> lançamento${totalItens===1?'':'s'} · ${fmtMoney(totalValor)}` : '',
+    actions: isAdmin ? `<button class="eye-toggle" onclick="abrirRegularizarPagamentos()" title="Marca vários lançamentos antigos como pagos de uma vez, sem afetar as contas do mês atual">🗓️ Regularizar pagamentos antigos</button>` : '',
+  });
+}
+
+/* ---------------- Regularizar pagamentos antigos (em lote) ----------------
+   Marca "Pago" bota SEMPRE a data de hoje em pagoEm — é o que decide em
+   qual PERÍODO DE FECHAMENTO a comissão de parceiro cai (ver
+   dentroDoPeriodoDeFechamento). Pra lançamento antigo que já foi pago
+   de verdade lá atrás e só nunca foi registrado, isso seria um problema
+   sério: bater "Pago" em massa hoje faria tudo cair no período aberto
+   AGORA, inflando as contas deste mês, exatamente o medo da Soraya.
+
+   Por isso esse fluxo NUNCA seta pagoEm. Sem pagoEm,
+   elegivelNoFechamento cai no "melhor esforço": (mesPagamento || mes)
+   === mês do filtro — ou seja, a comissão aparece liberada no mês
+   ESCOLHIDO aqui (o próprio mês do lançamento, por padrão), nunca no
+   mês atual. Por ser uma correção deliberada de dado histórico, esse
+   fluxo também ignora a trava de "mês fechado" de propósito. */
+function abrirRegularizarPagamentos(){
+  if(!isAdmin) return;
+  modalState = { type:'regularizar-pagamentos', produto:'Todos', ateMes: MONTHS[new Date().getMonth()], selecionados:{}, mesEscolhido:{} };
+  render();
+}
+function candidatosRegularizacao(){
+  const m = modalState;
+  if(!m || m.type !== 'regularizar-pagamentos') return [];
+  const ateIdx = MONTHS.indexOf(m.ateMes);
+  const produtos = m.produto === 'Todos' ? ['vendas','consultoria','publicos'] : [m.produto];
+  const out = [];
+  produtos.forEach(function(p){
+    if(p === 'vendas'){
+      rows.forEach(function(r){
+        if(r.pago) return;
+        if((r.ano||2026) !== yearFilter) return;
+        if(MONTHS.indexOf(r.mes) > ateIdx) return;
+        out.push({ chave:'vendas:'+r.id, origem:'Sistema', produtoKey:'vendas', id:r.id, cliente:r.cliente||r.venda||'—', mes:r.mes, ano:r.ano||2026, valor:Number(r.valor)||0 });
+      });
+    } else {
+      const mainField = ENTITIES[p].fields[0].key;
+      state[p].rows.forEach(function(r){
+        if(r.pago) return;
+        if((r.ano||2026) !== yearFilter) return;
+        if(MONTHS.indexOf(r.mes) > ateIdx) return;
+        out.push({ chave:p+':'+r.id, origem:ENTITIES[p].tabLabel, produtoKey:p, id:r.id, cliente:r[mainField]||'—', mes:r.mes, ano:r.ano||2026, valor:Number(r.valorContrato)||0 });
+      });
+    }
+  });
+  return out.sort(function(a,b){ return MONTHS.indexOf(a.mes) - MONTHS.indexOf(b.mes) || String(a.cliente).localeCompare(String(b.cliente),'pt-BR'); });
+}
+function setRegularizarProduto(v){ modalState.produto = v; render(); }
+function setRegularizarAteMes(v){ modalState.ateMes = v; render(); }
+function toggleSelecaoRegularizacao(chave, marcado){ modalState.selecionados[chave] = marcado; render(); }
+function setMesPagamentoRegularizacao(chave, mes){ modalState.mesEscolhido[chave] = mes; render(); }
+function marcarTodosRegularizacao(marcado){
+  candidatosRegularizacao().forEach(function(c){ modalState.selecionados[c.chave] = marcado; });
+  render();
+}
+function confirmarRegularizarPagamentos(){
+  const m = modalState;
+  if(!m || !isAdmin) return;
+  const selecionados = candidatosRegularizacao().filter(function(c){ return m.selecionados[c.chave]; });
+  if(!selecionados.length){ showAlert('Selecione ao menos um lançamento.'); return; }
+  showConfirm(
+    'Isso vai marcar ' + selecionados.length + ' lançamento' + (selecionados.length===1?'':'s') + ' como pago, cada um no mês de pagamento escolhido ao lado (por padrão, o próprio mês do lançamento) — nunca no mês atual. Continuar?',
+    function(){
+      const tocou = {};
+      selecionados.forEach(function(c){
+        const mesEscolhido = m.mesEscolhido[c.chave] || c.mes;
+        const colecao = c.produtoKey === 'vendas' ? rows : state[c.produtoKey].rows;
+        const r = colecao.find(function(x){ return x.id === c.id; });
+        if(!r) return;
+        r.pago = true; r.mesPagamento = mesEscolhido; r.pagoEm = null; r.fechamentoMes = null;
+        tocou[c.produtoKey] = true;
+      });
+      if(tocou.vendas) persist();
+      if(tocou.consultoria) persistEntityRows('consultoria');
+      if(tocou.publicos) persistEntityRows('publicos');
+      closeModal();
+      render();
+    },
+    'Marcar como pago'
+  );
+}
+
 function renderPagamentosSection(){
   const entries = getPagamentosRealizados();
   const total = entries.reduce((s,e) => s+e.valor, 0);
@@ -6402,11 +6609,12 @@ function renderPagamentosSection(){
   return `
     ${sectionsToolbarHtml()}
     ${realizadosHtml}
+    ${renderInadimplentesPanel()}
     ${renderComissoesLiberadas()}
     ${renderComissoesAguardando()}
 
     <div class="footnote" style="text-align:left;color:var(--ink-faint);font-size:12px;">
-      Este resumo é somente leitura — para editar, vá até a aba de origem do lançamento e mexa na coluna "Pagamento".
+      Este resumo é somente leitura — para editar um lançamento, vá até a aba de origem e mexa na coluna "Pagamento". A exceção é "Regularizar pagamentos antigos", em Inadimplentes, feita pra corrigir vários lançamentos antigos de uma vez.
     </div>
   `;
 }
