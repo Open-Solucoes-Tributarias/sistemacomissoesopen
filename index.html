@@ -1966,7 +1966,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-18-15';
+const APP_BUILD = '2026-09-19-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -6080,7 +6080,7 @@ function onPagamentoToggle(el, entityKey){
   const id = Number(el.dataset.id);
   const r = getRowForPayment(entityKey, id);
   if(!r) return;
-  if(isMonthClosed(r.ano||2026, r.mes)){
+  if(isMonthClosedFor(entityKey || 'vendas', r.ano||2026, r.mes)){
     showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
     render();
     return;
@@ -6102,7 +6102,7 @@ function onPagamentoMesSelect(el, entityKey){
   const id = Number(el.dataset.id);
   const r = getRowForPayment(entityKey, id);
   if(!r) return;
-  if(isMonthClosed(r.ano||2026, r.mes)){
+  if(isMonthClosedFor(entityKey || 'vendas', r.ano||2026, r.mes)){
     showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
     render();
     return;
@@ -6390,7 +6390,7 @@ function splitIntoInstallments(total, n){
 function parcelarRow(id){
   const r = rows.find(r => r.id === id);
   if(!r) return;
-  if(isMonthClosed(r.ano||2026, r.mes)){
+  if(isMonthClosedFor('vendas', r.ano||2026, r.mes)){
     showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
     return;
   }
@@ -6417,6 +6417,17 @@ function parcelarRow(id){
 
 function isMonthClosed(ano, mes){
   return closedMonths.indexOf(ano+'-'+mes) !== -1;
+}
+/* Sistema e Cursos recebem lançamento/matrícula o mês inteiro, até o
+   dia 31 — fechar o mês pra edição travaria lançamento legítimo de
+   fim de mês. Por isso essas duas áreas nunca travam por "mês fechado
+   pra edição" (closedMonths); Consultoria e Órgãos Públicos continuam
+   travando normalmente. Isso não mexe no fechamento de PAGAMENTO
+   (fechamentosMes), que é outra trava, sempre separada. */
+const PRODUTOS_SEM_TRAVA_DE_EDICAO = ['vendas', 'cursos'];
+function isMonthClosedFor(produto, ano, mes){
+  if(PRODUTOS_SEM_TRAVA_DE_EDICAO.indexOf(produto) !== -1) return false;
+  return isMonthClosed(ano, mes);
 }
 function toggleMonthClosed(ano, mes){
   const key = ano+'-'+mes;
@@ -7710,7 +7721,8 @@ function renderParceirosSection(){
 
   const isMonthClosedNow = partnerMonthFilter !== "Todos" && isMonthClosed(yearFilter, partnerMonthFilter);
   const closeButtonHtml = partnerMonthFilter === "Todos" ? '' : `
-    <button class="eye-toggle admin-only-btn${isMonthClosedNow?' danger-toggle':''}" onclick="toggleMonthClosed(${yearFilter}, '${partnerMonthFilter}')">
+    <button class="eye-toggle admin-only-btn${isMonthClosedNow?' danger-toggle':''}" onclick="toggleMonthClosed(${yearFilter}, '${partnerMonthFilter}')"
+            title="Trava a edição de Consultoria, Órgãos Públicos e Bônus neste mês — Sistema e Cursos continuam editáveis até o dia 31">
       ${isMonthClosedNow ? '🔓 Reabrir ' + esc(partnerMonthFilter) : '🔒 Fechar ' + esc(partnerMonthFilter)}
     </button>
   `;
@@ -8023,7 +8035,7 @@ function onComissaoPctInput(el){
   const id = Number(el.dataset.id), key = el.dataset.seller;
   const r = rows.find(function(x){ return x.id === id; });
   if(!r) return;
-  if(isMonthClosed(r.ano||2026, r.mes)){
+  if(isMonthClosedFor('vendas', r.ano||2026, r.mes)){
     showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
     render();
     return;
@@ -8082,7 +8094,7 @@ function updateSaveStatus(){
 function updateCell(id, field, value){
   const r = rows.find(r => r.id === id);
   if(!r) return;
-  if(isMonthClosed(r.ano||2026, r.mes)){
+  if(isMonthClosedFor('vendas', r.ano||2026, r.mes)){
     showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
     render();
     return;
@@ -8112,7 +8124,7 @@ function updateRowPartnerCalc(id){
 
 function addRow(){
   const mes = filter === "Todos" ? "Janeiro" : filter;
-  if(isMonthClosed(yearFilter, mes)){
+  if(isMonthClosedFor('vendas', yearFilter, mes)){
     showAlert("Este mês está fechado para novos lançamentos. Reabra em Resumo Geral para poder editar.");
     return;
   }
@@ -8144,7 +8156,7 @@ function toggleVendaNova(id){ marcarNaturezaVenda(id, 'novoContrato'); }
 function marcarNaturezaVenda(id, campo){
   const r = rows.find(function(x){ return x.id === id; });
   if(!r) return;
-  if(isMonthClosed(r.ano||2026, r.mes)){
+  if(isMonthClosedFor('vendas', r.ano||2026, r.mes)){
     showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
     return;
   }
@@ -8160,7 +8172,7 @@ function marcarNaturezaVenda(id, campo){
 
 function deleteRow(id){
   const r = rows.find(r => r.id === id);
-  if(r && isMonthClosed(r.ano||2026, r.mes)){
+  if(r && isMonthClosedFor('vendas', r.ano||2026, r.mes)){
     showAlert("Este mês está fechado. Reabra em Resumo Geral para poder excluir.");
     return;
   }
@@ -8191,7 +8203,7 @@ function duplicateRow(id){
 function moverVendaParaPublicos(id){
   const r = rows.find(function(v){ return v.id === id; });
   if(!r) return;
-  if(isMonthClosed(r.ano||2026, r.mes)){
+  if(isMonthClosedFor('vendas', r.ano||2026, r.mes)){
     showAlert("Este mês está fechado. Reabra em Resumo Geral para poder mover.");
     return;
   }
@@ -9110,13 +9122,13 @@ function renderVendasSection(){
   const rowsHtml = visible.length === 0
     ? `<tr class="empty-row"><td colspan="${13+visibleSellers.length}"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
     : visible.map(row => `
-      <tr class="${isVendasRowPending(row) ? 'row-pending' : ''}${isMonthClosed(row.ano||2026,row.mes) ? ' row-locked' : ''}${isVendasRowDuplicate(row) ? ' row-duplicate' : ''}">
+      <tr class="${isVendasRowPending(row) ? 'row-pending' : ''}${isMonthClosedFor('vendas',row.ano||2026,row.mes) ? ' row-locked' : ''}${isVendasRowDuplicate(row) ? ' row-duplicate' : ''}">
         <td>
           <select data-id="${row.id}" onchange="onMonthSelect(this)" title="${esc(row.mes)}">
             ${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthShort(m)}</option>`).join('')}
           </select>
           ${isVendasRowPending(row) ? '<span class="pending-badge" title="Lançamento incompleto: falta valor ou percentual">⚠️</span>' : ''}
-          ${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}
+          ${isMonthClosedFor('vendas',row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}
           ${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}
           ${isVendasRowDuplicate(row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo cliente, mês e valor — confira se não é duplicado">🔁 Duplicado</span>` : ''}
         </td>
@@ -9279,7 +9291,7 @@ function addEntityRow(key){
   const cfg = ENTITIES[key];
   const st = state[key];
   const mes = st.filter === "Todos" ? "Janeiro" : st.filter;
-  if(isMonthClosed(yearFilter, mes)){
+  if(isMonthClosedFor(key, yearFilter, mes)){
     showAlert("Este mês está fechado para novos lançamentos. Reabra em Resumo Geral para poder editar.");
     return;
   }
@@ -9300,7 +9312,7 @@ function addEntityRow(key){
 function addExtraVendedorSlot(key, rowId){
   const r = state[key].rows.find(r => r.id === rowId);
   if(!r) return;
-  if(isMonthClosed(r.ano||2026, r.mes)){
+  if(isMonthClosedFor(key, r.ano||2026, r.mes)){
     showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
     return;
   }
@@ -9321,7 +9333,7 @@ function removeExtraVendedorSlot(key, rowId, slotId){
 function updateExtraVendedorField(key, rowId, slotId, field, value){
   const r = state[key].rows.find(r => r.id === rowId);
   if(!r || !Array.isArray(r.extraVendedores)) return;
-  if(isMonthClosed(r.ano||2026, r.mes)){
+  if(isMonthClosedFor(key, r.ano||2026, r.mes)){
     showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
     render();
     return;
@@ -9340,7 +9352,7 @@ function updateExtraVendedorField(key, rowId, slotId, field, value){
 function toggleCursoInCompany(id){
   const r = state.cursos.rows.find(function(r){ return r.id === id; });
   if(!r) return;
-  if(isMonthClosed(r.ano||2026, r.mes)){
+  if(isMonthClosedFor('cursos', r.ano||2026, r.mes)){
     showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
     return;
   }
@@ -9356,7 +9368,7 @@ function toggleCursoInCompany(id){
 function toggleEntityRenovacao(key, id){
   const r = state[key].rows.find(function(r){ return r.id === id; });
   if(!r) return;
-  if(isMonthClosed(r.ano||2026, r.mes)){
+  if(isMonthClosedFor(key, r.ano||2026, r.mes)){
     showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
     return;
   }
@@ -9370,7 +9382,7 @@ function toggleEntityRenovacao(key, id){
 function toggleEntityUpgrade(key, id){
   const r = state[key].rows.find(function(r){ return r.id === id; });
   if(!r) return;
-  if(isMonthClosed(r.ano||2026, r.mes)){
+  if(isMonthClosedFor(key, r.ano||2026, r.mes)){
     showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
     return;
   }
@@ -9383,7 +9395,7 @@ function toggleEntityUpgrade(key, id){
 
 function deleteEntityRow(key, id){
   const r = state[key].rows.find(r => r.id === id);
-  if(r && isMonthClosed(r.ano||2026, r.mes)){
+  if(r && isMonthClosedFor(key, r.ano||2026, r.mes)){
     showAlert("Este mês está fechado. Reabra em Resumo Geral para poder excluir.");
     return;
   }
@@ -9408,7 +9420,7 @@ function parcelarEntityRow(key, id){
   const st = state[key];
   const r = st.rows.find(r => r.id === id);
   if(!r) return;
-  if(isMonthClosed(r.ano||2026, r.mes)){
+  if(isMonthClosedFor(key, r.ano||2026, r.mes)){
     showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
     return;
   }
@@ -9482,7 +9494,7 @@ function setEntityFieldFilter(key, fieldKey, value){ state[key].fieldFilters[fie
 function updateEntityCell(key, id, field, value){
   const r = state[key].rows.find(r => r.id === id);
   if(!r) return;
-  if(isMonthClosed(r.ano||2026, r.mes)){
+  if(isMonthClosedFor(key, r.ano||2026, r.mes)){
     showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
     render();
     return;
@@ -9854,7 +9866,7 @@ function renderEntitySection(key){
   const rowsHtml = visible.length === 0
     ? `<tr class="empty-row"><td colspan="${colCount}"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
     : visible.map(row => {
-        let cells = `<td class="col-mes"><select data-entity="${key}" data-id="${row.id}" onchange="onEntityMonthSelect(this)" title="${esc(row.mes)}">${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>${isEntityRowPending(row) ? '<span class="pending-badge" title="Lançamento incompleto: falta valor ou percentual">⚠️</span>' : ''}${isMonthClosed(row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}${isEntityRowDuplicate(key,row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo nome, mês e valor — confira se não é duplicado">🔁 Duplicado</span>` : ''}</td>`;
+        let cells = `<td class="col-mes"><select data-entity="${key}" data-id="${row.id}" onchange="onEntityMonthSelect(this)" title="${esc(row.mes)}">${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>${isEntityRowPending(row) ? '<span class="pending-badge" title="Lançamento incompleto: falta valor ou percentual">⚠️</span>' : ''}${isMonthClosedFor(key,row.ano||2026,row.mes) ? '<span class="pending-badge" title="Mês fechado">🔒</span>' : ''}${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}${isEntityRowDuplicate(key,row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo nome, mês e valor — confira se não é duplicado">🔁 Duplicado</span>` : ''}</td>`;
         cfg.fields.forEach((f, fi) => {
           if(fi === 1 && cfg.hasVendedorResponsavel && !isFinanceiro){
             cells += `<td class="resp-cell">
@@ -9979,7 +9991,7 @@ function renderEntitySection(key){
             <button class="action-btn danger" title="Excluir" onclick="deleteEntityRow('${key}',${row.id})">✕</button>
           </div>
         </td>`;
-        return `<tr class="${isEntityRowPending(row) ? 'row-pending' : ''}${isMonthClosed(row.ano||2026,row.mes) ? ' row-locked' : ''}${isEntityRowDuplicate(key,row) ? ' row-duplicate' : ''}">${cells}</tr>`;
+        return `<tr class="${isEntityRowPending(row) ? 'row-pending' : ''}${isMonthClosedFor(key,row.ano||2026,row.mes) ? ' row-locked' : ''}${isEntityRowDuplicate(key,row) ? ' row-duplicate' : ''}">${cells}</tr>`;
       }).join('');
 
   const semDivEnt = isAdmin ? entityRowsSemDivisao(key) : [];
@@ -11442,7 +11454,7 @@ function confirmarLancarNoSistema(){
   const destino = produtoEhPremium(m.produto) ? 'publicos' : 'vendas';
 
   m.lista.forEach(function(r){
-    if(isMonthClosed(r.ano, r.mes)){ fechados.push(r.mes); return; }
+    if(isMonthClosedFor(destino, r.ano, r.mes)){ fechados.push(r.mes); return; }
     // Renovar não é venda nova e fica fora do ranking. Subir o plano de um
     // cliente é: vai com a etiqueta de upgrade e conta no desempenho.
     const etiqueta = r.upgrade ? 'Upgrade de plano' : 'Renovação';
