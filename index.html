@@ -14220,7 +14220,14 @@ function render(){
     ${renderModal()}
   `;
   if(!isAdmin){
-    root.querySelectorAll('tbody td input, tbody td select, .meta-input-wrap input').forEach(function(el){ el.disabled = true; });
+    // .anexo-upload esconde um <input type="file"> dentro de um <td> só
+    // pra caber o clique no label — travar ele aqui de propósito
+    // impediria o financeiro de anexar nota, que é justamente uma das
+    // poucas coisas que a conta dele pode fazer (via anexar_nota_arquivo).
+    root.querySelectorAll('tbody td input, tbody td select, .meta-input-wrap input').forEach(function(el){
+      if(el.closest('.anexo-upload')) return;
+      el.disabled = true;
+    });
   }
   devolverFoco(focoGuardado);
   animarEntrada = false;   // a animação vale só pra este render
