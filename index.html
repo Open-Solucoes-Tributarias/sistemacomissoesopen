@@ -1966,7 +1966,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-19-01';
+const APP_BUILD = '2026-09-19-02';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -4639,33 +4639,43 @@ function titleCase(str){
   if(str===null || str===undefined || str==='') return str;
   return String(str).split(' ').map(w => w.length ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w).join(' ');
 }
+/* CAIXA ALTA por escolha da Soraya: muitos nomes de cliente/empresa são
+   sigla (ex.: "SAAE"), e Primeira-Letra-Maiúscula deixava sigla feia
+   ("Saae"). Os mesmos campos de sempre — só troca titleCase por
+   toUpperCase. */
+function upperOrKeep(v){
+  return (v === null || v === undefined) ? v : String(v).toUpperCase();
+}
 function normalizeAllText(){
   showConfirm(
-    "Isso vai colocar Primeira Letra Maiúscula (e o resto minúsculo) em todos os textos já lançados — cliente, produto, parceiro, colaborador, forma de pagamento, empresa/curso — nas três abas. Continuar?",
+    "Isso vai colocar em CAIXA ALTA todos os textos já lançados — cliente, produto, parceiro, colaborador, forma de pagamento, empresa/curso — nas três abas. Continuar?",
     () => {
       rows.forEach(r => {
-        r.cliente = titleCase(r.cliente);
-        r.venda = titleCase(r.venda);
-        r.parceiro = titleCase(r.parceiro);
-        r.colaborador = titleCase(r.colaborador);
-        r.formaPagamento = titleCase(r.formaPagamento);
+        r.cliente = upperOrKeep(r.cliente);
+        r.venda = upperOrKeep(r.venda);
+        r.parceiro = upperOrKeep(r.parceiro);
+        r.colaborador = upperOrKeep(r.colaborador);
+        r.formaPagamento = upperOrKeep(r.formaPagamento);
       });
-      vendaProducts = Array.from(new Set(vendaProducts.map(p => titleCase(p)))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+      vendaProducts = Array.from(new Set(vendaProducts.map(p => upperOrKeep(p)))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
       persist();
       persistVendaProducts();
 
       ENTITY_KEYS.forEach(key => {
         const mainField = ENTITIES[key].fields[0].key;
         state[key].rows.forEach(r => {
-          r[mainField] = titleCase(r[mainField]);
-          r.parceiro = titleCase(r.parceiro);
-          r.colaborador = titleCase(r.colaborador);
-          r.formaPagamento = titleCase(r.formaPagamento);
+          r[mainField] = upperOrKeep(r[mainField]);
+          r.parceiro = upperOrKeep(r.parceiro);
+          r.colaborador = upperOrKeep(r.colaborador);
+          r.formaPagamento = upperOrKeep(r.formaPagamento);
         });
         persistEntityRows(key);
       });
 
-      bonusRows.forEach(r => { r.descricao = titleCase(r.descricao); });
+      partners = Array.from(new Set(partners.map(p => upperOrKeep(p)))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+      persistPartners();
+
+      bonusRows.forEach(r => { r.descricao = upperOrKeep(r.descricao); });
       persistBonus();
     },
     "Normalizar"
@@ -5886,7 +5896,7 @@ function ensurePartnersIncludeCurrent(){
 function addPartner(){
   showPrompt("Nome do novo parceiro:", (name) => {
     if(!name) return;
-    const trimmed = name.trim();
+    const trimmed = upperOrKeep(name.trim());
     if(!trimmed) return;
     if(!partners.some(p => p.toLowerCase() === trimmed.toLowerCase())){
       partners.push(trimmed);
@@ -5905,7 +5915,7 @@ function onParceiroSelect(el){
   if(el.value === '__new__'){
     showPrompt("Nome do novo parceiro:", (name) => {
       if(!name) return;
-      const trimmed = name.trim();
+      const trimmed = upperOrKeep(name.trim());
       if(!trimmed) return;
       if(!partners.some(p => p.toLowerCase() === trimmed.toLowerCase())){
         partners.push(trimmed);
@@ -5925,7 +5935,7 @@ function onEntityParceiroSelect(el){
   if(el.value === '__new__'){
     showPrompt("Nome do novo parceiro:", (name) => {
       if(!name) return;
-      const trimmed = name.trim();
+      const trimmed = upperOrKeep(name.trim());
       if(!trimmed) return;
       if(!partners.some(p => p.toLowerCase() === trimmed.toLowerCase())){
         partners.push(trimmed);
@@ -6807,7 +6817,8 @@ function onBonusVendedorSelect(el){
   updateBonusCell(Number(el.dataset.id), "vendedor", el.value);
 }
 function onBonusTextInput(el){
-  updateBonusCell(Number(el.dataset.id), el.dataset.field, el.value);
+  const value = aplicarCaixaAltaNoCampo(el, true);
+  updateBonusCell(Number(el.dataset.id), el.dataset.field, value);
 }
 function onBonusNumInput(el){
   const v = el.value;
@@ -8092,7 +8103,7 @@ function onVendaSelect(el){
   if(el.value === '__new__'){
     showPrompt("Nome do novo produto:", (name) => {
       if(!name) return;
-      const trimmed = name.trim();
+      const trimmed = upperOrKeep(name.trim());
       if(!trimmed) return;
       if(!vendaProducts.some(p => p.toLowerCase() === trimmed.toLowerCase())){
         vendaProducts.push(trimmed);
@@ -8469,10 +8480,24 @@ function onNumInput(el){
   const v = el.value;
   updateCell(id, field, v === "" ? null : parseFloat(v));
 }
+/* Mesma lista de campos do "Normalizar textos" — daqui pra frente, quem
+   digita já vê em caixa alta na hora, sem precisar rodar o botão depois. */
+const VENDAS_CAMPOS_CAIXA_ALTA = new Set(['cliente','formaPagamento']);
+function aplicarCaixaAltaNoCampo(el, permitido){
+  if(!permitido) return el.value;
+  const maiusculo = el.value.toUpperCase();
+  if(el.value !== maiusculo){
+    const pos = el.selectionStart, posFim = el.selectionEnd;
+    el.value = maiusculo;
+    if(pos !== null && pos !== undefined) el.setSelectionRange(pos, posFim);
+  }
+  return el.value;
+}
 function onTextInput(el){
   const id = Number(el.dataset.id);
   const field = el.dataset.field;
-  updateCell(id, field, el.value);
+  const value = aplicarCaixaAltaNoCampo(el, VENDAS_CAMPOS_CAIXA_ALTA.has(field));
+  updateCell(id, field, value);
 }
 function onMonthSelect(el){
   const id = Number(el.dataset.id);
@@ -9710,9 +9735,13 @@ function onEntityNumInput(el){
   const key = el.dataset.entity, id = Number(el.dataset.id), field = el.dataset.field, v = el.value;
   updateEntityCell(key, id, field, v === "" ? null : parseFloat(v));
 }
+const ENTIDADE_CAMPOS_CAIXA_ALTA_EXTRA = new Set(['formaPagamento','colaborador']);
 function onEntityTextInput(el){
   const key = el.dataset.entity, id = Number(el.dataset.id), field = el.dataset.field;
-  updateEntityCell(key, id, field, el.value);
+  const mainField = ENTITIES[key].fields[0].key;
+  const permitido = field === mainField || ENTIDADE_CAMPOS_CAIXA_ALTA_EXTRA.has(field);
+  const value = aplicarCaixaAltaNoCampo(el, permitido);
+  updateEntityCell(key, id, field, value);
 }
 /* ---------- Divisão do faturamento de um curso entre as vendedoras ----------
    Um lançamento de curso é o faturamento TOTAL daquele curso, e ele vem de
@@ -14253,7 +14282,7 @@ function render(){
           <button class="eye-toggle admin-only-btn" onclick="abrirRelatorioMes()" title="Gera um relatório do mês inteiro, com todas as abas, pra salvar em PDF ou imprimir">📄 Relatório do mês</button>
           <button class="eye-toggle" onclick="showExport()" title="Copia todos os dados em texto, pra guardar ou levar pra outro navegador">⬇ Exportar dados</button>
           <button class="eye-toggle admin-only-btn" onclick="showImport()" title="Cola um texto exportado antes e restaura os dados">⬆ Importar dados</button>
-          <button class="eye-toggle admin-only-btn" onclick="normalizeAllText()" title="Coloca Primeira Letra Maiúscula em todos os textos já lançados">Aa Normalizar textos</button>
+          <button class="eye-toggle admin-only-btn" onclick="normalizeAllText()" title="Coloca em CAIXA ALTA todos os textos já lançados">🔠 Normalizar textos</button>
           <button class="eye-toggle danger-toggle admin-only-btn" onclick="wipeAllData()" title="Apaga todos os lançamentos das três abas, mantendo produtos/vendedores/parceiros cadastrados">🗑 Zerar tudo</button>
         </div>
       </div>
