@@ -6048,6 +6048,40 @@ async function corrigirMesPagamentoRPC(entityKey, r){
     saving = false; updateSaveStatus();
   }
 }
+
+/* Mesma porta estreita da nota/pagamento, agora pros dados do próprio
+   lançamento: cliente/empresa, valor do contrato, forma de pagamento e
+   observações. O financeiro precisa poder corrigir isso (ex.: nome
+   errado da empresa, valor do contrato) sem que o upsert em massa de
+   persist()/persistEntityRows() encoste em colunas de comissão —
+   aquele caminho manda a linha inteira, e a % que o financeiro nem
+   enxerga (vem null da view) apagaria a comissão de verdade no banco. */
+const VENDAS_CAMPOS_FINANCEIRO = { cliente:'cliente', venda:'venda', valor:'valor', formaPagamento:'forma_pagamento', observacoes:'observacoes' };
+function campoFinanceiroEntidade(key, field){
+  const mainField = ENTITIES[key].fields[0].key;
+  if(field === mainField) return 'nome';
+  if(field === 'valorContrato') return 'valor_contrato';
+  if(field === 'tipo') return 'tipo';
+  if(field === 'formaPagamento') return 'forma_pagamento';
+  if(field === 'observacoes') return 'observacoes';
+  return null;
+}
+async function editarCampoFinanceiroRPC(tabela, id, campoDb, valor){
+  saving = true; updateSaveStatus();
+  try{
+    await sbRpc('editar_campo_financeiro', {
+      p_tabela: tabela, p_id: id, p_campo: campoDb,
+      p_valor: (valor === null || valor === undefined) ? null : String(valor),
+    });
+    saveError = false;
+  }catch(e){
+    console.error('Falha ao editar campo (financeiro)', e);
+    saveError = true;
+    showAlert('Não consegui salvar essa alteração. Confira a internet e tente de novo.');
+  } finally {
+    saving = false; updateSaveStatus();
+  }
+}
 /* ---------- O mês em que a comissão é liberada ----------
    A nota de agosto que o cliente só pagou em setembro libera a comissão em
    SETEMBRO — é quando o dinheiro entrou. Por isso "mês de pagamento" é um
@@ -8104,7 +8138,12 @@ function updateCell(id, field, value){
   r[field] = value;
   // Mudou o contrato ou a fatia do parceiro: as comissões com % se refazem.
   if(field === "valor" || field === "participacao" || field === "parceiro") recalcComissoesPorPercent(r);
-  persist();
+  if(isFinanceiro && !isAdmin){
+    const campoDb = VENDAS_CAMPOS_FINANCEIRO[field];
+    if(campoDb) editarCampoFinanceiroRPC('vendas', id, campoDb, value);
+  } else {
+    persist();
+  }
   if(field === "mes" || field === "parceiro") render();
   else {
     updateSummaries();
@@ -9500,7 +9539,12 @@ function updateEntityCell(key, id, field, value){
     return;
   }
   r[field] = value;
-  persistEntityRows(key);
+  if(isFinanceiro && !isAdmin){
+    const campoDb = campoFinanceiroEntidade(key, field);
+    if(campoDb) editarCampoFinanceiroRPC('lancamentos', id, campoDb, value);
+  } else {
+    persistEntityRows(key);
+  }
   if(field === "mes" || field === "vendedor" || field === "vendedor2" || field === "vendedor3" || field === "parceiro" || field === "vendedorResponsavel") render();
   else {
     updateEntitySummaries(key);
@@ -14224,8 +14268,16 @@ function render(){
     // pra caber o clique no label — travar ele aqui de propósito
     // impediria o financeiro de anexar nota, que é justamente uma das
     // poucas coisas que a conta dele pode fazer (via anexar_nota_arquivo).
+    // Os campos do próprio lançamento (cliente/empresa, valor, forma de
+    // pagamento, observações, tipo) seguem a mesma lógica: ficam
+    // liberados só pro financeiro, e só gravam pela porta estreita
+    // (editarCampoFinanceiroRPC) — ver updateCell/updateEntityCell.
     root.querySelectorAll('tbody td input, tbody td select, .meta-input-wrap input').forEach(function(el){
       if(el.closest('.anexo-upload')) return;
+      if(isFinanceiro && el.dataset.field){
+        const campoDb = el.dataset.entity ? campoFinanceiroEntidade(el.dataset.entity, el.dataset.field) : VENDAS_CAMPOS_FINANCEIRO[el.dataset.field];
+        if(campoDb) return;
+      }
       el.disabled = true;
     });
   }
