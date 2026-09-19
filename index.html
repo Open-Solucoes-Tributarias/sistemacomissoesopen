@@ -1966,7 +1966,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-19-02';
+const APP_BUILD = '2026-09-19-03';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -4888,22 +4888,22 @@ function renderModal(){
     const linhas = d.lista.length ? d.lista.map(function(e){
       return `
         <tr>
-          <td><input type="text" list="empresas-datalist" value="${esc(e.nome)}" placeholder="Razão social" ${isAdmin?'':'disabled'}
+          <td><input type="text" class="fin-empresa-campo" list="empresas-datalist" value="${esc(e.nome)}" placeholder="Razão social" ${podeVisar?'':'disabled'}
                  onchange="onEmpresaCursoNomeChange(this,${e.id})" /></td>
           <td>
-            <input type="text" value="${esc(formatCnpj(e.cnpj))}" placeholder="00.000.000/0000-00" ${isAdmin?'':'disabled'}
+            <input type="text" class="fin-empresa-campo" value="${esc(formatCnpj(e.cnpj))}" placeholder="00.000.000/0000-00" ${podeVisar?'':'disabled'}
                    oninput="this.value=formatCnpj(this.value)" onchange="updateEmpresaCurso(${e.id},'cnpj',this.value)" />
             <span class="contrato-cnpj-aviso" id="empresa-cnpj-aviso-${e.id}">${(cnpjDigitos(e.cnpj) && !cnpjValido(e.cnpj)) ? 'CNPJ incompleto' : ''}</span>
           </td>
-          <td><input type="text" value="${esc(e.responsavel)}" placeholder="Responsável pela nota" ${isAdmin?'':'disabled'}
+          <td><input type="text" class="fin-empresa-campo" value="${esc(e.responsavel)}" placeholder="Responsável pela nota" ${podeVisar?'':'disabled'}
                  onchange="updateEmpresaCurso(${e.id},'responsavel',this.value)" /></td>
-          <td><input type="text" value="${esc(e.telefone)}" placeholder="Telefone" ${isAdmin?'':'disabled'}
+          <td><input type="text" class="fin-empresa-campo" value="${esc(e.telefone)}" placeholder="Telefone" ${podeVisar?'':'disabled'}
                  onchange="updateEmpresaCurso(${e.id},'telefone',this.value)" /></td>
-          <td><input type="text" value="${esc(e.email)}" placeholder="E-mail" ${isAdmin?'':'disabled'}
+          <td><input type="text" class="fin-empresa-campo" value="${esc(e.email)}" placeholder="E-mail" ${podeVisar?'':'disabled'}
                  onchange="updateEmpresaCurso(${e.id},'email',this.value)" /></td>
           <td class="col-valor">
             <div class="currency-wrap"><span class="currency-prefix">R$</span>
-              <input class="num" type="number" step="0.01" value="${e.valor===null||e.valor===undefined?'':e.valor}" ${isAdmin?'':'disabled'}
+              <input class="num fin-empresa-campo" type="number" step="0.01" value="${e.valor===null||e.valor===undefined?'':e.valor}" ${podeVisar?'':'disabled'}
                      oninput="onEmpresaValorInput(this,${e.id})" onchange="updateEmpresaCurso(${e.id},'valor',this.value)" />
             </div>
           </td>
@@ -4918,9 +4918,9 @@ function renderModal(){
                    📎 Anexar<input type="file" accept="application/pdf,image/*" onchange="anexarNotaArquivo('lancamento_empresas',${e.id},'',this)" />
                  </label>`)
             : (e.notaArquivoPath ? `<button type="button" class="anexo-link" title="${esc(e.notaArquivoNome||'')}" onclick="verNotaAnexada('lancamento_empresas',${e.id},'')">📎 ${esc(e.notaArquivoNome||'arquivo')}</button>` : '—')}</td>
-          ${isAdmin ? `<td><button class="action-btn danger" title="Remover" onclick="removeEmpresaCurso(${e.id})">✕</button></td>` : ''}
+          ${podeVisar ? `<td><button class="action-btn danger" title="Remover" onclick="removeEmpresaCurso(${e.id})">✕</button></td>` : ''}
         </tr>`;
-    }).join('') : `<tr class="empty-row"><td colspan="${isAdmin?9:8}"><span class="empty-icon">◌</span>Nenhuma empresa cadastrada ainda.</td></tr>`;
+    }).join('') : `<tr class="empty-row"><td colspan="${podeVisar?9:8}"><span class="empty-icon">◌</span>Nenhuma empresa cadastrada ainda.</td></tr>`;
 
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
@@ -4934,12 +4934,12 @@ function renderModal(){
           <div class="table-scroll">
             <table class="table-plain">
               <thead><tr>
-                <th style="min-width:340px;">Empresa</th><th style="min-width:140px;">CNPJ</th><th style="min-width:150px;">Responsável</th><th style="min-width:140px;">Telefone</th><th style="min-width:180px;">E-mail</th><th class="num" style="min-width:110px;">Valor</th><th style="min-width:120px;">Nota fiscal</th><th style="min-width:130px;">Anexo</th>${isAdmin?'<th></th>':''}
+                <th style="min-width:340px;">Empresa</th><th style="min-width:140px;">CNPJ</th><th style="min-width:150px;">Responsável</th><th style="min-width:140px;">Telefone</th><th style="min-width:180px;">E-mail</th><th class="num" style="min-width:110px;">Valor</th><th style="min-width:120px;">Nota fiscal</th><th style="min-width:130px;">Anexo</th>${podeVisar?'<th></th>':''}
               </tr></thead>
               <tbody>${linhas}</tbody>
             </table>
           </div>
-          ${isAdmin ? `
+          ${podeVisar ? `
             <div style="display:flex;gap:8px;margin-top:10px;">
               <button class="modal-btn modal-btn-ghost" style="flex:1;" onclick="addEmpresaCurso()">+ Adicionar empresa</button>
               <button class="modal-btn modal-btn-ghost" style="flex:1;" onclick="abrirImportarEmpresasCurso('${entKey}',${r.id})">📄 Importar planilha</button>
@@ -11027,7 +11027,7 @@ async function refrescarEmpresasDoLancamento(entKey, rowId){
 
 const empresaTimers = {};
 function persistEmpresaCurso(empresa, rowId){
-  if(!isAdmin) return;
+  if(!isAdmin && !isFinanceiro) return;
   const tk = 'empresa-' + empresa.id;
   if(empresaTimers[tk]) clearTimeout(empresaTimers[tk]);
   empresaTimers[tk] = setTimeout(function(){
@@ -11140,7 +11140,7 @@ function removerNotaAnexada(tabela, id, entKey){
    sempre. */
 function addEmpresaCurso(){
   const r = empresasRowAtual();
-  if(!r || !isAdmin) return;
+  if(!r || (!isAdmin && !isFinanceiro)) return;
   if(!Array.isArray(r.empresas)) r.empresas = [];
   const ehPrimeira = r.empresas.length === 0;
   const cfg = ENTITIES[modalState.entKey];
@@ -11174,7 +11174,7 @@ function addEmpresaCurso(){
 
 function removeEmpresaCurso(empresaId){
   const r = empresasRowAtual();
-  if(!r || !isAdmin) return;
+  if(!r || (!isAdmin && !isFinanceiro)) return;
   r.empresas = (r.empresas||[]).filter(function(x){ return x.id !== empresaId; });
   if(empresaTimers['empresa-'+empresaId]) clearTimeout(empresaTimers['empresa-'+empresaId]);
   sbDeleteAll('lancamento_empresas', 'id=eq.'+empresaId).catch(function(e){ console.error('Falha ao excluir empresa', e); });
@@ -11183,7 +11183,7 @@ function removeEmpresaCurso(empresaId){
 
 function updateEmpresaCurso(empresaId, campo, valor){
   const r = empresasRowAtual();
-  if(!r || !isAdmin) return;
+  if(!r || (!isAdmin && !isFinanceiro)) return;
   const item = (r.empresas||[]).find(function(x){ return x.id === empresaId; });
   if(!item) return;
   item[campo] = campo === 'valor' ? numOrNull(valor) : valor;
@@ -11286,7 +11286,7 @@ function prepararImportacaoEmpresas(linhas, entKey, rowId){
 }
 
 function abrirImportarEmpresasCurso(entKey, rowId){
-  if(!isAdmin) return;
+  if(!isAdmin && !isFinanceiro) return;
   modalState = { type:'import-empresas-curso', entKey: entKey, rowId: rowId, dados:null, erro:'', lendo:false };
   render();
 }
@@ -14301,8 +14301,12 @@ function render(){
     // pagamento, observações, tipo) seguem a mesma lógica: ficam
     // liberados só pro financeiro, e só gravam pela porta estreita
     // (editarCampoFinanceiroRPC) — ver updateCell/updateEntityCell.
+    // .fin-empresa-campo é o modal "Empresas por lançamento" — essa
+    // tabela não tem coluna de comissão nenhuma, então o financeiro tem
+    // UPDATE/INSERT/DELETE direto (RLS), sem precisar de RPC.
     root.querySelectorAll('tbody td input, tbody td select, .meta-input-wrap input').forEach(function(el){
       if(el.closest('.anexo-upload')) return;
+      if(isFinanceiro && el.classList.contains('fin-empresa-campo')) return;
       if(isFinanceiro && el.dataset.field){
         const campoDb = el.dataset.entity ? campoFinanceiroEntidade(el.dataset.entity, el.dataset.field) : VENDAS_CAMPOS_FINANCEIRO[el.dataset.field];
         if(campoDb) return;
