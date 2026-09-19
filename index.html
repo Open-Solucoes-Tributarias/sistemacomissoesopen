@@ -1977,7 +1977,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-19-06';
+const APP_BUILD = '2026-09-19-07';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -7410,8 +7410,21 @@ function periodoDoFechamento(mes, ano){
   const anterior = idx > 0 ? lista[idx-1] : null;
   return { inicio: anterior ? new Date(anterior.fechadoEm) : null, fim: new Date(lista[idx].fechadoEm) };
 }
+/* Mês que ainda nem começou (ex.: olhar Outubro em pleno Setembro) não
+   pode ter nada "no período aberto" — sem isso, todo mês ainda não
+   fechado herdava o MESMO período aberto (desde o último fechamento
+   até agora), e um pagamento batido hoje aparecia junto em Setembro
+   E em Outubro ao mesmo tempo, mesmo Outubro não tendo nem começado. */
+function mesAindaNaoComecou(mes, ano){
+  const hoje = new Date();
+  const idxMes = MONTHS.indexOf(mes);
+  if(idxMes === -1) return false;
+  if((ano||2026) !== hoje.getFullYear()) return (ano||2026) > hoje.getFullYear();
+  return idxMes > hoje.getMonth();
+}
 function dentroDoPeriodoDeFechamento(pagoEmIso, mes, ano){
   if(!pagoEmIso) return false;
+  if(mesAindaNaoComecou(mes, ano)) return false;
   const d = new Date(pagoEmIso);
   if(isNaN(d.getTime())) return false;
   const p = periodoDoFechamento(mes, ano);
