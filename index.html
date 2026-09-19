@@ -1973,7 +1973,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-19-04';
+const APP_BUILD = '2026-09-19-05';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5046,6 +5046,7 @@ function renderModal(){
                 ${MONTHS.map(function(mm){ return `<option value="${mm}" ${m.ateMes===mm?'selected':''}>${monthShort(mm)}</option>`; }).join('')}
               </select>
             </label>
+            <input id="regularizar-busca" class="search-input" type="text" placeholder="🔍 Buscar cliente / empresa / órgão..." value="${esc(m.busca)}" style="flex:1;min-width:180px;" oninput="onRegularizarBuscaInput(this)" />
           </div>
           ${candidatos.length === 0 ? `<div class="meta-empty" style="padding:6px 0;">Nenhum lançamento não pago encontrado com esse filtro.</div>` : `
             <div style="display:flex;gap:8px;margin-bottom:8px;">
@@ -6492,7 +6493,7 @@ function renderInadimplentesPanel(){
    fluxo também ignora a trava de "mês fechado" de propósito. */
 function abrirRegularizarPagamentos(){
   if(!isAdmin) return;
-  modalState = { type:'regularizar-pagamentos', produto:'Todos', ateMes: MONTHS[new Date().getMonth()], selecionados:{}, mesEscolhido:{} };
+  modalState = { type:'regularizar-pagamentos', produto:'Todos', ateMes: MONTHS[new Date().getMonth()], busca:'', selecionados:{}, mesEscolhido:{} };
   render();
 }
 function candidatosRegularizacao(){
@@ -6519,10 +6520,25 @@ function candidatosRegularizacao(){
       });
     }
   });
-  return out.sort(function(a,b){ return MONTHS.indexOf(a.mes) - MONTHS.indexOf(b.mes) || String(a.cliente).localeCompare(String(b.cliente),'pt-BR'); });
+  const busca = String(m.busca||'').trim().toLowerCase();
+  const filtrado = busca ? out.filter(function(c){ return c.cliente.toLowerCase().indexOf(busca) !== -1; }) : out;
+  return filtrado.sort(function(a,b){ return MONTHS.indexOf(a.mes) - MONTHS.indexOf(b.mes) || String(a.cliente).localeCompare(String(b.cliente),'pt-BR'); });
 }
 function setRegularizarProduto(v){ modalState.produto = v; render(); }
 function setRegularizarAteMes(v){ modalState.ateMes = v; render(); }
+/* render() só devolve o foco sozinho fora de modal (devolverFoco olha
+   `if(modalState) return`) — aqui dentro precisa fazer isso na mão, ou
+   cada letra digitada tira o cursor do campo de busca. */
+function onRegularizarBuscaInput(el){
+  const pos = el.selectionStart;
+  modalState.busca = el.value;
+  render();
+  const novo = document.getElementById('regularizar-busca');
+  if(novo){
+    novo.focus();
+    try{ novo.setSelectionRange(pos, pos); }catch(e){}
+  }
+}
 function toggleSelecaoRegularizacao(chave, marcado){ modalState.selecionados[chave] = marcado; render(); }
 function setMesPagamentoRegularizacao(chave, mes){ modalState.mesEscolhido[chave] = mes; render(); }
 function marcarTodosRegularizacao(marcado){
