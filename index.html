@@ -785,6 +785,10 @@
   }
   .modal-box.modal-box-wide{max-width:640px;max-height:85vh;overflow-y:auto;}
   .modal-box.modal-box-xwide{max-width:980px;max-height:85vh;overflow-y:auto;}
+  /* Empresas por lançamento tem muita coluna (Empresa/CNPJ/Responsável/
+     Telefone/E-mail/Valor/Nota fiscal/Anexo) — 980px cortava a última
+     coluna, obrigando a rolar dentro da própria tabela. */
+  .modal-box.modal-box-empresas{max-width:1400px;}
   .tabela-detalhe-scroll{max-height:50vh;overflow-y:auto;}
   .tabela-detalhe-scroll thead th{position:sticky;top:0;background:var(--surface);z-index:1;}
   .modal-textarea{
@@ -1973,7 +1977,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-19-05';
+const APP_BUILD = '2026-09-19-06';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -4931,7 +4935,7 @@ function renderModal(){
 
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
-        <div class="modal-box modal-box-xwide">
+        <div class="modal-box modal-box-xwide modal-box-empresas">
           <div class="modal-msg">Empresas — ${esc(nome)}</div>
           <div class="divisao-explica">
             O valor deste lançamento é de <b>${fmtMoney(d.total)}</b>. Liste aqui cada empresa dele, com o
