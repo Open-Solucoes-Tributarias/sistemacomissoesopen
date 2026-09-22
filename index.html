@@ -9121,7 +9121,19 @@ function notasProntasParaEmitir(){
 function irParaNotasProntas(){
   activeTab = 'parceiros';
   notaFiltro = 'PodeEmitir';
+  // O painel "Notas lançadas" pode estar dobrado (lembrado no
+  // localStorage de uma sessão anterior) ou lá embaixo da tela — sem
+  // isso, o filtro muda por baixo dos panos e a pessoa não vê nada
+  // acontecer quando clica em "Ver notas".
+  if(collapsedSections['fin-notas']){
+    collapsedSections['fin-notas'] = false;
+    try{ localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsedSections)); }catch(e){}
+  }
   render();
+  setTimeout(function(){
+    const el = document.getElementById('sec-fin-notas');
+    if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+  }, 60);
 }
 
 /* ---------- Lembrete de dia fixo pra emitir nota (Mensal/Plano Premium) ----------
