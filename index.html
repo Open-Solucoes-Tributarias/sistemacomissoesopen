@@ -2113,6 +2113,24 @@ async function enviarPedidoNota(){
     enviandoPedidoNota = false; render();
   }
 }
+/* Só o pedido em si ainda PENDENTE — depois que o admin já vinculou,
+   quem pediu não pode mais apagar (o RLS nem deixa: ver policy no
+   banco), pra não sumir um registro que o admin já processou.
+   window.confirm() de propósito: esta tela é isolada de propósito, sem
+   sidebar nem modal do sistema (ver renderSolicitarNotaScreen), então
+   showConfirm() aqui nunca apareceria na tela. */
+async function excluirMeuPedidoNota(pedidoId){
+  if(!isSolicitante) return;
+  if(!window.confirm('Excluir este pedido de nota?')) return;
+  try{
+    await sb('/rest/v1/pedidos_nota?id=eq.'+pedidoId, { method:'DELETE', headers:{'Prefer':'return=minimal'} });
+    pedidosNota = (pedidosNota||[]).filter(function(p){ return p.id !== pedidoId; });
+    render();
+  }catch(e){
+    console.error('Falha ao excluir meu pedido de nota', e);
+    showAlert('Não consegui excluir o pedido. Confira a internet e tente de novo.');
+  }
+}
 
 function renderSolicitarNotaScreen(){
   const root = document.getElementById('root');
@@ -2124,7 +2142,7 @@ function renderSolicitarNotaScreen(){
     : pedidosNota.length === 0
       ? `<div class="meta-empty" style="padding:16px 0;">Você ainda não pediu nenhuma nota.</div>`
       : `<div class="table-scroll"><table class="table-plain">
-          <thead><tr><th>Cliente</th><th class="num">Valor</th><th>Pedido em</th><th>Não emitir antes de</th><th>Situação</th></tr></thead>
+          <thead><tr><th>Cliente</th><th class="num">Valor</th><th>Pedido em</th><th>Não emitir antes de</th><th>Situação</th><th></th></tr></thead>
           <tbody>${pedidosNota.map(function(p){ return `
             <tr>
               <td>${esc(p.cliente)}</td>
@@ -2132,6 +2150,7 @@ function renderSolicitarNotaScreen(){
               <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
               <td>${p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—'}</td>
               <td>${p.status==='vinculado' ? '<span class="usuario-tag fin">Vinculado ✓</span>' : '<span class="usuario-tag">Pendente</span>'}</td>
+              <td>${p.status!=='vinculado' ? `<button type="button" class="anexo-remover" title="Cancelar/excluir este pedido" onclick="excluirMeuPedidoNota(${p.id})">✕</button>` : ''}</td>
             </tr>
           `; }).join('')}</tbody>
         </table></div>`;
@@ -9639,6 +9658,28 @@ function irParaLancamentoVinculado(pedidoId){
   }
   showAlert('Não encontrei mais esse lançamento — pode ter sido apagado.');
 }
+/* Exclui só o REGISTRO do pedido — o lançamento que já foi vinculado
+   (vendas/empresa) não é tocado aqui, continua do jeito que ficou. É só
+   tirar da fila algo que ficou errado, duplicado ou já resolvido. */
+function excluirPedidoNota(pedidoId){
+  if(!isAdmin) return;
+  const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
+  if(!pedido) return;
+  showConfirm(
+    'Excluir o pedido de "' + (pedido.cliente || 'sem nome') + '"?' + (pedido.status==='vinculado' ? ' Ele já está vinculado — o lançamento em si não muda, só o registro do pedido some da fila.' : ''),
+    async function(){
+      try{
+        await sb('/rest/v1/pedidos_nota?id=eq.'+pedidoId, { method:'DELETE', headers:{'Prefer':'return=minimal'} });
+        pedidosNota = (pedidosNota||[]).filter(function(p){ return p.id !== pedidoId; });
+        render();
+      }catch(e){
+        console.error('Falha ao excluir pedido de nota', e);
+        showAlert('Não consegui excluir o pedido. Confira a internet e tente de novo.');
+      }
+    },
+    'Excluir'
+  );
+}
 function renderPedidosNotaPanel(){
   const lista = pedidosNota || [];
   if(lista.length === 0) return '';
@@ -9659,12 +9700,13 @@ function renderPedidosNotaPanel(){
       <td>${p.status==='vinculado'
         ? `<button type="button" class="usuario-tag fin link-tag" title="Ver o lançamento vinculado" onclick="irParaLancamentoVinculado(${p.id})">Vinculado ✓ — ver lançamento</button>`
         : `<button class="modal-btn modal-btn-ghost" onclick="abrirVincularPedido(${p.id})">Vincular</button>`}</td>
+      <td><button type="button" class="anexo-remover" title="Excluir este pedido" onclick="excluirPedidoNota(${p.id})">✕</button></td>
     </tr>`;
   };
   return panel('pedidos-nota', '📋 Pedidos de Nota' + (pendentes.length ? ` (${pendentes.length} pendente${pendentes.length===1?'':'s'})` : ''), `
     <div class="table-scroll">
       <table class="table-plain">
-        <thead><tr><th>Cliente</th><th>CNPJ</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th class="num">Valor</th><th>Produto</th><th>Empenho</th><th>Pedido em</th><th>Não emitir antes de</th><th></th></tr></thead>
+        <thead><tr><th>Cliente</th><th>CNPJ</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th class="num">Valor</th><th>Produto</th><th>Empenho</th><th>Pedido em</th><th>Não emitir antes de</th><th></th><th></th></tr></thead>
         <tbody>${pendentes.map(linha).join('')}${resolvidos.map(linha).join('')}</tbody>
       </table>
     </div>
