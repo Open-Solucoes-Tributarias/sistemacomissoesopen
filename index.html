@@ -9685,6 +9685,40 @@ function irParaLancamentoVinculado(pedidoId){
   }
   showAlert('Não encontrei mais esse lançamento — pode ter sido apagado.');
 }
+/* Edita um campo do PEDIDO em si (não do lançamento já vinculado, se
+   houver) — pra corrigir um valor/dado que a solicitante digitou errado,
+   sem precisar excluir e pedir de novo. Só admin: financeiro só
+   acompanha (ver renderPedidosNotaPanel). */
+const PEDIDO_NOTA_CAMPOS_DB = {
+  cliente:'cliente', cnpj:'cnpj', responsavel:'responsavel', telefone:'telefone',
+  email:'email', valor:'valor', produto:'produto', empenho:'empenho',
+  dataMinimaEmissao:'data_minima_emissao',
+};
+async function updatePedidoNotaCampo(pedidoId, campoJs, valorBruto){
+  if(!isAdmin) return;
+  const campoDb = PEDIDO_NOTA_CAMPOS_DB[campoJs];
+  const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
+  if(!campoDb || !pedido) return;
+  const anterior = pedido[campoJs];
+  let novo;
+  if(campoJs === 'valor') novo = numOrNull(valorBruto);
+  else if(campoJs === 'cnpj') novo = cnpjDigitos(valorBruto);
+  else if(campoJs === 'dataMinimaEmissao') novo = valorBruto || null;
+  else if(campoJs === 'produto') novo = valorBruto || null;
+  else novo = String(valorBruto||'').trim();
+  pedido[campoJs] = novo;
+  render();
+  try{
+    await sb('/rest/v1/pedidos_nota?id=eq.'+pedidoId, {
+      method:'PATCH', headers:{'Prefer':'return=minimal'}, body:{[campoDb]: novo},
+    });
+  }catch(e){
+    console.error('Falha ao editar pedido de nota', e);
+    pedido[campoJs] = anterior;
+    render();
+    showAlert('Não consegui salvar essa edição. Confira a internet e tente de novo.');
+  }
+}
 /* Exclui só o REGISTRO do pedido — o lançamento que já foi vinculado
    (vendas/empresa) não é tocado aqui, continua do jeito que ficou. É só
    tirar da fila algo que ficou errado, duplicado ou já resolvido. */
@@ -9716,21 +9750,49 @@ function renderPedidosNotaPanel(){
   const pendentes = lista.filter(function(p){ return p.status !== 'vinculado'; });
   const resolvidos = lista.filter(function(p){ return p.status === 'vinculado'; });
   const linha = function(p){
+    if(!podeAgir){
+      return `<tr>
+        <td>${esc(p.cliente)}</td>
+        <td>${esc(formatCnpj(p.cnpj)) || '—'}</td>
+        <td>${esc(p.responsavel) || '—'}</td>
+        <td>${esc(p.telefone) || '—'}</td>
+        <td>${esc(p.email) || '—'}</td>
+        <td class="num">${p.valor===null||p.valor===undefined?'—':fmtMoney(p.valor)}</td>
+        <td>${p.produto ? esc(p.produto) : '—'}</td>
+        <td>${p.empenho ? esc(p.empenho) : '—'}</td>
+        <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
+        <td>${p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—'}</td>
+        <td>${p.status==='vinculado'
+          ? `<button type="button" class="usuario-tag fin link-tag" title="Ver o lançamento vinculado" onclick="irParaLancamentoVinculado(${p.id})">Vinculado ✓ — ver lançamento</button>`
+          : '<span class="usuario-tag">Pendente</span>'}</td>
+        <td></td>
+      </tr>`;
+    }
+    // Admin pode corrigir qualquer campo do pedido em si — a solicitante
+    // às vezes digita algo errado, e sem isso a única saída seria
+    // excluir e pedir pra ela mandar tudo de novo.
     return `<tr>
-      <td>${esc(p.cliente)}</td>
-      <td>${esc(formatCnpj(p.cnpj)) || '—'}</td>
-      <td>${esc(p.responsavel) || '—'}</td>
-      <td>${esc(p.telefone) || '—'}</td>
-      <td>${esc(p.email) || '—'}</td>
-      <td class="num">${p.valor===null||p.valor===undefined?'—':fmtMoney(p.valor)}</td>
-      <td>${p.produto ? esc(p.produto) : '—'}</td>
-      <td>${p.empenho ? esc(p.empenho) : '—'}</td>
+      <td><input type="text" class="fin-empresa-campo" value="${esc(p.cliente)}" onchange="updatePedidoNotaCampo(${p.id},'cliente',this.value)" /></td>
+      <td><input type="text" class="fin-empresa-campo" value="${esc(formatCnpj(p.cnpj))}" oninput="this.value=formatCnpj(this.value)" onchange="updatePedidoNotaCampo(${p.id},'cnpj',this.value)" /></td>
+      <td><input type="text" class="fin-empresa-campo" value="${esc(p.responsavel)}" onchange="updatePedidoNotaCampo(${p.id},'responsavel',this.value)" /></td>
+      <td><input type="text" class="fin-empresa-campo" value="${esc(p.telefone)}" onchange="updatePedidoNotaCampo(${p.id},'telefone',this.value)" /></td>
+      <td><input type="email" class="fin-empresa-campo" value="${esc(p.email)}" onchange="updatePedidoNotaCampo(${p.id},'email',this.value)" /></td>
+      <td class="col-valor"><div class="currency-wrap"><span class="currency-prefix">R$</span>
+        <input class="num fin-empresa-campo" type="number" step="0.01" value="${p.valor===null||p.valor===undefined?'':p.valor}" onchange="updatePedidoNotaCampo(${p.id},'valor',this.value)" /></div></td>
+      <td><select class="fin-empresa-campo" onchange="updatePedidoNotaCampo(${p.id},'produto',this.value)">
+        <option value="" ${!p.produto?'selected':''}>—</option>
+        <option value="Sistema" ${p.produto==='Sistema'?'selected':''}>Sistema</option>
+        <option value="Consultoria" ${p.produto==='Consultoria'?'selected':''}>Consultoria</option>
+        <option value="Órgãos Públicos" ${p.produto==='Órgãos Públicos'?'selected':''}>Órgãos Públicos</option>
+        <option value="Cursos" ${p.produto==='Cursos'?'selected':''}>Cursos</option>
+      </select></td>
+      <td><input type="text" class="fin-empresa-campo" value="${esc(p.empenho||'')}" onchange="updatePedidoNotaCampo(${p.id},'empenho',this.value)" /></td>
       <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
-      <td>${p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—'}</td>
+      <td><input type="date" class="fin-empresa-campo" value="${esc(p.dataMinimaEmissao||'')}" onchange="updatePedidoNotaCampo(${p.id},'dataMinimaEmissao',this.value)" /></td>
       <td>${p.status==='vinculado'
         ? `<button type="button" class="usuario-tag fin link-tag" title="Ver o lançamento vinculado" onclick="irParaLancamentoVinculado(${p.id})">Vinculado ✓ — ver lançamento</button>`
-        : (podeAgir ? `<button class="modal-btn modal-btn-ghost" onclick="abrirVincularPedido(${p.id})">Vincular</button>` : '<span class="usuario-tag">Pendente</span>')}</td>
-      <td>${podeAgir ? `<button type="button" class="anexo-remover" title="Excluir este pedido" onclick="excluirPedidoNota(${p.id})">✕</button>` : ''}</td>
+        : `<button class="modal-btn modal-btn-ghost" onclick="abrirVincularPedido(${p.id})">Vincular</button>`}</td>
+      <td><button type="button" class="anexo-remover" title="Excluir este pedido" onclick="excluirPedidoNota(${p.id})">✕</button></td>
     </tr>`;
   };
   return panel('pedidos-nota', '📋 Pedidos de Nota' + (pendentes.length ? ` (${pendentes.length} pendente${pendentes.length===1?'':'s'})` : ''), `
