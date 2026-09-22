@@ -2496,6 +2496,21 @@ function numOrNull(v){
   return isNaN(n) ? null : n;
 }
 
+/* Toda coluna "*_em" (pago_em, nota_emitida_em, pode_emitir_em) é
+   timestamp with time zone no banco — mandar qualquer coisa que não seja
+   um ISO completo (ex: um "2026" sozinho, de algum estado em memória que
+   ficou torto) derruba a upsert INTEIRA, porque persist()/persistEntityRows()
+   sempre reenviam todas as linhas juntas: um valor ruim numa trava a
+   gravação de todo mundo, mesmo quem só editou outra linha sem relação
+   nenhuma. Por segurança na borda, qualquer coisa que não pareça um ISO
+   de verdade vira null em vez de ir pro banco quebrar tudo. */
+function timestampValidoOuNull(v){
+  return (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) ? v : null;
+}
+function dataValidaOuNull(v){
+  return (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? v : null;
+}
+
 function sbSelect(table, query){
   const source = READ_VIEWS[table] || table;
   return sb('/rest/v1/' + source + (query ? '?' + query : ''), { method: 'GET' });
@@ -2640,14 +2655,14 @@ function persist(){
             forma_pagamento: r.formaPagamento||'', colaborador: r.colaborador||'', observacoes: r.observacoes||'',
             renovacao: !!r.renovacao, novo_contrato: !!r.novoContrato, upgrade: !!r.upgrade,
             vendedor2: r.vendedor2||'', vendedor3: r.vendedor3||'', pago: !!r.pago, mes_pagamento: r.mesPagamento||null,
-            pago_em: r.pagoEm || null, fechamento_mes: r.fechamentoMes || null,
+            pago_em: timestampValidoOuNull(r.pagoEm), fechamento_mes: r.fechamentoMes || null,
             parcela_label: r.parcelaLabel || null,
             vendedor_responsavel: r.vendedorResponsavel || '',
             // vai junto de propósito: upsert que não manda a coluna a
             // devolve para o padrão, e o visto do financeiro sumiria
-            nota_emitida: !!r.notaEmitida, nota_emitida_em: r.notaEmitidaEm || null,
-            pode_emitir: !!r.podeEmitir, pode_emitir_em: r.podeEmitirEm || null,
-            data_minima_emissao: r.dataMinimaEmissao || null,
+            nota_emitida: !!r.notaEmitida, nota_emitida_em: timestampValidoOuNull(r.notaEmitidaEm),
+            pode_emitir: !!r.podeEmitir, pode_emitir_em: timestampValidoOuNull(r.podeEmitirEm),
+            data_minima_emissao: dataValidaOuNull(r.dataMinimaEmissao),
           };
         });
         await sbUpsert('vendas', dbRows, 'id');
@@ -2748,9 +2763,9 @@ function persistEntityRows(key){
             nome:'', valor_contrato:null, tipo:null,
             parceiro: r.parceiro||'', participacao: numOrNull(r.participacao),
             forma_pagamento:'', colaborador:'', observacoes:'',
-            pago:false, mes_pagamento:null, pago_em: r.pagoEm || null, fechamento_mes: r.fechamentoMes || null,
-            nota_emitida: !!r.notaEmitida, nota_emitida_em: r.notaEmitidaEm || null,
-            pode_emitir: !!r.podeEmitir, pode_emitir_em: r.podeEmitirEm || null,
+            pago:false, mes_pagamento:null, pago_em: timestampValidoOuNull(r.pagoEm), fechamento_mes: r.fechamentoMes || null,
+            nota_emitida: !!r.notaEmitida, nota_emitida_em: timestampValidoOuNull(r.notaEmitidaEm),
+            pode_emitir: !!r.podeEmitir, pode_emitir_em: timestampValidoOuNull(r.podeEmitirEm),
             in_company: !!r.inCompany, renovacao: !!r.renovacao, upgrade: !!r.upgrade,
             vendedor_responsavel: cfg.hasVendedorResponsavel ? (r.vendedorResponsavel || '') : null,
             professor: r.professor||'', honorario_professor: numOrNull(r.honorarioProfessor),
