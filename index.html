@@ -2060,6 +2060,7 @@ async function loadCurrentUserAccess(){
 let pedidosNota = null;
 let carregandoPedidosNota = false;
 let pedidoNotaForm = { cliente:'', cnpj:'', responsavel:'', telefone:'', email:'', valor:null, produto:'', observacoes:'', dataMinima:'', empenho:'' };
+let pedidoNotaArquivo = null;   // File escolhido no input — não dá pra guardar isso em pedidoNotaForm (não é serializável)
 let enviandoPedidoNota = false;
 let pedidoNotaErro = '';
 let pedidoNotaEnviado = false;
@@ -2075,6 +2076,7 @@ async function tryLoadPedidosNotaAsync(){
         observacoes: d.observacoes||'', status: d.status||'pendente', criadoEm: d.criado_em,
         vinculadoTabela: d.vinculado_tabela||null, vinculadoId: d.vinculado_id||null,
         dataMinimaEmissao: d.data_minima_emissao||null, empenho: d.empenho||'',
+        anexoPath: d.anexo_path||null, anexoNome: d.anexo_nome||null,
       };
     });
   }catch(e){
@@ -2088,11 +2090,22 @@ async function tryLoadPedidosNotaAsync(){
 function onPedidoNotaInput(el, campo){
   pedidoNotaForm[campo] = campo === 'valor' ? (el.value === '' ? null : parseFloat(el.value)) : el.value;
 }
+function onPedidoNotaArquivoChange(input){
+  pedidoNotaArquivo = (input.files && input.files[0]) || null;
+  render();
+}
 async function enviarPedidoNota(){
   const f = pedidoNotaForm;
   if(!f.cliente.trim()){ pedidoNotaErro = 'Informe o nome do cliente/empresa.'; render(); return; }
   pedidoNotaErro = ''; pedidoNotaEnviado = false; enviandoPedidoNota = true; render();
   try{
+    let anexoPath = null, anexoNome = null;
+    if(pedidoNotaArquivo){
+      const nomeLimpo = pedidoNotaArquivo.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+      anexoPath = Date.now() + '-' + nomeLimpo;
+      await sbUploadFile('pedidos-nota-anexos', anexoPath, pedidoNotaArquivo);
+      anexoNome = pedidoNotaArquivo.name;
+    }
     await sb('/rest/v1/pedidos_nota', {
       method: 'POST',
       headers: { 'Prefer': 'return=minimal' },
@@ -2101,9 +2114,11 @@ async function enviarPedidoNota(){
         telefone: f.telefone.trim(), email: f.email.trim(), valor: numOrNull(f.valor),
         produto: f.produto || null, observacoes: f.observacoes.trim(),
         data_minima_emissao: f.dataMinima || null, empenho: f.empenho.trim() || null,
+        anexo_path: anexoPath, anexo_nome: anexoNome,
       }],
     });
     pedidoNotaForm = { cliente:'', cnpj:'', responsavel:'', telefone:'', email:'', valor:null, produto:'', observacoes:'', dataMinima:'', empenho:'' };
+    pedidoNotaArquivo = null;
     pedidoNotaEnviado = true;
     await tryLoadPedidosNotaAsync();
   }catch(e){
@@ -2142,13 +2157,14 @@ function renderSolicitarNotaScreen(){
     : pedidosNota.length === 0
       ? `<div class="meta-empty" style="padding:16px 0;">Você ainda não pediu nenhuma nota.</div>`
       : `<div class="table-scroll"><table class="table-plain">
-          <thead><tr><th>Cliente</th><th class="num">Valor</th><th>Pedido em</th><th>Não emitir antes de</th><th>Situação</th><th></th></tr></thead>
+          <thead><tr><th>Cliente</th><th class="num">Valor</th><th>Pedido em</th><th>Não emitir antes de</th><th>Anexo</th><th>Situação</th><th></th></tr></thead>
           <tbody>${pedidosNota.map(function(p){ return `
             <tr>
               <td>${esc(p.cliente)}</td>
               <td class="num">${p.valor===null||p.valor===undefined?'—':fmtMoney(p.valor)}</td>
               <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
               <td>${p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—'}</td>
+              <td>${p.anexoPath ? '📎 ' + esc(p.anexoNome||'anexado') : '—'}</td>
               <td>${p.status==='vinculado' ? '<span class="usuario-tag fin">Vinculado ✓</span>' : '<span class="usuario-tag">Pendente</span>'}</td>
               <td>${p.status!=='vinculado' ? `<button type="button" class="anexo-remover" title="Cancelar/excluir este pedido" onclick="excluirMeuPedidoNota(${p.id})">✕</button>` : ''}</td>
             </tr>
@@ -2213,6 +2229,14 @@ function renderSolicitarNotaScreen(){
           </div>
           <label class="meta-field"><span>Observações</span>
             <input type="text" value="${esc(f.observacoes)}" oninput="onPedidoNotaInput(this,'observacoes')" /></label>
+
+          <label class="meta-field"><span>Anexar arquivo (opcional)</span>
+            <label class="anexo-upload" title="Anexar PDF ou imagem de referência (ex: contrato, orçamento)">
+              📎 ${pedidoNotaArquivo ? 'Trocar arquivo' : 'Escolher arquivo'}
+              <input type="file" accept="application/pdf,image/*" onchange="onPedidoNotaArquivoChange(this)" />
+            </label>
+            ${pedidoNotaArquivo ? `<span class="anexo-arquivo" style="margin-left:10px;">📄 ${esc(pedidoNotaArquivo.name)}</span>` : ''}
+          </label>
 
           <button class="auth-submit" ${enviandoPedidoNota?'disabled':''} onclick="enviarPedidoNota()">${enviandoPedidoNota?'Enviando...':'Solicitar nota'}</button>
 
@@ -9719,6 +9743,48 @@ async function updatePedidoNotaCampo(pedidoId, campoJs, valorBruto){
     showAlert('Não consegui salvar essa edição. Confira a internet e tente de novo.');
   }
 }
+/* Anexo do PEDIDO (ex: contrato, orçamento que a solicitante anexou),
+   guardado num bucket à parte — não é a nota fiscal emitida em si (essa
+   continua vivendo em notas-fiscais, presa ao lançamento). */
+async function verAnexoPedidoNota(pedidoId){
+  const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
+  if(!pedido || !pedido.anexoPath) return;
+  // Mesmo motivo do anexo de nota fiscal: abrir a aba ANTES do await,
+  // senão o navegador bloqueia como pop-up.
+  const aba = window.open('', '_blank');
+  try{
+    const url = await sbSignedUrl('pedidos-nota-anexos', pedido.anexoPath, 120);
+    if(aba) aba.location.href = url;
+    else window.open(url, '_blank');
+  }catch(e){
+    if(aba) aba.close();
+    console.error('Falha ao abrir o anexo do pedido', e);
+    showAlert('Não consegui abrir o arquivo anexado. Tente de novo.');
+  }
+}
+function removerAnexoPedidoNota(pedidoId){
+  if(!isAdmin) return;
+  const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
+  if(!pedido || !pedido.anexoPath) return;
+  showConfirm(
+    'Remover o anexo "' + (pedido.anexoNome || 'arquivo') + '" deste pedido?',
+    async function(){
+      const caminho = pedido.anexoPath;
+      pedido.anexoPath = null; pedido.anexoNome = null;
+      render();
+      try{
+        await sb('/rest/v1/pedidos_nota?id=eq.'+pedidoId, {
+          method:'PATCH', headers:{'Prefer':'return=minimal'}, body:{anexo_path:null, anexo_nome:null},
+        });
+        sbDeleteFile('pedidos-nota-anexos', caminho).catch(function(e){ console.error('Falha ao apagar arquivo do storage', e); });
+      }catch(e){
+        console.error('Falha ao remover o anexo do pedido', e);
+        showAlert('Não consegui remover o anexo no banco. Tente de novo.');
+      }
+    },
+    'Remover'
+  );
+}
 /* Exclui só o REGISTRO do pedido — o lançamento que já foi vinculado
    (vendas/empresa) não é tocado aqui, continua do jeito que ficou. É só
    tirar da fila algo que ficou errado, duplicado ou já resolvido. */
@@ -9731,6 +9797,7 @@ function excluirPedidoNota(pedidoId){
     async function(){
       try{
         await sb('/rest/v1/pedidos_nota?id=eq.'+pedidoId, { method:'DELETE', headers:{'Prefer':'return=minimal'} });
+        if(pedido.anexoPath) sbDeleteFile('pedidos-nota-anexos', pedido.anexoPath).catch(function(e){ console.error('Falha ao apagar anexo do storage', e); });
         pedidosNota = (pedidosNota||[]).filter(function(p){ return p.id !== pedidoId; });
         render();
       }catch(e){
@@ -9762,6 +9829,7 @@ function renderPedidosNotaPanel(){
         <td>${p.empenho ? esc(p.empenho) : '—'}</td>
         <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
         <td>${p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—'}</td>
+        <td>${p.anexoPath ? `<button type="button" class="anexo-link" title="${esc(p.anexoNome||'')}" onclick="verAnexoPedidoNota(${p.id})">📎 ${esc(p.anexoNome||'arquivo')}</button>` : '—'}</td>
         <td>${p.status==='vinculado'
           ? `<button type="button" class="usuario-tag fin link-tag" title="Ver o lançamento vinculado" onclick="irParaLancamentoVinculado(${p.id})">Vinculado ✓ — ver lançamento</button>`
           : '<span class="usuario-tag">Pendente</span>'}</td>
@@ -9789,6 +9857,9 @@ function renderPedidosNotaPanel(){
       <td><input type="text" class="fin-empresa-campo" value="${esc(p.empenho||'')}" onchange="updatePedidoNotaCampo(${p.id},'empenho',this.value)" /></td>
       <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
       <td><input type="date" class="fin-empresa-campo" value="${esc(p.dataMinimaEmissao||'')}" onchange="updatePedidoNotaCampo(${p.id},'dataMinimaEmissao',this.value)" /></td>
+      <td>${p.anexoPath
+        ? `<span class="anexo-arquivo"><button type="button" class="anexo-link" title="${esc(p.anexoNome||'')}" onclick="verAnexoPedidoNota(${p.id})">📎 ${esc(p.anexoNome||'arquivo')}</button><button type="button" class="anexo-remover" title="Remover anexo" onclick="removerAnexoPedidoNota(${p.id})">✕</button></span>`
+        : '—'}</td>
       <td>${p.status==='vinculado'
         ? `<button type="button" class="usuario-tag fin link-tag" title="Ver o lançamento vinculado" onclick="irParaLancamentoVinculado(${p.id})">Vinculado ✓ — ver lançamento</button>`
         : `<button class="modal-btn modal-btn-ghost" onclick="abrirVincularPedido(${p.id})">Vincular</button>`}</td>
@@ -9798,7 +9869,7 @@ function renderPedidosNotaPanel(){
   return panel('pedidos-nota', '📋 Pedidos de Nota' + (pendentes.length ? ` (${pendentes.length} pendente${pendentes.length===1?'':'s'})` : ''), `
     <div class="table-scroll">
       <table class="table-plain">
-        <thead><tr><th>Cliente</th><th>CNPJ</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th class="num">Valor</th><th>Produto</th><th>Empenho</th><th>Pedido em</th><th>Não emitir antes de</th><th></th><th></th></tr></thead>
+        <thead><tr><th>Cliente</th><th>CNPJ</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th class="num">Valor</th><th>Produto</th><th>Empenho</th><th>Pedido em</th><th>Não emitir antes de</th><th>Anexo</th><th></th><th></th></tr></thead>
         <tbody>${pendentes.map(linha).join('')}${resolvidos.map(linha).join('')}</tbody>
       </table>
     </div>
