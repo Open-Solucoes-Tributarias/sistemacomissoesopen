@@ -861,6 +861,21 @@
     position:relative;z-index:1;
     font-size:11px;font-weight:600;letter-spacing:.06em;color:rgba(255,255,255,.42);
   }
+  /* Tela dedicada da conta "solicitante" (ex.: Luciana pedindo nota) —
+     mesma linguagem visual do login, mas mais larga (tem formulário +
+     lista) e com scroll de verdade, já que .auth-screen/.auth-card são
+     pensados pro cartão de login, mais curto e sempre cabe na tela. */
+  .solicitar-screen{
+    position:relative;min-height:100vh;overflow-y:auto;
+    display:flex;justify-content:center;padding:40px 20px;
+    background:linear-gradient(125deg,#061626 0%,var(--navy) 45%,var(--navy-2) 100%);
+  }
+  .solicitar-card{
+    position:relative;z-index:1;background:var(--surface);border:1px solid rgba(255,255,255,.14);
+    border-radius:var(--radius-xl);box-shadow:0 30px 70px -20px rgba(0,0,0,.55);
+    max-width:720px;width:100%;height:fit-content;
+    animation:aparecer .5s var(--ease) both;
+  }
   .auth-logo{font-size:12.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--primary);margin-bottom:6px;}
   .auth-card h1{font-size:19px;margin:0 0 5px;font-weight:800;color:var(--ink);letter-spacing:-.01em;line-height:1.2;}
   .auth-card .auth-sub{font-size:13px;color:var(--ink-soft);margin:0 0 22px;font-weight:500;}
@@ -1977,7 +1992,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-19-07';
+const APP_BUILD = '2026-09-22-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -2005,20 +2020,175 @@ let isAdmin = false;
    ninguém. O corte de verdade é no banco (RLS + views _safe); aqui a tela
    só deixa de desenhar o que não vem. */
 let isFinanceiro = false;
+/* Quarto nível, o mais restrito de todos: só pede nota. Não vê
+   lançamento nenhum, não vê comissão, não vê valor de ninguém — só
+   preenche um pedido (cliente/CNPJ/responsável/valor) que cai numa
+   fila pro admin vincular ao lançamento certo. Pensado pra alguém
+   como a Luciana Amorim, que precisa pedir emissão sem enxergar nada
+   do resto do sistema. */
+let isSolicitante = false;
 let currentPersonName = null;
 async function loadCurrentUserAccess(){
   try{
-    const rows = await sbSelect('app_user_access', 'select=full_access,person_name,financeiro');
+    const rows = await sbSelect('app_user_access', 'select=full_access,person_name,financeiro,solicitante');
     const row = rows && rows[0];
     isAdmin = !!(row && row.full_access);
     isFinanceiro = !isAdmin && !!(row && row.financeiro);
+    isSolicitante = !isAdmin && !isFinanceiro && !!(row && row.solicitante);
     currentPersonName = row ? row.person_name : null;
   } catch(e){
     console.error('Falha ao carregar permissões do usuário', e);
     isAdmin = false;
     isFinanceiro = false;
+    isSolicitante = false;
     currentPersonName = null;
   }
+}
+
+/* ---------------- Pedidos de Nota (fila "solicitante" → admin) ----------------
+   A conta solicitante só enxerga isto: preenche um pedido, o admin vê
+   a fila (dentro de Resumo Geral) e vincula ao lançamento certo,
+   liberando "Pode emitir" nele. Nenhuma tabela de vendas/comissão é
+   lida por essa conta — a fila em si é tudo que a RLS deixa passar. */
+let pedidosNota = null;
+let carregandoPedidosNota = false;
+let pedidoNotaForm = { cliente:'', cnpj:'', responsavel:'', telefone:'', email:'', valor:null, produto:'', observacoes:'' };
+let enviandoPedidoNota = false;
+let pedidoNotaErro = '';
+let pedidoNotaEnviado = false;
+
+async function tryLoadPedidosNotaAsync(){
+  carregandoPedidosNota = true;
+  try{
+    const dados = await sbSelect('pedidos_nota', 'select=*&order=criado_em.desc');
+    pedidosNota = (dados||[]).map(function(d){
+      return {
+        id: d.id, cliente: d.cliente||'', cnpj: d.cnpj||'', responsavel: d.responsavel||'',
+        telefone: d.telefone||'', email: d.email||'', valor: d.valor, produto: d.produto||'',
+        observacoes: d.observacoes||'', status: d.status||'pendente', criadoEm: d.criado_em,
+        vinculadoTabela: d.vinculado_tabela||null, vinculadoId: d.vinculado_id||null,
+      };
+    });
+  }catch(e){
+    console.error('Falha ao carregar pedidos de nota', e);
+    pedidosNota = pedidosNota || [];
+  }finally{
+    carregandoPedidosNota = false;
+  }
+}
+
+function onPedidoNotaInput(el, campo){
+  pedidoNotaForm[campo] = campo === 'valor' ? (el.value === '' ? null : parseFloat(el.value)) : el.value;
+}
+async function enviarPedidoNota(){
+  const f = pedidoNotaForm;
+  if(!f.cliente.trim()){ pedidoNotaErro = 'Informe o nome do cliente/empresa.'; render(); return; }
+  pedidoNotaErro = ''; pedidoNotaEnviado = false; enviandoPedidoNota = true; render();
+  try{
+    await sb('/rest/v1/pedidos_nota', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=minimal' },
+      body: [{
+        cliente: f.cliente.trim(), cnpj: cnpjDigitos(f.cnpj), responsavel: f.responsavel.trim(),
+        telefone: f.telefone.trim(), email: f.email.trim(), valor: numOrNull(f.valor),
+        produto: f.produto || null, observacoes: f.observacoes.trim(),
+      }],
+    });
+    pedidoNotaForm = { cliente:'', cnpj:'', responsavel:'', telefone:'', email:'', valor:null, produto:'', observacoes:'' };
+    pedidoNotaEnviado = true;
+    await tryLoadPedidosNotaAsync();
+  }catch(e){
+    console.error('Falha ao enviar pedido de nota', e);
+    pedidoNotaErro = 'Não consegui enviar o pedido. Confira a internet e tente de novo.';
+  }finally{
+    enviandoPedidoNota = false; render();
+  }
+}
+
+function renderSolicitarNotaScreen(){
+  const root = document.getElementById('root');
+  if(pedidosNota === null && !carregandoPedidosNota) tryLoadPedidosNotaAsync().then(render);
+  const f = pedidoNotaForm;
+
+  const listaHtml = !pedidosNota
+    ? `<div class="meta-empty" style="padding:16px 0;">${carregandoPedidosNota ? 'Carregando...' : 'Você ainda não pediu nenhuma nota.'}</div>`
+    : pedidosNota.length === 0
+      ? `<div class="meta-empty" style="padding:16px 0;">Você ainda não pediu nenhuma nota.</div>`
+      : `<div class="table-scroll"><table class="table-plain">
+          <thead><tr><th>Cliente</th><th class="num">Valor</th><th>Pedido em</th><th>Situação</th></tr></thead>
+          <tbody>${pedidosNota.map(function(p){ return `
+            <tr>
+              <td>${esc(p.cliente)}</td>
+              <td class="num">${p.valor===null||p.valor===undefined?'—':fmtMoney(p.valor)}</td>
+              <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
+              <td>${p.status==='vinculado' ? '<span class="usuario-tag fin">Vinculado ✓</span>' : '<span class="usuario-tag">Pendente</span>'}</td>
+            </tr>
+          `; }).join('')}</tbody>
+        </table></div>`;
+
+  root.innerHTML = `
+    ${novaVersaoDisponivel ? `
+      <div class="versao-nova-aviso">
+        🔄 Tem uma versão mais nova do sistema.
+        <button onclick="recarregarPagina()">Atualizar agora</button>
+      </div>
+    ` : ''}
+    <div class="solicitar-screen">
+      <div class="solicitar-card">
+        <div class="auth-topo">
+          ${marcaOpenHtml({tam:34, clara:true, cor:'#8FCBF5'})}
+          ${hubMarcaHtml({clara:true})}
+        </div>
+        <div class="auth-corpo">
+          <h1>Solicitar nota</h1>
+          <p class="auth-sub">Preencha os dados do cliente e clique em "Solicitar nota" — a administração confere e vincula ao lançamento certo.</p>
+          ${pedidoNotaErro ? `<div class="auth-error">${esc(pedidoNotaErro)}</div>` : ''}
+          ${pedidoNotaEnviado ? `<div class="auth-notice">✅ Pedido enviado! Ele aparece na lista abaixo como "Pendente" até a administração vincular.</div>` : ''}
+
+          <div class="meta-form-grid">
+            <label class="meta-field"><span>Cliente / Empresa *</span>
+              <input type="text" placeholder="Razão social" value="${esc(f.cliente)}" oninput="onPedidoNotaInput(this,'cliente')" /></label>
+            <label class="meta-field"><span>CNPJ</span>
+              <input type="text" placeholder="00.000.000/0000-00" value="${esc(formatCnpj(f.cnpj))}" oninput="this.value=formatCnpj(this.value);onPedidoNotaInput(this,'cnpj')" /></label>
+          </div>
+          <div class="meta-form-grid">
+            <label class="meta-field"><span>Responsável</span>
+              <input type="text" value="${esc(f.responsavel)}" oninput="onPedidoNotaInput(this,'responsavel')" /></label>
+            <label class="meta-field"><span>Telefone</span>
+              <input type="text" value="${esc(f.telefone)}" oninput="onPedidoNotaInput(this,'telefone')" /></label>
+          </div>
+          <div class="meta-form-grid">
+            <label class="meta-field"><span>E-mail</span>
+              <input type="email" value="${esc(f.email)}" oninput="onPedidoNotaInput(this,'email')" /></label>
+            <label class="meta-field"><span>Valor</span>
+              <div class="meta-field-money"><span class="currency-prefix">R$</span>
+                <input type="number" step="0.01" placeholder="0,00" value="${f.valor===null||f.valor===undefined?'':f.valor}" oninput="onPedidoNotaInput(this,'valor')" /></div>
+            </label>
+          </div>
+          <label class="meta-field"><span>Produto (se souber)</span>
+            <select onchange="onPedidoNotaInput(this,'produto')">
+              <option value="">— não sei / outro —</option>
+              <option value="Sistema" ${f.produto==='Sistema'?'selected':''}>Sistema</option>
+              <option value="Consultoria" ${f.produto==='Consultoria'?'selected':''}>Consultoria</option>
+              <option value="Órgãos Públicos" ${f.produto==='Órgãos Públicos'?'selected':''}>Órgãos Públicos</option>
+              <option value="Cursos" ${f.produto==='Cursos'?'selected':''}>Cursos</option>
+            </select>
+          </label>
+          <label class="meta-field"><span>Observações</span>
+            <input type="text" value="${esc(f.observacoes)}" oninput="onPedidoNotaInput(this,'observacoes')" /></label>
+
+          <button class="auth-submit" ${enviandoPedidoNota?'disabled':''} onclick="enviarPedidoNota()">${enviandoPedidoNota?'Enviando...':'Solicitar nota'}</button>
+
+          <div style="margin-top:30px;">
+            <div class="auth-eyebrow">Seus pedidos</div>
+            ${listaHtml}
+          </div>
+
+          <div class="auth-foot"><button type="button" class="auth-link" onclick="logout()">Sair</button></div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function loadStoredAuthSession(){
@@ -4807,6 +4977,8 @@ function renderModal(){
             <div class="usuario-dica">É por esse nome que o HUB Comercial decide o que a pessoa enxerga.</div>
           ` : m.nivel === 'admin'
             ? `<div class="usuario-dica">Administrador vê tudo, não precisa de nome.</div>`
+            : m.nivel === 'solicitante'
+            ? `<div class="usuario-dica">A conta solicitante não vê nada do sistema — só pede nota numa tela própria. Não precisa de nome.</div>`
             : `<div class="usuario-dica">O financeiro vê o valor das notas de todo mundo e nenhuma comissão. Não precisa de nome.</div>`}
           <div class="modal-actions">
             <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
@@ -5079,6 +5251,51 @@ function renderModal(){
           <div class="modal-actions">
             <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
             <button class="modal-btn modal-btn-primary" ${selecionadosCount?'':'disabled'} onclick="confirmarRegularizarPagamentos()">Marcar ${selecionadosCount||''} como pago${selecionadosCount===1?'':'s'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  if(m.type === 'vincular-pedido'){
+    const pedido = (pedidosNota||[]).find(function(p){ return p.id === m.pedidoId; });
+    if(!pedido) return '';
+    const candidatos = candidatosVinculoPedido(m.produto, m.busca);
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-xwide">
+          <div class="modal-msg">Vincular pedido de nota</div>
+          <div class="divisao-explica">
+            Pedido de <b>${esc(pedido.cliente)}</b>${pedido.valor!==null&&pedido.valor!==undefined?' · '+fmtMoney(pedido.valor):''}${pedido.cnpj?' · CNPJ '+esc(formatCnpj(pedido.cnpj)):''}.
+            Escolha a qual lançamento ele pertence: pra Sistema, vincula direto na venda; pra Consultoria/Órgãos
+            Públicos/Cursos, cria uma empresa nova dentro do contrato escolhido, já com os dados do pedido e
+            "Pode emitir" marcado.
+          </div>
+          <div class="filters-row" style="margin:0 0 12px;gap:10px;">
+            <select onchange="setVincularProduto(this.value)">
+              <option value="" ${!m.produto?'selected':''}>Todos os produtos</option>
+              <option value="vendas" ${m.produto==='vendas'?'selected':''}>Sistema</option>
+              <option value="consultoria" ${m.produto==='consultoria'?'selected':''}>${esc(ENTITIES.consultoria.tabLabel)}</option>
+              <option value="publicos" ${m.produto==='publicos'?'selected':''}>${esc(ENTITIES.publicos.tabLabel)}</option>
+              <option value="cursos" ${m.produto==='cursos'?'selected':''}>${esc(ENTITIES.cursos.tabLabel)}</option>
+            </select>
+            <input id="vincular-busca" class="search-input" type="text" placeholder="🔍 Buscar por cliente/empresa..." value="${esc(m.busca)}" style="flex:1;min-width:180px;" oninput="onVincularBuscaInput(this)" />
+          </div>
+          <div class="table-scroll" style="max-height:340px;">
+            <table class="table-plain">
+              <thead><tr><th></th><th>Origem</th><th>Cliente / Empresa / Órgão / Curso</th></tr></thead>
+              <tbody>${candidatos.length ? candidatos.map(function(c){
+                const sel = m.escolhido && m.escolhido.produtoKey===c.produtoKey && m.escolhido.id===c.id;
+                return `<tr style="cursor:pointer;" class="${sel?'row-pending':''}" onclick="escolherCandidatoVinculo('${c.produtoKey}',${c.id})">
+                  <td><input type="radio" ${sel?'checked':''} onchange="escolherCandidatoVinculo('${c.produtoKey}',${c.id})" /></td>
+                  <td>${esc(c.rotulo)}</td>
+                  <td>${esc(c.cliente)}</td>
+                </tr>`;
+              }).join('') : `<tr><td colspan="3" style="text-align:center;color:var(--ink-faint);padding:16px;">Nada encontrado.</td></tr>`}</tbody>
+            </table>
+          </div>
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
+            <button class="modal-btn modal-btn-primary" ${m.escolhido?'':'disabled'} onclick="confirmarVinculoPedido()">Vincular</button>
           </div>
         </div>
       </div>
@@ -8258,6 +8475,8 @@ function renderParceirosSection(){
       </div>
     `, {flush: true, meta: `<b>${entries.length}</b> honorário${entries.length===1?"":"s"}${partnerMonthFilter!=="Todos" ? " em <b>"+esc(partnerMonthFilter)+"</b>" : ""}`})}
 
+    ${isAdmin ? renderPedidosNotaPanel() : ''}
+
     ${renderNotasPanel()}
 
     <div class="footnote" style="text-align:left;color:var(--ink-faint);font-size:12px;">
@@ -9207,6 +9426,128 @@ async function atualizarNotasLancadas(){
   } finally {
     atualizandoNotas = false; render();
   }
+}
+
+/* ---------------- Pedidos de Nota: lado do admin ----------------
+   A conta solicitante manda os dados sem saber a qual lançamento eles
+   pertencem — quem sabe é o admin, e é ele quem vincula. Vincular a
+   Sistema marca "Pode emitir" direto na venda (só tem CNPJ pra puxar
+   de lá, o resto vendas nem guarda). Vincular a Consultoria/Órgãos
+   Públicos/Cursos cria uma EMPRESA nova dentro do contrato escolhido,
+   já com "Pode emitir" — mesmo caminho de addEmpresaCurso, só que
+   pré-preenchido com o que a solicitante mandou. */
+function candidatosVinculoPedido(produto, busca){
+  const termo = String(busca||'').trim().toLowerCase();
+  const bate = (nome) => !termo || String(nome||'').toLowerCase().indexOf(termo) !== -1;
+  const out = [];
+  if(!produto || produto === 'vendas'){
+    rows.forEach(function(r){
+      const nome = r.cliente || r.venda || '';
+      if(!bate(nome)) return;
+      out.push({ produtoKey:'vendas', id:r.id, cliente:nome, rotulo: 'Sistema · ' + monthShort(r.mes) + '/' + (r.ano||2026) });
+    });
+  }
+  ENTITY_KEYS.forEach(function(key){
+    if(produto && produto !== key) return;
+    const mainField = ENTITIES[key].fields[0].key;
+    state[key].rows.forEach(function(r){
+      const nome = r[mainField] || '';
+      if(!bate(nome)) return;
+      out.push({ produtoKey:key, id:r.id, cliente:nome, rotulo: ENTITIES[key].tabLabel + ' · ' + monthShort(r.mes) + '/' + (r.ano||2026) });
+    });
+  });
+  return out.slice(0, 40);
+}
+function abrirVincularPedido(pedidoId){
+  if(!isAdmin) return;
+  modalState = { type:'vincular-pedido', pedidoId: pedidoId, produto:'', busca:'', escolhido:null };
+  render();
+}
+function setVincularProduto(v){ modalState.produto = v; modalState.escolhido = null; render(); }
+function onVincularBuscaInput(el){
+  const pos = el.selectionStart;
+  modalState.busca = el.value; modalState.escolhido = null;
+  render();
+  const novo = document.getElementById('vincular-busca');
+  if(novo){ novo.focus(); try{ novo.setSelectionRange(pos, pos); }catch(e){} }
+}
+function escolherCandidatoVinculo(produtoKey, id){
+  const c = candidatosVinculoPedido(modalState.produto, modalState.busca).find(function(x){ return x.produtoKey === produtoKey && x.id === id; });
+  modalState.escolhido = c || null;
+  render();
+}
+async function finalizarVinculoPedido(pedidoId, tabela, id){
+  try{
+    await sb('/rest/v1/pedidos_nota?id=eq.'+pedidoId, {
+      method:'PATCH', headers:{'Prefer':'return=minimal'},
+      body:{ status:'vinculado', vinculado_tabela:tabela, vinculado_id:id, vinculado_em:new Date().toISOString(), vinculado_por: authSession.user.id },
+    });
+  }catch(e){
+    console.error('Falha ao marcar pedido como vinculado', e);
+    showAlert('O lançamento foi criado/atualizado, mas não consegui marcar o pedido como resolvido no banco. Recarregue a página pra conferir.');
+  }
+  await tryLoadPedidosNotaAsync();
+  render();
+}
+function confirmarVinculoPedido(){
+  const m = modalState;
+  if(!m || !isAdmin || !m.escolhido) return;
+  const pedido = (pedidosNota||[]).find(function(p){ return p.id === m.pedidoId; });
+  if(!pedido) return;
+  const alvo = m.escolhido;
+  closeModal();
+  if(alvo.produtoKey === 'vendas'){
+    const r = rows.find(function(x){ return x.id === alvo.id; });
+    if(!r) return;
+    if(!r.cnpj && pedido.cnpj) r.cnpj = pedido.cnpj;
+    r.podeEmitir = true; r.podeEmitirEm = new Date().toISOString();
+    persist();
+    render();
+    finalizarVinculoPedido(pedido.id, 'vendas', r.id);
+  } else {
+    const key = alvo.produtoKey;
+    const r = state[key].rows.find(function(x){ return x.id === alvo.id; });
+    if(!r) return;
+    if(!Array.isArray(r.empresas)) r.empresas = [];
+    const nova = {
+      id: Date.now() + r.empresas.length,
+      nome: pedido.cliente, cnpj: pedido.cnpj||'', responsavel: pedido.responsavel||'',
+      telefone: pedido.telefone||'', email: pedido.email||'', valor: pedido.valor,
+      observacoes: pedido.observacoes||'', notaEmitida:false, notaEmitidaEm:null,
+      podeEmitir:true, podeEmitirEm:new Date().toISOString(),
+    };
+    r.empresas.push(nova);
+    persistEmpresaCurso(nova, r.id);
+    render();
+    finalizarVinculoPedido(pedido.id, 'lancamento_empresas', nova.id);
+  }
+}
+function renderPedidosNotaPanel(){
+  const lista = pedidosNota || [];
+  if(lista.length === 0) return '';
+  const pendentes = lista.filter(function(p){ return p.status !== 'vinculado'; });
+  const resolvidos = lista.filter(function(p){ return p.status === 'vinculado'; });
+  const linha = function(p){
+    return `<tr>
+      <td>${esc(p.cliente)}</td>
+      <td>${esc(formatCnpj(p.cnpj)) || '—'}</td>
+      <td>${esc(p.responsavel) || '—'}</td>
+      <td>${esc(p.telefone) || '—'}</td>
+      <td>${esc(p.email) || '—'}</td>
+      <td class="num">${p.valor===null||p.valor===undefined?'—':fmtMoney(p.valor)}</td>
+      <td>${p.produto ? esc(p.produto) : '—'}</td>
+      <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
+      <td>${p.status==='vinculado' ? '<span class="usuario-tag fin">Vinculado ✓</span>' : `<button class="modal-btn modal-btn-ghost" onclick="abrirVincularPedido(${p.id})">Vincular</button>`}</td>
+    </tr>`;
+  };
+  return panel('pedidos-nota', '📋 Pedidos de Nota' + (pendentes.length ? ` (${pendentes.length} pendente${pendentes.length===1?'':'s'})` : ''), `
+    <div class="table-scroll">
+      <table class="table-plain">
+        <thead><tr><th>Cliente</th><th>CNPJ</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th class="num">Valor</th><th>Produto</th><th>Pedido em</th><th></th></tr></thead>
+        <tbody>${pendentes.map(linha).join('')}${resolvidos.map(linha).join('')}</tbody>
+      </table>
+    </div>
+  `, { flush:true, meta: `<b>${lista.length}</b> pedido${lista.length===1?'':'s'}` });
 }
 
 /* O quadro das notas do período, com o visto. É o mesmo para o financeiro
@@ -14093,17 +14434,21 @@ let usuariosErro = '';
 let usuarioForm = { email:'', senha:'', nivel:'restrita', pessoa:'' };
 let usuarioCriado = null;   // {email, senha} — pra mostrar a senha uma vez
 
-/* Os três níveis de acesso, num lugar só — o cadastro e a janela de
+/* Os quatro níveis de acesso, num lugar só — o cadastro e a janela de
    "mudar acesso" desenham o mesmo seletor, então a explicação de cada
    nível nunca fica diferente entre as duas telas.
-     admin      → vê e edita tudo, e gerencia contas;
-     financeiro → vê o valor das notas de todas as origens, e nenhuma
-                  comissão de ninguém (nem a própria);
-     restrita   → é uma vendedora: vê só os lançamentos dela. */
+     admin       → vê e edita tudo, e gerencia contas;
+     financeiro  → vê o valor das notas de todas as origens, e nenhuma
+                   comissão de ninguém (nem a própria);
+     solicitante → não vê NADA do sistema — só uma tela própria pra
+                   pedir nota (cliente/CNPJ/valor), sem lançamento,
+                   sem comissão, sem valor de ninguém;
+     restrita    → é uma vendedora: vê só os lançamentos dela. */
 const NIVEIS_ACESSO = [
-  { id:'admin',      titulo:'Administrador', texto:'vê e edita tudo, e pode gerenciar usuários' },
-  { id:'financeiro', titulo:'Financeiro',     texto:'vê o valor de contrato de todas as notas (sistema, renovações, consultoria, órgãos públicos e cursos) e <b>nenhuma comissão</b> — nem percentual, nem bônus, nem meta, de ninguém' },
-  { id:'restrita',   titulo:'Restrita',       texto:'é uma vendedora: vê apenas os lançamentos em que o nome dela aparece' },
+  { id:'admin',       titulo:'Administrador', texto:'vê e edita tudo, e pode gerenciar usuários' },
+  { id:'financeiro',  titulo:'Financeiro',     texto:'vê o valor de contrato de todas as notas (sistema, renovações, consultoria, órgãos públicos e cursos) e <b>nenhuma comissão</b> — nem percentual, nem bônus, nem meta, de ninguém' },
+  { id:'solicitante', titulo:'Solicitante',    texto:'não vê <b>nada</b> do sistema — só uma tela própria pra pedir nota (cliente, CNPJ, valor); o admin vincula o pedido ao lançamento certo' },
+  { id:'restrita',    titulo:'Restrita',       texto:'é uma vendedora: vê apenas os lançamentos em que o nome dela aparece' },
 ];
 function seletorNivelHtml(nivelAtual, onchangeJs, grupo){
   return '<div class="usuario-niveis">' + NIVEIS_ACESSO.map(function(n){
@@ -14183,7 +14528,7 @@ async function criarUsuario(){
   try{
     await chamarAdminUsuarios({
       acao:'criar', email:f.email.trim(), senha:f.senha,
-      admin: f.nivel === 'admin', financeiro: f.nivel === 'financeiro',
+      admin: f.nivel === 'admin', financeiro: f.nivel === 'financeiro', solicitante: f.nivel === 'solicitante',
       pessoa: f.pessoa.trim(),
     });
     usuarioCriado = { email: f.email.trim(), senha: f.senha };
@@ -14218,7 +14563,7 @@ function abrirAcessoUsuario(id){
   const u = (usuariosLista||[]).find(x => x.id === id);
   if(!u) return;
   modalState = { type:'acesso-usuario', id: id, email: u.email,
-                 nivel: u.admin ? 'admin' : (u.financeiro ? 'financeiro' : 'restrita'),
+                 nivel: u.admin ? 'admin' : (u.financeiro ? 'financeiro' : (u.solicitante ? 'solicitante' : 'restrita')),
                  pessoa: u.pessoa || '' };
   render();
 }
@@ -14235,7 +14580,7 @@ async function salvarAcessoUsuario(){
     render(); return;
   }
   const dados = { acao:'acesso', id:m.id,
-                  admin: m.nivel === 'admin', financeiro: m.nivel === 'financeiro',
+                  admin: m.nivel === 'admin', financeiro: m.nivel === 'financeiro', solicitante: m.nivel === 'solicitante',
                   pessoa: String(m.pessoa||'').trim() };
   closeModal();
   usuariosCarregando = true; usuariosErro = ''; render();
@@ -14296,7 +14641,12 @@ function renderUsuariosSection(){
         é por ele que o HUB Comercial decide o que essa pessoa enxerga. "Rios" e "Ana Rios" são nomes
         diferentes para o HUB Comercial.
       </div>` : usuarioForm.nivel === 'admin' ? `
-      <div class="usuario-dica">Conta de administrador não precisa de nome: ela vê tudo.</div>` : `
+      <div class="usuario-dica">Conta de administrador não precisa de nome: ela vê tudo.</div>` : usuarioForm.nivel === 'solicitante' ? `
+      <div class="usuario-dica">
+        A conta solicitante não leva nome de pessoa e não vê nenhum lançamento, comissão ou valor —
+        só uma tela própria pra pedir nota (cliente, CNPJ, responsável, valor). Você vincula cada
+        pedido ao lançamento certo em Resumo Geral, no quadro "Pedidos de Nota".
+      </div>` : `
       <div class="usuario-dica">
         A conta do financeiro não leva nome de pessoa: ela não é de ninguém em particular. Vê o
         valor das notas de todo mundo justamente para conferir faturamento — e o HUB Comercial esconde
@@ -14318,6 +14668,7 @@ function renderUsuariosSection(){
         ? '<span class="usuario-tag alerta">sem acesso</span>'
         : (u.admin ? '<span class="usuario-tag admin">Administrador</span>'
           : u.financeiro ? '<span class="usuario-tag fin">Financeiro</span>'
+          : u.solicitante ? '<span class="usuario-tag">Solicitante</span>'
                    : '<span class="usuario-tag">Restrita</span>')}</td>
       <td>${u.pessoa ? esc(u.pessoa) : '—'}</td>
       <td>${quando}</td>
@@ -14427,6 +14778,10 @@ function render(){
     root.innerHTML = `<div class="app-loading"><div class="spinner"></div><div>Carregando seus dados...</div></div>`;
     return;
   }
+  // A conta solicitante tem uma tela própria, sem o shell normal —
+  // ela não deve nem passar perto de sidebar/abas/relatórios, que
+  // mostram lançamento e valor de todo mundo.
+  if(isSolicitante){ renderSolicitarNotaScreen(); return; }
   const focoGuardado = focoParaRestaurar();
   ensurePartnersIncludeCurrent();
   if(isFinanceiro && ABAS_FINANCEIRO.indexOf(activeTab) === -1) activeTab = 'parceiros';
@@ -14591,6 +14946,7 @@ function boot(){
     tryLoadPrazosEmissaoNotaAsync(),
     tryLoadRenovacaoPessoasAsync(),
     tryLoadRenovacoesAsync(),
+    tryLoadPedidosNotaAsync(),
   ];
   Promise.allSettled(loaders).then(function(){
     initialDataLoaded = true;
