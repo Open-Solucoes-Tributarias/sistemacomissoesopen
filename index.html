@@ -374,6 +374,7 @@
   }
   tr.row-duplicate{background:#F5F3FF;}
   tr.row-duplicate:hover{background:#EDE9FE;}
+  tr.linha-destacada{background:#FEF3C7 !important; outline:2px solid #FCD34D; outline-offset:-2px;}
   .atraso-badge{
     display:inline-block;font-size:11px;font-weight:700;
     background:#FEE2E2;color:#B91C1C;padding:2px 8px;border-radius:999px;white-space:nowrap;
@@ -1269,6 +1270,8 @@
   .usuario-tag.admin{background:var(--primary-soft);color:var(--primary);}
   .usuario-tag.fin{background:#E8F3EC;color:#166534;}
   .usuario-tag.alerta{background:#FFF8E8;color:#B45309;}
+  button.usuario-tag.link-tag{border:none;cursor:pointer;font-family:inherit;}
+  button.usuario-tag.link-tag:hover{filter:brightness(0.95);text-decoration:underline;}
   .usuario-nunca{color:var(--ink-faint);font-style:italic;}
   .senha-nova{
     border:2px solid var(--primary);border-radius:var(--radius-md);
@@ -1415,6 +1418,7 @@
   .pode-emitir-btn.on{background:#FEF3C7;border-color:#FCD34D;color:#B45309;}
   .nota-selo{font-size:11px;font-weight:800;color:#15803D;white-space:nowrap;}
   .nota-selo-pode{color:#B45309;}
+  .nota-selo-bloqueada{color:#B91C1C;}
   .nota-editar-data{
     margin-left:4px;font-size:11px;cursor:pointer;background:none;border:none;padding:2px;
     opacity:.6;transition:opacity .15s;vertical-align:middle;
@@ -1846,6 +1850,9 @@ let fechamentosMes = [];   // [{ano, mes, fechadoEm}] — quando cada mês foi f
 let prazosEmissaoNota = [];   // [{id, entidade, nomeCliente, dia, avista}] — dia fixo do mês combinado pra emitir a nota de um contrato Mensal/Plano Premium (lembrete só pro financeiro); avista=true marca "pago à vista, sem nota recorrente" (dia fica null)
 let atualizandoNotas = false;   // "↻ Atualizar" do quadro de notas — busca de novo do banco, sem recarregar a página inteira
 let novaVersaoDisponivel = false;   // true quando checkForNewVersion() percebe que o HTML publicado mudou — ver checkForNewVersion()
+let dadosDesatualizados = false;   // true quando verificarDadosDesatualizados() percebe que vendas/lançamentos mudaram no banco depois que esta aba carregou — ver verificarDadosDesatualizados()
+let assinaturaVendasCheck = null;
+let assinaturaLancamentosCheck = null;
 let metas = [];      // regras de meta: gatilho da empresa que premia uma pessoa
 let metasNextId = 1;
 let pagamentosMonthFilter = "Todos";
@@ -1992,7 +1999,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-22-02';
+const APP_BUILD = '2026-09-22-03';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -2052,7 +2059,7 @@ async function loadCurrentUserAccess(){
    lida por essa conta — a fila em si é tudo que a RLS deixa passar. */
 let pedidosNota = null;
 let carregandoPedidosNota = false;
-let pedidoNotaForm = { cliente:'', cnpj:'', responsavel:'', telefone:'', email:'', valor:null, produto:'', observacoes:'' };
+let pedidoNotaForm = { cliente:'', cnpj:'', responsavel:'', telefone:'', email:'', valor:null, produto:'', observacoes:'', dataMinima:'', empenho:'' };
 let enviandoPedidoNota = false;
 let pedidoNotaErro = '';
 let pedidoNotaEnviado = false;
@@ -2067,6 +2074,7 @@ async function tryLoadPedidosNotaAsync(){
         telefone: d.telefone||'', email: d.email||'', valor: d.valor, produto: d.produto||'',
         observacoes: d.observacoes||'', status: d.status||'pendente', criadoEm: d.criado_em,
         vinculadoTabela: d.vinculado_tabela||null, vinculadoId: d.vinculado_id||null,
+        dataMinimaEmissao: d.data_minima_emissao||null, empenho: d.empenho||'',
       };
     });
   }catch(e){
@@ -2092,9 +2100,10 @@ async function enviarPedidoNota(){
         cliente: f.cliente.trim(), cnpj: cnpjDigitos(f.cnpj), responsavel: f.responsavel.trim(),
         telefone: f.telefone.trim(), email: f.email.trim(), valor: numOrNull(f.valor),
         produto: f.produto || null, observacoes: f.observacoes.trim(),
+        data_minima_emissao: f.dataMinima || null, empenho: f.empenho.trim() || null,
       }],
     });
-    pedidoNotaForm = { cliente:'', cnpj:'', responsavel:'', telefone:'', email:'', valor:null, produto:'', observacoes:'' };
+    pedidoNotaForm = { cliente:'', cnpj:'', responsavel:'', telefone:'', email:'', valor:null, produto:'', observacoes:'', dataMinima:'', empenho:'' };
     pedidoNotaEnviado = true;
     await tryLoadPedidosNotaAsync();
   }catch(e){
@@ -2115,12 +2124,13 @@ function renderSolicitarNotaScreen(){
     : pedidosNota.length === 0
       ? `<div class="meta-empty" style="padding:16px 0;">Você ainda não pediu nenhuma nota.</div>`
       : `<div class="table-scroll"><table class="table-plain">
-          <thead><tr><th>Cliente</th><th class="num">Valor</th><th>Pedido em</th><th>Situação</th></tr></thead>
+          <thead><tr><th>Cliente</th><th class="num">Valor</th><th>Pedido em</th><th>Não emitir antes de</th><th>Situação</th></tr></thead>
           <tbody>${pedidosNota.map(function(p){ return `
             <tr>
               <td>${esc(p.cliente)}</td>
               <td class="num">${p.valor===null||p.valor===undefined?'—':fmtMoney(p.valor)}</td>
               <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
+              <td>${p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—'}</td>
               <td>${p.status==='vinculado' ? '<span class="usuario-tag fin">Vinculado ✓</span>' : '<span class="usuario-tag">Pendente</span>'}</td>
             </tr>
           `; }).join('')}</tbody>
@@ -2158,6 +2168,10 @@ function renderSolicitarNotaScreen(){
               <input type="text" value="${esc(f.telefone)}" oninput="onPedidoNotaInput(this,'telefone')" /></label>
           </div>
           <div class="meta-form-grid">
+            <label class="meta-field"><span>Número do empenho (se necessário)</span>
+              <input type="text" placeholder="Só pra contrato com órgão público" value="${esc(f.empenho)}" oninput="onPedidoNotaInput(this,'empenho')" /></label>
+          </div>
+          <div class="meta-form-grid">
             <label class="meta-field"><span>E-mail</span>
               <input type="email" value="${esc(f.email)}" oninput="onPedidoNotaInput(this,'email')" /></label>
             <label class="meta-field"><span>Valor</span>
@@ -2165,15 +2179,19 @@ function renderSolicitarNotaScreen(){
                 <input type="number" step="0.01" placeholder="0,00" value="${f.valor===null||f.valor===undefined?'':f.valor}" oninput="onPedidoNotaInput(this,'valor')" /></div>
             </label>
           </div>
-          <label class="meta-field"><span>Produto (se souber)</span>
-            <select onchange="onPedidoNotaInput(this,'produto')">
-              <option value="">— não sei / outro —</option>
-              <option value="Sistema" ${f.produto==='Sistema'?'selected':''}>Sistema</option>
-              <option value="Consultoria" ${f.produto==='Consultoria'?'selected':''}>Consultoria</option>
-              <option value="Órgãos Públicos" ${f.produto==='Órgãos Públicos'?'selected':''}>Órgãos Públicos</option>
-              <option value="Cursos" ${f.produto==='Cursos'?'selected':''}>Cursos</option>
-            </select>
-          </label>
+          <div class="meta-form-grid">
+            <label class="meta-field"><span>Produto (se souber)</span>
+              <select onchange="onPedidoNotaInput(this,'produto')">
+                <option value="">— não sei / outro —</option>
+                <option value="Sistema" ${f.produto==='Sistema'?'selected':''}>Sistema</option>
+                <option value="Consultoria" ${f.produto==='Consultoria'?'selected':''}>Consultoria</option>
+                <option value="Órgãos Públicos" ${f.produto==='Órgãos Públicos'?'selected':''}>Órgãos Públicos</option>
+                <option value="Cursos" ${f.produto==='Cursos'?'selected':''}>Cursos</option>
+              </select>
+            </label>
+            <label class="meta-field"><span>Não emitir antes de (opcional)</span>
+              <input type="date" value="${esc(f.dataMinima||'')}" oninput="onPedidoNotaInput(this,'dataMinima')" /></label>
+          </div>
           <label class="meta-field"><span>Observações</span>
             <input type="text" value="${esc(f.observacoes)}" oninput="onPedidoNotaInput(this,'observacoes')" /></label>
 
@@ -2473,6 +2491,19 @@ function sbRpc(fn, args){
   return sb('/rest/v1/rpc/' + fn, { method: 'POST', body: args || {} });
 }
 
+/* sb() joga tudo num Error genérico ("Supabase 400: {json...}") — pega de
+   volta a mensagem que a própria função no banco escreveu (ex: bloqueio
+   de data mínima de emissão), pra mostrar isso pra pessoa em vez de um
+   aviso genérico de "não consegui gravar". */
+function mensagemErroSupabase(e){
+  try{
+    const texto = String((e && e.message) || '');
+    const raw = texto.slice(texto.indexOf(': ') + 2);
+    const corpo = JSON.parse(raw);
+    return (corpo && corpo.message) ? corpo.message : null;
+  }catch(_e){ return null; }
+}
+
 /* ---------- Supabase Storage (anexo de nota fiscal) ----------
    Só isso usa Storage no sistema todo — o resto é banco de dados puro.
    Não reaproveita sb() porque o corpo aqui é o arquivo em si (binário),
@@ -2575,7 +2606,7 @@ function checkStorageAvailability(){
 }
 
 /* ---------- Sistema (vendas + vendas_comissoes) ---------- */
-const VENDA_NON_SELLER_FIELDS = new Set(['id','ano','mes','cliente','venda','valor','parceiro','participacao','formaPagamento','colaborador','observacoes','vendedor2','vendedor3','vendedorResponsavel','pago','mesPagamento','pagoEm','fechamentoMes','parcelaLabel','comissaoPercents','renovacao','novoContrato','upgrade','notaEmitida','notaEmitidaEm']);
+const VENDA_NON_SELLER_FIELDS = new Set(['id','ano','mes','cliente','venda','valor','parceiro','participacao','formaPagamento','colaborador','observacoes','vendedor2','vendedor3','vendedorResponsavel','pago','mesPagamento','pagoEm','fechamentoMes','parcelaLabel','comissaoPercents','renovacao','novoContrato','upgrade','notaEmitida','notaEmitidaEm','dataMinimaEmissao']);
 
 function persist(){
   saving = true; updateSaveStatus();
@@ -2597,6 +2628,7 @@ function persist(){
             // devolve para o padrão, e o visto do financeiro sumiria
             nota_emitida: !!r.notaEmitida, nota_emitida_em: r.notaEmitidaEm || null,
             pode_emitir: !!r.podeEmitir, pode_emitir_em: r.podeEmitirEm || null,
+            data_minima_emissao: r.dataMinimaEmissao || null,
           };
         });
         await sbUpsert('vendas', dbRows, 'id');
@@ -2655,6 +2687,7 @@ async function tryLoadFromStorageAsync(){
           vendedorResponsavel: d.vendedor_responsavel || '',
           notaEmitida: !!d.nota_emitida, notaEmitidaEm: d.nota_emitida_em || null,
           podeEmitir: !!d.pode_emitir, podeEmitirEm: d.pode_emitir_em || null,
+          dataMinimaEmissao: d.data_minima_emissao || null,
           notaArquivoPath: d.nota_arquivo_path || null, notaArquivoNome: d.nota_arquivo_nome || null,
         };
         SELLERS.forEach(function(s){ r[s.key] = null; });
@@ -2833,6 +2866,7 @@ async function tryLoadEntityFromStorageAsync(key){
           telefone: e.telefone||'', email: e.email||'',
           notaEmitida: !!e.nota_emitida, notaEmitidaEm: e.nota_emitida_em || null,
           podeEmitir: !!e.pode_emitir, podeEmitirEm: e.pode_emitir_em || null,
+          dataMinimaEmissao: e.data_minima_emissao || null,
           notaArquivoPath: e.nota_arquivo_path || null, notaArquivoNome: e.nota_arquivo_nome || null,
         });
       });
@@ -5090,7 +5124,7 @@ function renderModal(){
                      oninput="onEmpresaValorInput(this,${e.id})" onchange="updateEmpresaCurso(${e.id},'valor',this.value)" />
             </div>
           </td>
-          <td>${notaEmissaoBotoesHtml('lancamento_empresas', e.id, '', e.podeEmitir, e.podeEmitirEm, e.notaEmitida, e.notaEmitidaEm, podeVisar)}</td>
+          <td>${notaEmissaoBotoesHtml('lancamento_empresas', e.id, '', e.podeEmitir, e.podeEmitirEm, e.notaEmitida, e.notaEmitidaEm, podeVisar, e.dataMinimaEmissao)}</td>
           <td>${podeVisar
             ? (e.notaArquivoPath
               ? `<span class="anexo-arquivo">
@@ -5265,10 +5299,10 @@ function renderModal(){
         <div class="modal-box modal-box-xwide">
           <div class="modal-msg">Vincular pedido de nota</div>
           <div class="divisao-explica">
-            Pedido de <b>${esc(pedido.cliente)}</b>${pedido.valor!==null&&pedido.valor!==undefined?' · '+fmtMoney(pedido.valor):''}${pedido.cnpj?' · CNPJ '+esc(formatCnpj(pedido.cnpj)):''}.
+            Pedido de <b>${esc(pedido.cliente)}</b>${pedido.valor!==null&&pedido.valor!==undefined?' · '+fmtMoney(pedido.valor):''}${pedido.cnpj?' · CNPJ '+esc(formatCnpj(pedido.cnpj)):''}${pedido.empenho?' · Empenho '+esc(pedido.empenho):''}.
             Escolha a qual lançamento ele pertence: pra Sistema, vincula direto na venda; pra Consultoria/Órgãos
-            Públicos/Cursos, cria uma empresa nova dentro do contrato escolhido, já com os dados do pedido e
-            "Pode emitir" marcado.
+            Públicos/Cursos, cria uma empresa nova dentro do contrato escolhido, já com os dados do pedido.
+            ${pedido.dataMinimaEmissao ? `O pedido pediu pra <b>não emitir antes de ${formatarDataIso(pedido.dataMinimaEmissao)}</b> — até lá, fica travado.` : '"Pode emitir" já sai marcado.'}
           </div>
           <div class="filters-row" style="margin:0 0 12px;gap:10px;">
             <select onchange="setVincularProduto(this.value)">
@@ -9011,7 +9045,7 @@ function notasDoAno(){
     out.push({mes:r.mes, origem:'Sistema', nome:r.cliente || r.venda || '—', valor:Number(r.valor)||0,
               pago:r.pago, mesPagamento:r.mesPagamento, forma:r.formaPagamento||'',
               tabela:'vendas', entKey:'', id:r.id, emitida:!!r.notaEmitida, emitidaEm:r.notaEmitidaEm||null,
-              podeEmitir:!!r.podeEmitir, podeEmitirEm:r.podeEmitirEm||null,
+              podeEmitir:!!r.podeEmitir, podeEmitirEm:r.podeEmitirEm||null, dataMinimaEmissao:r.dataMinimaEmissao||null,
               notaArquivoPath:r.notaArquivoPath||null, notaArquivoNome:r.notaArquivoNome||null});
   });
   ENTITY_KEYS.forEach(function(key){
@@ -9025,7 +9059,7 @@ function notasDoAno(){
                     nome:(r[campo]||'—') + ' — ' + (e.nome||'empresa sem nome') + (e.cnpj ? ' (CNPJ ' + formatCnpj(e.cnpj) + ')' : ''),
                     valor:Number(e.valor)||0, pago:r.pago, mesPagamento:r.mesPagamento, forma:r.formaPagamento||'',
                     tabela:'lancamento_empresas', entKey:'', id:e.id, emitida:!!e.notaEmitida, emitidaEm:e.notaEmitidaEm||null,
-                    podeEmitir:!!e.podeEmitir, podeEmitirEm:e.podeEmitirEm||null,
+                    podeEmitir:!!e.podeEmitir, podeEmitirEm:e.podeEmitirEm||null, dataMinimaEmissao:e.dataMinimaEmissao||null,
                     notaArquivoPath:e.notaArquivoPath||null, notaArquivoNome:e.notaArquivoNome||null});
         });
         return;
@@ -9041,6 +9075,19 @@ function notasDoAno(){
     const d = MONTHS.indexOf(a.mes) - MONTHS.indexOf(b.mes);
     return d !== 0 ? d : String(a.nome).localeCompare(String(b.nome), 'pt-BR');
   });
+}
+
+/* Notas já conferidas ("Pode emitir") mas ainda não emitidas — é a fila
+   de quem vai gerar a nota de fato. Usado pelo aviso que avisa a Marli
+   assim que abre o sistema, sem precisar ela ir catar isso dentro de
+   Pagamentos Realizados. */
+function notasProntasParaEmitir(){
+  return notasDoAno().filter(function(n){ return n.podeEmitir && !n.emitida; });
+}
+function irParaNotasProntas(){
+  activeTab = 'parceiros';
+  notaFiltro = 'PodeEmitir';
+  render();
 }
 
 /* ---------- Lembrete de dia fixo pra emitir nota (Mensal/Plano Premium) ----------
@@ -9295,7 +9342,7 @@ async function toggleNotaEmitida(tabela, id, entKey){
     alvo.notaEmitida = !novo;
     alvo.notaEmitidaEm = null;
     saveError = true;
-    showAlert('Não consegui gravar o visto desta nota. Confira a internet e tente de novo.');
+    showAlert(mensagemErroSupabase(e) || 'Não consegui gravar o visto desta nota. Confira a internet e tente de novo.');
   }finally{
     saving = false; updateSaveStatus(); render();
   }
@@ -9325,7 +9372,7 @@ async function togglePodeEmitir(tabela, id, entKey){
     alvo.podeEmitir = !novo;
     alvo.podeEmitirEm = null;
     saveError = true;
-    showAlert('Não consegui gravar "Pode emitir". Confira a internet e tente de novo.');
+    showAlert(mensagemErroSupabase(e) || 'Não consegui gravar "Pode emitir". Confira a internet e tente de novo.');
   }finally{
     saving = false; updateSaveStatus(); render();
   }
@@ -9336,11 +9383,20 @@ async function togglePodeEmitir(tabela, id, entKey){
    nota fiscal (Sistema, Empresas por lançamento e o quadro
    consolidado "Notas lançadas"). entKeyLiteral já deve vir pronto pra
    entrar direto no onclick (aspas simples, escapado se precisar). */
-function notaEmissaoBotoesHtml(tabela, id, entKeyLiteral, podeEmitir, podeEmitirEm, notaEmitida, notaEmitidaEm, podeVisar){
+function notaEmissaoBotoesHtml(tabela, id, entKeyLiteral, podeEmitir, podeEmitirEm, notaEmitida, notaEmitidaEm, podeVisar, dataMinimaEmissao){
+  // Pedido de nota pediu pra não emitir antes de uma data — enquanto ela
+  // não chega, nem "Pode emitir" nem "Emitir" aparecem pra ninguém (o
+  // bloqueio de verdade está no banco, nas RPCs marcar_pode_emitir e
+  // marcar_nota_emitida; isto aqui só evita a pessoa clicar pra nada).
+  const bloqueadoAte = (!notaEmitida && dataMinimaEmissao && dataMinimaEmissao > hojeIsoDate()) ? dataMinimaEmissao : null;
   if(!podeVisar){
     if(notaEmitida) return '<span class="nota-selo">✓ Emitida</span>';
     if(podeEmitir) return '<span class="nota-selo nota-selo-pode">Pode emitir</span>';
+    if(bloqueadoAte) return `<span class="nota-selo nota-selo-bloqueada" title="Pedido pediu pra não emitir antes desta data">🔒 até ${formatarDataIso(bloqueadoAte)}</span>`;
     return '—';
+  }
+  if(bloqueadoAte){
+    return `<span class="nota-selo nota-selo-bloqueada" title="Este pedido só pode ser liberado/emitido a partir de ${formatarDataIso(bloqueadoAte)}">🔒 Só a partir de ${formatarDataIso(bloqueadoAte)}</span>`;
   }
   const podeBtn = `<button type="button" class="pode-emitir-btn${podeEmitir?' on':''}"
                      title="${podeEmitir ? 'Liberada para emitir — clique para desmarcar' : 'Marcar que este lançamento já está conferido e pronto pra emitir a nota'}"
@@ -9396,7 +9452,7 @@ async function gravarDataEmissao(tabela, id, entKey, isoData){
     console.error('Falha ao corrigir a data de emissão', e);
     alvo.notaEmitidaEm = anterior;
     saveError = true;
-    showAlert('Não consegui corrigir a data. Confira a internet e tente de novo.');
+    showAlert(mensagemErroSupabase(e) || 'Não consegui corrigir a data. Confira a internet e tente de novo.');
   }finally{
     saving = false; updateSaveStatus(); render();
   }
@@ -9406,6 +9462,20 @@ function dataCurta(iso){
   if(!iso) return '';
   const d = new Date(iso);
   return isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
+}
+
+/* Formata uma data "pura" (YYYY-MM-DD, sem hora — o formato de
+   <input type="date"> e da coluna data_minima_emissao) como DD/MM/AAAA
+   direto no texto, sem passar por Date: um new Date('YYYY-MM-DD') é lido
+   como meia-noite UTC, e em fuso negativo (Brasil) isso pode voltar um
+   dia — nunca é a data que a pessoa realmente digitou. */
+function formatarDataIso(isoDate){
+  const m = String(isoDate||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? (m[3]+'/'+m[2]+'/'+m[1]) : '';
+}
+function hojeIsoDate(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 
 /* A tela carrega os dados uma vez só, quando a aba abre — edições de
@@ -9494,12 +9564,18 @@ function confirmarVinculoPedido(){
   const pedido = (pedidosNota||[]).find(function(p){ return p.id === m.pedidoId; });
   if(!pedido) return;
   const alvo = m.escolhido;
+  // Se o pedido veio com "não emitir antes de" no futuro, o vínculo já
+  // nasce travado — "Pode emitir" só liga sozinho quando a data chegar
+  // (o bloqueio de verdade está nas RPCs marcar_pode_emitir/marcar_nota_emitida).
+  const minima = pedido.dataMinimaEmissao || null;
+  const liberaJa = !minima || minima <= hojeIsoDate();
   closeModal();
   if(alvo.produtoKey === 'vendas'){
     const r = rows.find(function(x){ return x.id === alvo.id; });
     if(!r) return;
     if(!r.cnpj && pedido.cnpj) r.cnpj = pedido.cnpj;
-    r.podeEmitir = true; r.podeEmitirEm = new Date().toISOString();
+    r.dataMinimaEmissao = minima;
+    if(liberaJa){ r.podeEmitir = true; r.podeEmitirEm = new Date().toISOString(); }
     persist();
     render();
     finalizarVinculoPedido(pedido.id, 'vendas', r.id);
@@ -9513,13 +9589,55 @@ function confirmarVinculoPedido(){
       nome: pedido.cliente, cnpj: pedido.cnpj||'', responsavel: pedido.responsavel||'',
       telefone: pedido.telefone||'', email: pedido.email||'', valor: pedido.valor,
       observacoes: pedido.observacoes||'', notaEmitida:false, notaEmitidaEm:null,
-      podeEmitir:true, podeEmitirEm:new Date().toISOString(),
+      dataMinimaEmissao: minima,
+      podeEmitir: liberaJa, podeEmitirEm: liberaJa ? new Date().toISOString() : null,
     };
     r.empresas.push(nova);
-    persistEmpresaCurso(nova, r.id);
+    persistEmpresaCurso(nova, r.id, { pode_emitir: nova.podeEmitir, pode_emitir_em: nova.podeEmitirEm, data_minima_emissao: nova.dataMinimaEmissao });
     render();
     finalizarVinculoPedido(pedido.id, 'lancamento_empresas', nova.id);
   }
+}
+/* "Vinculado ✓" sozinho não dizia ONDE — a pessoa via o pedido resolvido
+   mas não achava o lançamento correspondente na tela. Isto leva direto
+   pra lá: Sistema rola até a linha e pisca; Consultoria/Órgãos
+   Públicos/Cursos abre o modal "Empresas por lançamento" já na empresa
+   certa, que é onde ela mora de fato. */
+function irParaLancamentoVinculado(pedidoId){
+  if(!isAdmin) return;
+  const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
+  if(!pedido || pedido.status !== 'vinculado' || !pedido.vinculadoTabela || !pedido.vinculadoId) return;
+  if(pedido.vinculadoTabela === 'vendas'){
+    const r = rows.find(function(x){ return x.id === pedido.vinculadoId; });
+    if(!r){ showAlert('Não encontrei mais esse lançamento no Sistema — pode ter sido apagado.'); return; }
+    yearFilter = r.ano || 2026;
+    activeTab = 'vendas';
+    filter = 'Todos'; naturezaFilter = 'Todas'; sellerFilter = 'Todas';
+    searchCliente = ''; searchParceiro = ''; searchColaborador = '';
+    render();
+    setTimeout(function(){
+      const el = document.getElementById('venda-row-' + r.id);
+      if(!el) return;
+      el.scrollIntoView({behavior:'smooth', block:'center'});
+      el.classList.add('linha-destacada');
+      setTimeout(function(){ el.classList.remove('linha-destacada'); }, 2500);
+    }, 60);
+    return;
+  }
+  for(let k = 0; k < ENTITY_KEYS.length; k++){
+    const key = ENTITY_KEYS[k];
+    if(!ENTITIES[key].hasEmpresas) continue;
+    const pai = state[key].rows.find(function(r){ return (r.empresas||[]).some(function(e){ return e.id === pedido.vinculadoId; }); });
+    if(pai){
+      yearFilter = pai.ano || 2026;
+      activeTab = key;
+      state[key].filter = 'Todos';
+      state[key].search.main = '';
+      abrirEmpresasCurso(key, pai.id);
+      return;
+    }
+  }
+  showAlert('Não encontrei mais esse lançamento — pode ter sido apagado.');
 }
 function renderPedidosNotaPanel(){
   const lista = pedidosNota || [];
@@ -9535,14 +9653,18 @@ function renderPedidosNotaPanel(){
       <td>${esc(p.email) || '—'}</td>
       <td class="num">${p.valor===null||p.valor===undefined?'—':fmtMoney(p.valor)}</td>
       <td>${p.produto ? esc(p.produto) : '—'}</td>
+      <td>${p.empenho ? esc(p.empenho) : '—'}</td>
       <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
-      <td>${p.status==='vinculado' ? '<span class="usuario-tag fin">Vinculado ✓</span>' : `<button class="modal-btn modal-btn-ghost" onclick="abrirVincularPedido(${p.id})">Vincular</button>`}</td>
+      <td>${p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—'}</td>
+      <td>${p.status==='vinculado'
+        ? `<button type="button" class="usuario-tag fin link-tag" title="Ver o lançamento vinculado" onclick="irParaLancamentoVinculado(${p.id})">Vinculado ✓ — ver lançamento</button>`
+        : `<button class="modal-btn modal-btn-ghost" onclick="abrirVincularPedido(${p.id})">Vincular</button>`}</td>
     </tr>`;
   };
   return panel('pedidos-nota', '📋 Pedidos de Nota' + (pendentes.length ? ` (${pendentes.length} pendente${pendentes.length===1?'':'s'})` : ''), `
     <div class="table-scroll">
       <table class="table-plain">
-        <thead><tr><th>Cliente</th><th>CNPJ</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th class="num">Valor</th><th>Produto</th><th>Pedido em</th><th></th></tr></thead>
+        <thead><tr><th>Cliente</th><th>CNPJ</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th class="num">Valor</th><th>Produto</th><th>Empenho</th><th>Pedido em</th><th>Não emitir antes de</th><th></th></tr></thead>
         <tbody>${pendentes.map(linha).join('')}${resolvidos.map(linha).join('')}</tbody>
       </table>
     </div>
@@ -9617,7 +9739,7 @@ function renderNotasPanel(){
             <td>${esc(n.forma || '—')}</td>
             <td>${n.pago ? 'Pago' + (n.mesPagamento ? ' · ' + esc(monthShort(n.mesPagamento)) : '') : 'Pendente'}</td>
             <td class="num col-valor-larga">${fmtMoney(n.valor)}</td>
-            <td>${notaEmissaoBotoesHtml(n.tabela, n.id, escJs(n.entKey), n.podeEmitir, n.podeEmitirEm, n.emitida, n.emitidaEm, podeVisar)}</td>
+            <td>${notaEmissaoBotoesHtml(n.tabela, n.id, escJs(n.entKey), n.podeEmitir, n.podeEmitirEm, n.emitida, n.emitidaEm, podeVisar, n.dataMinimaEmissao)}</td>
             <td>${podeVisar
               ? (n.notaArquivoPath
                 ? `<span class="anexo-arquivo">
@@ -9767,7 +9889,7 @@ function renderVendasSection(){
   const rowsHtml = visible.length === 0
     ? `<tr class="empty-row"><td colspan="${13+visibleSellers.length}"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
     : visible.map(row => `
-      <tr class="${isVendasRowPending(row) ? 'row-pending' : ''}${isMonthClosedFor('vendas',row.ano||2026,row.mes) ? ' row-locked' : ''}${isVendasRowDuplicate(row) ? ' row-duplicate' : ''}">
+      <tr id="venda-row-${row.id}" class="${isVendasRowPending(row) ? 'row-pending' : ''}${isMonthClosedFor('vendas',row.ano||2026,row.mes) ? ' row-locked' : ''}${isVendasRowDuplicate(row) ? ' row-duplicate' : ''}">
         <td>
           <select data-id="${row.id}" onchange="onMonthSelect(this)" title="${esc(row.mes)}">
             ${MONTHS.map(m => `<option value="${m}" ${row.mes===m?'selected':''}>${monthShort(m)}</option>`).join('')}
@@ -9806,7 +9928,7 @@ function renderVendasSection(){
                   title="${pagoEmOutroMes(row) ? 'Nota de ' + esc(row.mes) + ' paga em ' + esc(row.mesPagamento) + ' — a comissão libera em ' + esc(row.mesPagamento) : 'Mês em que o cliente pagou'}"
                   onchange="onPagamentoMesSelect(this)">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>` : ''}
         </td>
-        <td>${notaEmissaoBotoesHtml('vendas', row.id, '', row.podeEmitir, row.podeEmitirEm, row.notaEmitida, row.notaEmitidaEm, podeVisar)}</td>
+        <td>${notaEmissaoBotoesHtml('vendas', row.id, '', row.podeEmitir, row.podeEmitirEm, row.notaEmitida, row.notaEmitidaEm, podeVisar, row.dataMinimaEmissao)}</td>
         <td>${podeVisar
           ? (row.notaArquivoPath
             ? `<span class="anexo-arquivo">
@@ -11597,6 +11719,7 @@ async function refrescarEmpresasDoLancamento(entKey, rowId){
         telefone: e.telefone||'', email: e.email||'',
         notaEmitida: !!e.nota_emitida, notaEmitidaEm: e.nota_emitida_em || null,
         podeEmitir: !!e.pode_emitir, podeEmitirEm: e.pode_emitir_em || null,
+        dataMinimaEmissao: e.data_minima_emissao || null,
         notaArquivoPath: e.nota_arquivo_path || null, notaArquivoNome: e.nota_arquivo_nome || null,
       };
       if(porId[e.id]) Object.assign(porId[e.id], doServidor);
@@ -11607,7 +11730,12 @@ async function refrescarEmpresasDoLancamento(entKey, rowId){
 }
 
 const empresaTimers = {};
-function persistEmpresaCurso(empresa, rowId){
+/* extra: só usado ao CRIAR a empresa (ver confirmarVinculoPedido) — pode
+   levar pode_emitir/pode_emitir_em/data_minima_emissao junto, porque
+   nesse momento a linha ainda não existe no banco, então não tem o visto
+   de ninguém pra atropelar. Fora daí, esses campos continuam de fora
+   deste payload — ver nota acima. */
+function persistEmpresaCurso(empresa, rowId, extra){
   if(!isAdmin && !isFinanceiro) return;
   const tk = 'empresa-' + empresa.id;
   if(empresaTimers[tk]) clearTimeout(empresaTimers[tk]);
@@ -11616,12 +11744,12 @@ function persistEmpresaCurso(empresa, rowId){
       saving = true; updateSaveStatus();
       try{
         // nota_emitida/nota_emitida_em nunca vão nesse payload — ver nota acima.
-        await sbUpsert('lancamento_empresas', [{
+        await sbUpsert('lancamento_empresas', [Object.assign({
           id: empresa.id, lancamento_id: rowId,
           nome: empresa.nome||'', cnpj: cnpjDigitos(empresa.cnpj), responsavel: empresa.responsavel||'',
           valor: numOrNull(empresa.valor), observacoes: empresa.observacoes||'',
           telefone: empresa.telefone||'', email: empresa.email||'',
-        }], 'id');
+        }, extra||{})], 'id');
         saveError = false;
       }catch(e){
         console.error('Falha ao salvar empresa do curso', e);
@@ -14811,6 +14939,12 @@ function render(){
         <button onclick="recarregarPagina()">Atualizar agora</button>
       </div>
     ` : ''}
+    ${(dadosDesatualizados && !novaVersaoDisponivel) ? `
+      <div class="versao-nova-aviso">
+        🔄 Os lançamentos mudaram no banco depois que esta aba abriu (outra pessoa editou, ou você mesma em outra aba) — o que você está vendo aqui pode estar desatualizado.
+        <button onclick="recarregarPagina()">Atualizar agora</button>
+      </div>
+    ` : ''}
     <div class="shell${isAdmin ? '' : ' read-only-mode'}">
       <aside class="sidebar">
         <div class="brand">
@@ -14858,11 +14992,21 @@ function render(){
           emite cada nota fiscal. Comissões, bônus e salários não aparecem aqui. Para lançar ou corrigir um contrato,
           fale com a administração do HUB Comercial.
         </div>
-      ` : (!isAdmin ? `
+      ` : ''}
+
+      ${(isFinanceiro && notasProntasParaEmitir().length) ? `
+        <div class="storage-warning read-only-notice">
+          🔔 <b>${notasProntasParaEmitir().length}</b> nota${notasProntasParaEmitir().length===1?'':'s'} nova${notasProntasParaEmitir().length===1?'':'s'}
+          para emissão — já conferida${notasProntasParaEmitir().length===1?'':'s'} ("Pode emitir"), só falta gerar a nota fiscal.
+          <button type="button" class="modal-btn modal-btn-ghost" style="margin-left:8px;" onclick="irParaNotasProntas()">Ver notas</button>
+        </div>
+      ` : ''}
+
+      ${(!isFinanceiro && !isAdmin) ? `
         <div class="storage-warning read-only-notice">
           👁 Modo somente leitura — você só vê os lançamentos relacionados a você${currentPersonName ? ` (<b>${esc(currentPersonName)}</b>)` : ''} e não pode editar. Pra lançar ou alterar algo, fale com a administração do HUB Comercial.
         </div>
-      ` : '')}
+      ` : ''}
 
       ${storageAvailable === false ? `
         <div class="storage-warning">
@@ -14986,6 +15130,39 @@ async function checkForNewVersion(){
 }
 function recarregarPagina(){ window.location.reload(); }
 
+/* Duas pessoas logadas ao mesmo tempo (ex: Soraya edita, Marli só olha)
+   não se enxergam: cada aba carrega os dados uma vez e nunca mais busca
+   de novo sozinha — Marli podia passar a tarde inteira vendo um mês
+   errado sem saber. Em vez de reescrever tudo em cima (arriscado: uma
+   troca muda o array de rows debaixo de uma edição em andamento e o
+   próximo autosave grava por cima do que a pessoa acabou de digitar —
+   é exatamente o "bug que já pegou o fechamento" mencionado alhures),
+   só avisa: busca de novo os campos que mudam com frequência, compara
+   com o que tinha da última vez, e se for diferente mostra o aviso de
+   "Atualizar agora" — mesmo botão/recarregamento inteiro de página já
+   usado pra versão nova, então nunca corre o risco de misturar dado
+   velho com novo na mesma sessão. */
+async function verificarDadosDesatualizados(){
+  if(dadosDesatualizados) return;
+  if(!authSession || !initialDataLoaded || isSolicitante) return;
+  try{
+    const [vendasAgora, lancamentosAgora] = await Promise.all([
+      sbSelectOpcional('vendas', 'select=id,mes,ano,valor,pago,mes_pagamento,nota_emitida,pode_emitir,cnpj&order=id.asc', null),
+      sbSelectOpcional('lancamentos', 'select=id,entidade,mes,ano,valor_contrato,pago,mes_pagamento,nota_emitida,pode_emitir&order=id.asc', null),
+    ]);
+    if(vendasAgora === null || lancamentosAgora === null) return;   // erro/RLS: nunca compara com "vazio" por engano
+    const novaAssinaturaVendas = JSON.stringify(vendasAgora);
+    const novaAssinaturaLancamentos = JSON.stringify(lancamentosAgora);
+    const primeiraChecagem = assinaturaVendasCheck === null;
+    if(!primeiraChecagem && (novaAssinaturaVendas !== assinaturaVendasCheck || novaAssinaturaLancamentos !== assinaturaLancamentosCheck)){
+      dadosDesatualizados = true;
+      render();
+    }
+    assinaturaVendasCheck = novaAssinaturaVendas;
+    assinaturaLancamentosCheck = novaAssinaturaLancamentos;
+  }catch(e){ /* rede instável não deve incomodar ninguém com isso */ }
+}
+
 /* Link de recuperação de senha do Supabase volta com #access_token=...&type=recovery */
 (function initAuth(){
   const hash = window.location.hash;
@@ -15012,6 +15189,17 @@ setTimeout(checkForNewVersion, 60 * 1000);
 setInterval(checkForNewVersion, 15 * 60 * 1000);
 document.addEventListener('visibilitychange', function(){
   if(document.visibilityState === 'visible') checkForNewVersion();
+});
+
+/* Mesma lógica do aviso de versão nova, mas pros DADOS: primeira
+   conferência logo cedo, depois a cada 90 segundos, e sempre que a aba
+   volta a ficar visível — é o alt-tab de volta que mais importa aqui,
+   porque é quando alguém que só deixou a aba aberta o dia inteiro
+   precisa saber que mudou algo enquanto ela não estava olhando. */
+setTimeout(verificarDadosDesatualizados, 60 * 1000);
+setInterval(verificarDadosDesatualizados, 90 * 1000);
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible') verificarDadosDesatualizados();
 });
 </script>
 </body>
