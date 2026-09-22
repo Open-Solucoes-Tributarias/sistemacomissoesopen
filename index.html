@@ -9638,7 +9638,7 @@ function confirmarVinculoPedido(){
    Públicos/Cursos abre o modal "Empresas por lançamento" já na empresa
    certa, que é onde ela mora de fato. */
 function irParaLancamentoVinculado(pedidoId){
-  if(!isAdmin) return;
+  if(!isAdmin && !isFinanceiro) return;
   const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
   if(!pedido || pedido.status !== 'vinculado' || !pedido.vinculadoTabela || !pedido.vinculadoId) return;
   if(pedido.vinculadoTabela === 'vendas'){
@@ -9698,6 +9698,9 @@ function excluirPedidoNota(pedidoId){
 function renderPedidosNotaPanel(){
   const lista = pedidosNota || [];
   if(lista.length === 0) return '';
+  // Financeiro só acompanha — vincular e excluir continuam só com o
+  // admin, que é quem decide a qual lançamento cada pedido pertence.
+  const podeAgir = isAdmin;
   const pendentes = lista.filter(function(p){ return p.status !== 'vinculado'; });
   const resolvidos = lista.filter(function(p){ return p.status === 'vinculado'; });
   const linha = function(p){
@@ -9714,8 +9717,8 @@ function renderPedidosNotaPanel(){
       <td>${p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—'}</td>
       <td>${p.status==='vinculado'
         ? `<button type="button" class="usuario-tag fin link-tag" title="Ver o lançamento vinculado" onclick="irParaLancamentoVinculado(${p.id})">Vinculado ✓ — ver lançamento</button>`
-        : `<button class="modal-btn modal-btn-ghost" onclick="abrirVincularPedido(${p.id})">Vincular</button>`}</td>
-      <td><button type="button" class="anexo-remover" title="Excluir este pedido" onclick="excluirPedidoNota(${p.id})">✕</button></td>
+        : (podeAgir ? `<button class="modal-btn modal-btn-ghost" onclick="abrirVincularPedido(${p.id})">Vincular</button>` : '<span class="usuario-tag">Pendente</span>')}</td>
+      <td>${podeAgir ? `<button type="button" class="anexo-remover" title="Excluir este pedido" onclick="excluirPedidoNota(${p.id})">✕</button>` : ''}</td>
     </tr>`;
   };
   return panel('pedidos-nota', '📋 Pedidos de Nota' + (pendentes.length ? ` (${pendentes.length} pendente${pendentes.length===1?'':'s'})` : ''), `
@@ -9837,6 +9840,7 @@ function renderFinanceiroResumo(){
   }).join('');
 
   return `
+    ${renderPedidosNotaPanel()}
     <div class="kpis">
       <div class="kpi-card" style="--kc:#1C6FBF"><div class="kpi-label"><span class="kpi-dot"></span>Sistema</div><div class="kpi-value">${fmtMoney(ano.sistema)}</div></div>
       <div class="kpi-card" style="--kc:#0D9488"><div class="kpi-label"><span class="kpi-dot"></span>Consultoria</div><div class="kpi-value">${fmtMoney(ano.consultoria)}</div></div>
