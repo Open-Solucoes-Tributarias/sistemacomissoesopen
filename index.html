@@ -9698,11 +9698,12 @@ function confirmarVinculoPedido(){
   const pedido = (pedidosNota||[]).find(function(p){ return p.id === m.pedidoId; });
   if(!pedido) return;
   const alvo = m.escolhido;
-  // Se o pedido veio com "não emitir antes de" no futuro, o vínculo já
-  // nasce travado — "Pode emitir" só liga sozinho quando a data chegar
-  // (o bloqueio de verdade está nas RPCs marcar_pode_emitir/marcar_nota_emitida).
+  // Vincular o pedido só traz os dados (CNPJ, responsável, telefone...) e
+  // registra a data mínima de emissão, se o pedido pediu uma — nunca marca
+  // "Pode emitir" sozinho. Isso fica sempre por conta da Soraya, na mão:
+  // às vezes o pedido já existe mas a nota ainda não está livre pra sair
+  // (ela decide quando, mesmo sem data mínima nenhuma no pedido).
   const minima = pedido.dataMinimaEmissao || null;
-  const liberaJa = !minima || minima <= hojeIsoDate();
   closeModal();
   if(alvo.produtoKey === 'vendas'){
     const r = rows.find(function(x){ return x.id === alvo.id; });
@@ -9710,12 +9711,6 @@ function confirmarVinculoPedido(){
     if(!r.cnpj && pedido.cnpj) r.cnpj = pedido.cnpj;
     r.dataMinimaEmissao = minima;
     persist();
-    if(liberaJa){
-      r.podeEmitir = true; r.podeEmitirEm = new Date().toISOString();
-      // pode_emitir não vai no persist() (ver comentário lá) — quem grava
-      // é a RPC, igual a um clique manual em "Pode emitir".
-      sbRpc('marcar_pode_emitir', { p_tabela:'vendas', p_id:r.id, p_pode:true }).catch(function(e){ console.error('Falha ao liberar emissão ao vincular pedido', e); });
-    }
     render();
     finalizarVinculoPedido(pedido.id, 'vendas', r.id);
   } else {
@@ -9729,7 +9724,7 @@ function confirmarVinculoPedido(){
       telefone: pedido.telefone||'', email: pedido.email||'', valor: pedido.valor,
       observacoes: pedido.observacoes||'', notaEmitida:false, notaEmitidaEm:null,
       dataMinimaEmissao: minima,
-      podeEmitir: liberaJa, podeEmitirEm: liberaJa ? new Date().toISOString() : null,
+      podeEmitir: false, podeEmitirEm: null,
     };
     r.empresas.push(nova);
     persistEmpresaCurso(nova, r.id, { pode_emitir: nova.podeEmitir, pode_emitir_em: nova.podeEmitirEm, data_minima_emissao: nova.dataMinimaEmissao });
