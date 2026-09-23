@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Diagnóstico — Pode emitir</title>
+<style>
+  body{font-family:system-ui,sans-serif;max-width:900px;margin:20px auto;padding:0 16px;}
+  table{border-collapse:collapse;width:100%;font-size:14px;}
+  th,td{border:1px solid #ccc;padding:6px 8px;text-align:left;}
+  th{background:#f0f0f0;}
+  .true{background:#d4f4dd;font-weight:bold;}
+  .false{background:#fce8e8;}
+  button{padding:4px 10px;cursor:pointer;}
+  #login{max-width:400px;margin:40px auto;}
+  input{display:block;width:100%;padding:8px;margin:6px 0;box-sizing:border-box;}
+  #status{white-space:pre-wrap;font-family:monospace;background:#f5f5f5;padding:10px;margin:10px 0;font-size:12px;}
+</style>
+</head>
+<body>
+<h2>Diagnóstico bruto — tabela vendas direto do banco</h2>
+<p>Página separada do sistema principal, sem nenhuma lógica extra — só login, busca e mostra o que o banco realmente tem. Não usa cache nenhum.</p>
+
+<div id="login">
+  <input id="email" type="email" placeholder="E-mail" autocomplete="username">
+  <input id="pwd" type="password" placeholder="Senha" autocomplete="current-password">
+  <button onclick="doLogin()">Entrar</button>
+  <div id="loginErr" style="color:red;"></div>
+</div>
+
+<div id="app" style="display:none;">
+  <p>Logada como <b id="whoami"></b> — <button onclick="carregar()">🔄 Recarregar do banco agora</button></p>
+  <div id="status"></div>
+  <table id="tabela"><thead><tr><th>ID</th><th>Cliente</th><th>Mês</th><th>Pode emitir</th><th>Gravado em</th><th>Ação</th></tr></thead><tbody></tbody></table>
+</div>
+
+<script>
+const SUPABASE_URL = "https://ogkrrlssdrtctdyyvkql.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9na3JybHNzZHJ0Y3RkeXl2a3FsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2MDAzNTUsImV4cCI6MjEwMzE3NjM1NX0.Jsgu02MUoYbFNPVilrdK0tbDDdRxRb9cPkGPWkg8lyA";
+let token = null;
+
+async function doLogin(){
+  const email = document.getElementById('email').value.trim();
+  const pwd = document.getElementById('pwd').value;
+  document.getElementById('loginErr').textContent = '';
+  try{
+    const res = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pwd }),
+      cache: 'no-store',
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error_description || data.msg || 'Falha no login');
+    token = data.access_token;
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('whoami').textContent = email;
+    await carregar();
+  }catch(e){
+    document.getElementById('loginErr').textContent = 'Erro: ' + e.message;
+  }
+}
+
+async function carregar(){
+  const status = document.getElementById('status');
+  status.textContent = 'Buscando agora, ' + new Date().toLocaleTimeString('pt-BR') + '...';
+  try{
+    const res = await fetch(SUPABASE_URL + '/rest/v1/vendas_safe?select=id,cliente,mes,ano,pode_emitir,pode_emitir_em&order=id.asc&mes=eq.Setembro&ano=eq.2026', {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + token },
+      cache: 'no-store',
+    });
+    const rows = await res.json();
+    if(!res.ok) throw new Error(JSON.stringify(rows));
+    status.textContent = 'Resposta do servidor às ' + new Date().toLocaleTimeString('pt-BR') + ' — ' + rows.length + ' linhas. HTTP ' + res.status + '\n' +
+      'Headers relevantes: date=' + res.headers.get('date') + ' | cache-control=' + res.headers.get('cache-control') + ' | x-cache=' + (res.headers.get('x-cache')||'(nenhum)') + ' | cf-cache-status=' + (res.headers.get('cf-cache-status')||'(nenhum)');
+    const tbody = document.querySelector('#tabela tbody');
+    tbody.innerHTML = '';
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${r.id}</td><td>${r.cliente}</td><td>${r.mes}/${r.ano}</td>
+        <td class="${r.pode_emitir}">${r.pode_emitir}</td>
+        <td>${r.pode_emitir_em || '—'}</td>
+        <td><button onclick="marcar(${r.id}, ${!r.pode_emitir})">${r.pode_emitir ? 'Desmarcar' : 'Marcar'}</button></td>`;
+      tbody.appendChild(tr);
+    });
+  }catch(e){
+    status.textContent = 'ERRO: ' + e.message;
+  }
+}
+
+async function marcar(id, valor){
+  const status = document.getElementById('status');
+  status.textContent = 'Gravando id=' + id + ' pode_emitir=' + valor + '...';
+  try{
+    const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/marcar_pode_emitir', {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_tabela: 'vendas', p_id: id, p_pode: valor }),
+      cache: 'no-store',
+    });
+    const data = await res.json().catch(()=>null);
+    if(!res.ok) throw new Error((data && data.message) || res.status);
+    status.textContent = 'Gravado com sucesso às ' + new Date().toLocaleTimeString('pt-BR') + '. Recarregando...';
+    await carregar();
+  }catch(e){
+    status.textContent = 'ERRO ao gravar: ' + e.message;
+  }
+}
+</script>
+</body>
+</html>
