@@ -2683,10 +2683,17 @@ function persist(){
             pago_em: timestampValidoOuNull(r.pagoEm), fechamento_mes: r.fechamentoMes || null,
             parcela_label: r.parcelaLabel || null,
             vendedor_responsavel: r.vendedorResponsavel || '',
-            // vai junto de propósito: upsert que não manda a coluna a
-            // devolve para o padrão, e o visto do financeiro sumiria
-            nota_emitida: !!r.notaEmitida, nota_emitida_em: timestampValidoOuNull(r.notaEmitidaEm),
-            pode_emitir: !!r.podeEmitir, pode_emitir_em: timestampValidoOuNull(r.podeEmitirEm),
+            // nota_emitida/nota_emitida_em/pode_emitir/pode_emitir_em NUNCA
+            // vão neste payload: são geridos só pelas RPCs
+            // marcar_nota_emitida/marcar_pode_emitir (togglePodeEmitir /
+            // toggleNotaEmitida), que gravam direto no banco na hora do
+            // clique. Mandar essas colunas aqui de novo cria uma corrida —
+            // este autosave "geral" é disparado (com debounce) por QUALQUER
+            // edição em QUALQUER linha, e se ele capturar um instantâneo de
+            // "pode_emitir" de ANTES do clique e essa gravação em lote
+            // chegar ao banco DEPOIS da RPC (ordem de rede não é garantida),
+            // ela apaga o clique — foi exatamente o que aconteceu (RPC
+            // retornando 200 mas o banco continuando com pode_emitir=false).
             data_minima_emissao: dataValidaOuNull(r.dataMinimaEmissao),
           };
         });
@@ -2789,8 +2796,11 @@ function persistEntityRows(key){
             parceiro: r.parceiro||'', participacao: numOrNull(r.participacao),
             forma_pagamento:'', colaborador:'', observacoes:'',
             pago:false, mes_pagamento:null, pago_em: timestampValidoOuNull(r.pagoEm), fechamento_mes: r.fechamentoMes || null,
-            nota_emitida: !!r.notaEmitida, nota_emitida_em: timestampValidoOuNull(r.notaEmitidaEm),
-            pode_emitir: !!r.podeEmitir, pode_emitir_em: timestampValidoOuNull(r.podeEmitirEm),
+            // nota_emitida/pode_emitir (e seus "_em") ficam de fora deste
+            // payload de propósito — mesmo motivo do persist() de vendas
+            // (ver comentário lá): quem grava esses dois é só a RPC
+            // marcar_nota_emitida/marcar_pode_emitir, na hora do clique;
+            // mandar de novo aqui cria corrida com esse autosave em lote.
             in_company: !!r.inCompany, renovacao: !!r.renovacao, upgrade: !!r.upgrade,
             vendedor_responsavel: cfg.hasVendedorResponsavel ? (r.vendedorResponsavel || '') : null,
             professor: r.professor||'', honorario_professor: numOrNull(r.honorarioProfessor),
@@ -9694,8 +9704,13 @@ function confirmarVinculoPedido(){
     if(!r) return;
     if(!r.cnpj && pedido.cnpj) r.cnpj = pedido.cnpj;
     r.dataMinimaEmissao = minima;
-    if(liberaJa){ r.podeEmitir = true; r.podeEmitirEm = new Date().toISOString(); }
     persist();
+    if(liberaJa){
+      r.podeEmitir = true; r.podeEmitirEm = new Date().toISOString();
+      // pode_emitir não vai no persist() (ver comentário lá) — quem grava
+      // é a RPC, igual a um clique manual em "Pode emitir".
+      sbRpc('marcar_pode_emitir', { p_tabela:'vendas', p_id:r.id, p_pode:true }).catch(function(e){ console.error('Falha ao liberar emissão ao vincular pedido', e); });
+    }
     render();
     finalizarVinculoPedido(pedido.id, 'vendas', r.id);
   } else {
