@@ -9193,6 +9193,22 @@ function irParaNotasProntas(){
   }, 60);
 }
 
+/* Curso "completo pra Marli": ela quer saber quando TODAS as empresas
+   de um curso já foram lançadas com os dados e liberadas ("Pode
+   emitir") — não só que existe alguma nota pronta solta por aí (isso
+   já é o aviso genérico acima). Um curso com uma empresa ainda faltando
+   liberar não entra aqui, mesmo que as outras já estejam prontas —
+   ele só "libera" quando o lote inteiro está conferido. */
+function cursosComTodasNotasProntas(){
+  return (state.cursos.rows || []).filter(function(r){
+    const emp = r.empresas || [];
+    if(!emp.length) return false;
+    const todasLiberadas = emp.every(function(e){ return !!e.podeEmitir; });
+    const temAlgoAEmitir = emp.some(function(e){ return e.podeEmitir && !e.notaEmitida; });
+    return todasLiberadas && temAlgoAEmitir;
+  });
+}
+
 /* ---------- Lembrete de dia fixo pra emitir nota (Mensal/Plano Premium) ----------
    Contrato recorrente: o financeiro combina o dia UMA vez ("todo dia 10")
    e isso vale pra sempre, mês a mês — sem precisar redigitar a cada novo
@@ -15254,6 +15270,15 @@ function render(){
         <div class="storage-warning read-only-notice">
           🔔 <b>${notasProntasParaEmitir().length}</b> nota${notasProntasParaEmitir().length===1?'':'s'} nova${notasProntasParaEmitir().length===1?'':'s'}
           para emissão — já conferida${notasProntasParaEmitir().length===1?'':'s'} ("Pode emitir"), só falta gerar a nota fiscal.
+          <button type="button" class="modal-btn modal-btn-ghost" style="margin-left:8px;" onclick="irParaNotasProntas()">Ver notas</button>
+        </div>
+      ` : ''}
+
+      ${(isFinanceiro && cursosComTodasNotasProntas().length) ? `
+        <div class="storage-warning read-only-notice">
+          🎓 Curso${cursosComTodasNotasProntas().length===1?'':'s'} com <b>todas</b> as empresas liberadas —
+          ${cursosComTodasNotasProntas().map(function(r){ return '<b>'+esc(r.curso||'sem nome')+'</b>'; }).join(', ')}.
+          Já pode emitir as notas.
           <button type="button" class="modal-btn modal-btn-ghost" style="margin-left:8px;" onclick="irParaNotasProntas()">Ver notas</button>
         </div>
       ` : ''}
