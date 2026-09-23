@@ -9534,7 +9534,7 @@ function notaEmissaoBotoesHtml(tabela, id, entKeyLiteral, podeEmitir, podeEmitir
   }
   const podeBtn = `<button type="button" class="pode-emitir-btn${podeEmitir?' on':''}"
                      title="${podeEmitir ? 'Liberada para emitir — clique para desmarcar' : 'Marcar que este lançamento já está conferido e pronto pra emitir a nota'}"
-                     onclick="togglePodeEmitir('${tabela}',${id},'${entKeyLiteral}')">${podeEmitir ? '✓ Pode emitir' : 'Pode emitir'}</button>`;
+                     onclick="togglePodeEmitir('${tabela}',${id},'${entKeyLiteral}')">${podeEmitir ? '✓ Pode emitir' : 'Pode emitir'}</button><span style="font-size:9px;color:#b91c1c;margin-left:3px;" title="diagnóstico temporário — remover depois">[#${id}:${podeEmitir}]</span>`;
   const emitirBtn = `<button type="button" class="nota-btn${notaEmitida?' on':''}"
                      title="${notaEmitida ? 'Nota emitida — clique para desmarcar' : 'Marcar que a nota foi emitida'}"
                      onclick="toggleNotaEmitida('${tabela}',${id},'${entKeyLiteral}')">${
