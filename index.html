@@ -2545,6 +2545,17 @@ function sbSelect(table, query){
   const source = READ_VIEWS[table] || table;
   return sb('/rest/v1/' + source + (query ? '?' + query : ''), { method: 'GET' });
 }
+/* Diagnóstico temporário — busca a venda 231 (TSE) direto, sem passar por
+   tryLoadFromStorageAsync nem por nenhum mapeamento camelCase, pra ver
+   exatamente o que a resposta HTTP traz pra esta sessão. Remover depois. */
+async function diagnosticoBruto(){
+  try{
+    const resposta = await sb('/rest/v1/vendas_safe?id=eq.231&select=id,cliente,pode_emitir,pode_emitir_em', { method: 'GET' });
+    showAlert('Resposta crua do servidor:\n\n' + JSON.stringify(resposta, null, 2));
+  }catch(e){
+    showAlert('Erro na busca crua: ' + (e && e.message));
+  }
+}
 /* Chamada a uma função do banco. Usada quando a escrita precisa de uma
    porta mais estreita que a tabela inteira — o visto de nota emitida é o
    caso: a conta do financeiro não tem (nem pode ter) permissão de escrever
@@ -15235,6 +15246,12 @@ function render(){
       <div class="versao-nova-aviso">
         🔄 Os lançamentos mudaram no banco depois que esta aba abriu (outra pessoa editou, ou você mesma em outra aba) — o que você está vendo aqui pode estar desatualizado.
         <button onclick="recarregarPagina()">Atualizar agora</button>
+      </div>
+    ` : ''}
+    ${isAdmin ? `
+      <div class="versao-nova-aviso" style="background:#fef2f2;border-color:#fecaca;">
+        🔬 Diagnóstico temporário — remover depois.
+        <button onclick="diagnosticoBruto()">Ver dado cru do TSE (venda 231)</button>
       </div>
     ` : ''}
     <div class="shell${isAdmin ? '' : ' read-only-mode'}">
