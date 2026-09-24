@@ -2000,7 +2000,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-23-01';
+const APP_BUILD = '2026-09-24-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5415,29 +5415,49 @@ function renderModal(){
   }
   if(m.type === 'dados-pedido-vinculado'){
     const p = m.pedido;
+    // Desde que o pedido vinculado saiu da lista "Pedidos de Nota" (ela só
+    // mostra os pendentes agora), este modal virou o único lugar pra
+    // corrigir um dado errado — por isso, pra admin, os campos viram
+    // inputs de verdade em vez de texto fixo (mesma RPC/porta estreita de
+    // updatePedidoNotaCampo, já usada no painel).
+    const campo = function(rotulo, campoJs, valorAtual, tipo){
+      if(!isAdmin) return `<label class="meta-field"><span>${rotulo}</span><div class="meta-field-valor">${valorAtual || '—'}</div></label>`;
+      const valorInput = campoJs === 'cnpj' ? formatCnpj(p.cnpj)
+        : campoJs === 'valor' ? (p.valor===null||p.valor===undefined?'':p.valor)
+        : campoJs === 'dataMinimaEmissao' ? (p.dataMinimaEmissao||'')
+        : (p[campoJs]||'');
+      const attrs = tipo === 'cnpj' ? `type="text" oninput="this.value=formatCnpj(this.value)"`
+        : tipo === 'valor' ? `type="number" step="0.01"`
+        : tipo === 'data' ? `type="date"`
+        : tipo === 'email' ? `type="email"`
+        : `type="text"`;
+      return `<label class="meta-field"><span>${rotulo}</span><input class="fin-empresa-campo" ${attrs} value="${esc(String(valorInput))}" onchange="updatePedidoNotaCampo(${p.id},'${campoJs}',this.value)" /></label>`;
+    };
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
         <div class="modal-box">
           <div class="modal-msg">📋 Dados do pedido de nota</div>
           <div class="meta-form-grid">
-            <label class="meta-field"><span>Cliente / Empresa</span><div class="meta-field-valor">${esc(p.cliente) || '—'}</div></label>
-            <label class="meta-field"><span>CNPJ</span><div class="meta-field-valor">${esc(formatCnpj(p.cnpj)) || '—'}</div></label>
+            ${campo('Cliente / Empresa', 'cliente', esc(p.cliente))}
+            ${campo('CNPJ', 'cnpj', esc(formatCnpj(p.cnpj)), 'cnpj')}
           </div>
           <div class="meta-form-grid">
-            <label class="meta-field"><span>Responsável</span><div class="meta-field-valor">${esc(p.responsavel) || '—'}</div></label>
-            <label class="meta-field"><span>Telefone</span><div class="meta-field-valor">${esc(p.telefone) || '—'}</div></label>
+            ${campo('Responsável', 'responsavel', esc(p.responsavel))}
+            ${campo('Telefone', 'telefone', esc(p.telefone))}
           </div>
           <div class="meta-form-grid">
-            <label class="meta-field"><span>E-mail</span><div class="meta-field-valor">${esc(p.email) || '—'}</div></label>
-            <label class="meta-field"><span>Valor pedido</span><div class="meta-field-valor">${p.valor===null||p.valor===undefined?'—':fmtMoney(p.valor)}</div></label>
+            ${campo('E-mail', 'email', esc(p.email), 'email')}
+            ${campo('Valor pedido', 'valor', p.valor===null||p.valor===undefined?'—':fmtMoney(p.valor), 'valor')}
           </div>
           <div class="meta-form-grid">
-            <label class="meta-field"><span>Empenho</span><div class="meta-field-valor">${esc(p.empenho) || '—'}</div></label>
-            <label class="meta-field"><span>Não emitir antes de</span><div class="meta-field-valor">${p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—'}</div></label>
+            ${campo('Empenho', 'empenho', esc(p.empenho))}
+            ${campo('Não emitir antes de', 'dataMinimaEmissao', p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—', 'data')}
           </div>
-          ${p.observacoes ? `<label class="meta-field"><span>Observações</span><div class="meta-field-valor">${esc(p.observacoes)}</div></label>` : ''}
+          ${(p.observacoes || isAdmin) ? `<label class="meta-field"><span>Observações</span>${isAdmin
+            ? `<textarea class="fin-empresa-campo" rows="3" onchange="updatePedidoNotaCampo(${p.id},'observacoes',this.value)">${esc(p.observacoes)}</textarea>`
+            : `<div class="meta-field-valor">${esc(p.observacoes)}</div>`}</label>` : ''}
           ${p.anexoPath ? `<button type="button" class="modal-btn modal-btn-ghost" onclick="verAnexoPedidoNota(${p.id})">📎 Ver anexo: ${esc(p.anexoNome||'arquivo')}</button>` : ''}
-          <div class="divisao-explica">Pedido em ${new Date(p.criadoEm).toLocaleDateString('pt-BR')}. Pra corrigir algum desses dados, edite no painel "Pedidos de Nota".</div>
+          <div class="divisao-explica">Pedido em ${new Date(p.criadoEm).toLocaleDateString('pt-BR')}.${isAdmin ? '' : ' Pra corrigir algum desses dados, peça pra administração.'}</div>
           <div class="modal-actions">
             <button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button>
           </div>
@@ -9801,7 +9821,7 @@ function irParaLancamentoVinculado(pedidoId){
 const PEDIDO_NOTA_CAMPOS_DB = {
   cliente:'cliente', cnpj:'cnpj', responsavel:'responsavel', telefone:'telefone',
   email:'email', valor:'valor', produto:'produto', empenho:'empenho',
-  dataMinimaEmissao:'data_minima_emissao',
+  dataMinimaEmissao:'data_minima_emissao', observacoes:'observacoes',
 };
 async function updatePedidoNotaCampo(pedidoId, campoJs, valorBruto){
   if(!isAdmin) return;
