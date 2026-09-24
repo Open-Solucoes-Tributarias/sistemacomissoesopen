@@ -2153,21 +2153,25 @@ function renderSolicitarNotaScreen(){
   if(pedidosNota === null && !carregandoPedidosNota) tryLoadPedidosNotaAsync().then(render);
   const f = pedidoNotaForm;
 
+  // Pedido vinculado sai da lista de vez — mesmo motivo do painel do
+  // admin: ela só cresce, e depois de vinculado a solicitante não tem
+  // mais nada a fazer com aquele pedido.
+  const pedidosPendentes = (pedidosNota || []).filter(function(p){ return p.status !== 'vinculado'; });
   const listaHtml = !pedidosNota
     ? `<div class="meta-empty" style="padding:16px 0;">${carregandoPedidosNota ? 'Carregando...' : 'Você ainda não pediu nenhuma nota.'}</div>`
-    : pedidosNota.length === 0
+    : pedidosPendentes.length === 0
       ? `<div class="meta-empty" style="padding:16px 0;">Você ainda não pediu nenhuma nota.</div>`
       : `<div class="table-scroll"><table class="table-plain">
           <thead><tr><th>Cliente</th><th class="num">Valor</th><th>Pedido em</th><th>Não emitir antes de</th><th>Anexo</th><th>Situação</th><th></th></tr></thead>
-          <tbody>${pedidosNota.map(function(p){ return `
+          <tbody>${pedidosPendentes.map(function(p){ return `
             <tr>
               <td>${esc(p.cliente)}</td>
               <td class="num">${p.valor===null||p.valor===undefined?'—':fmtMoney(p.valor)}</td>
               <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
               <td>${p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—'}</td>
               <td>${p.anexoPath ? '📎 ' + esc(p.anexoNome||'anexado') : '—'}</td>
-              <td>${p.status==='vinculado' ? '<span class="usuario-tag fin">Vinculado ✓</span>' : '<span class="usuario-tag">Pendente</span>'}</td>
-              <td>${p.status!=='vinculado' ? `<button type="button" class="anexo-remover" title="Cancelar/excluir este pedido" onclick="excluirMeuPedidoNota(${p.id})">✕</button>` : ''}</td>
+              <td><span class="usuario-tag">Pendente</span></td>
+              <td><button type="button" class="anexo-remover" title="Cancelar/excluir este pedido" onclick="excluirMeuPedidoNota(${p.id})">✕</button></td>
             </tr>
           `; }).join('')}</tbody>
         </table></div>`;
@@ -9890,13 +9894,17 @@ function excluirPedidoNota(pedidoId){
   );
 }
 function renderPedidosNotaPanel(){
-  const lista = pedidosNota || [];
+  // Pedido vinculado sai da lista de vez — senão ela só cresce pra sempre
+  // (já chegou a 19 linhas, quase tudo resolvido, difícil achar o que
+  // falta). Quem precisa achar o lançamento de um pedido antigo faz isso
+  // pela tela de origem (Sistema/Consultoria/Órgãos Públicos/Cursos), que
+  // já mostra "📋 Dados do pedido" — não precisa mais vir por aqui.
+  const lista = (pedidosNota || []).filter(function(p){ return p.status !== 'vinculado'; });
   if(lista.length === 0) return '';
   // Financeiro só acompanha — vincular e excluir continuam só com o
   // admin, que é quem decide a qual lançamento cada pedido pertence.
   const podeAgir = isAdmin;
-  const pendentes = lista.filter(function(p){ return p.status !== 'vinculado'; });
-  const resolvidos = lista.filter(function(p){ return p.status === 'vinculado'; });
+  const pendentes = lista;
   const linha = function(p){
     if(!podeAgir){
       return `<tr>
@@ -9951,10 +9959,10 @@ function renderPedidosNotaPanel(){
     <div class="table-scroll">
       <table class="table-plain">
         <thead><tr><th>Cliente</th><th>CNPJ</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th class="num">Valor</th><th>Produto</th><th>Empenho</th><th>Pedido em</th><th>Não emitir antes de</th><th>Anexo</th><th></th><th></th></tr></thead>
-        <tbody>${pendentes.map(linha).join('')}${resolvidos.map(linha).join('')}</tbody>
+        <tbody>${pendentes.map(linha).join('')}</tbody>
       </table>
     </div>
-  `, { flush:true, meta: `<b>${lista.length}</b> pedido${lista.length===1?'':'s'}` });
+  `, { flush:true, meta: `<b>${lista.length}</b> pedido${lista.length===1?'':'s'} pendente${lista.length===1?'':'s'}` });
 }
 
 /* O quadro das notas do período, com o visto. É o mesmo para o financeiro
