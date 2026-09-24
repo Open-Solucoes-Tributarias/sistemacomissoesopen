@@ -2160,7 +2160,7 @@ function renderSolicitarNotaScreen(){
   const listaHtml = !pedidosNota
     ? `<div class="meta-empty" style="padding:16px 0;">${carregandoPedidosNota ? 'Carregando...' : 'Você ainda não pediu nenhuma nota.'}</div>`
     : pedidosPendentes.length === 0
-      ? `<div class="meta-empty" style="padding:16px 0;">Você ainda não pediu nenhuma nota.</div>`
+      ? `<div class="meta-empty" style="padding:16px 0;">${pedidosNota.length ? 'Todas as suas notas foram vinculadas.' : 'Você ainda não pediu nenhuma nota.'}</div>`
       : `<div class="table-scroll"><table class="table-plain">
           <thead><tr><th>Cliente</th><th class="num">Valor</th><th>Pedido em</th><th>Não emitir antes de</th><th>Anexo</th><th>Situação</th><th></th></tr></thead>
           <tbody>${pedidosPendentes.map(function(p){ return `
