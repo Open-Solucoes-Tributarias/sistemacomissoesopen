@@ -2001,7 +2001,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-24-02';
+const APP_BUILD = '2026-09-24-03';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5395,15 +5395,17 @@ function renderModal(){
           </div>
           <div class="table-scroll" style="max-height:340px;">
             <table class="table-plain">
-              <thead><tr><th></th><th>Origem</th><th>Cliente / Empresa / Órgão / Curso</th></tr></thead>
+              <thead><tr><th></th><th>Origem</th><th>Cliente / Empresa / Órgão / Curso</th><th>Venda / Tipo</th><th class="num">Valor</th></tr></thead>
               <tbody>${candidatos.length ? candidatos.map(function(c){
                 const sel = m.escolhido && m.escolhido.produtoKey===c.produtoKey && m.escolhido.id===c.id;
                 return `<tr style="cursor:pointer;" class="${sel?'row-pending':''}" onclick="escolherCandidatoVinculo('${c.produtoKey}',${c.id})">
                   <td><input type="radio" ${sel?'checked':''} onchange="escolherCandidatoVinculo('${c.produtoKey}',${c.id})" /></td>
                   <td>${esc(c.rotulo)}</td>
                   <td>${esc(c.cliente)}</td>
+                  <td>${esc(c.detalhe) || '—'}</td>
+                  <td class="num">${fmtMoney(c.valor)}</td>
                 </tr>`;
-              }).join('') : `<tr><td colspan="3" style="text-align:center;color:var(--ink-faint);padding:16px;">Nada encontrado.</td></tr>`}</tbody>
+              }).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--ink-faint);padding:16px;">Nada encontrado.</td></tr>`}</tbody>
             </table>
           </div>
           <div class="modal-actions">
@@ -9721,7 +9723,7 @@ function candidatosVinculoPedido(produto, busca){
     rows.forEach(function(r){
       const nome = r.cliente || r.venda || '';
       if(!bate(nome)) return;
-      out.push({ produtoKey:'vendas', id:r.id, cliente:nome, rotulo: 'Sistema · ' + monthShort(r.mes) + '/' + (r.ano||2026) });
+      out.push({ produtoKey:'vendas', id:r.id, cliente:nome, detalhe: r.venda||'', valor: Number(r.valor)||0, rotulo: 'Sistema · ' + monthShort(r.mes) + '/' + (r.ano||2026) });
     });
   }
   ENTITY_KEYS.forEach(function(key){
@@ -9730,7 +9732,7 @@ function candidatosVinculoPedido(produto, busca){
     state[key].rows.forEach(function(r){
       const nome = r[mainField] || '';
       if(!bate(nome)) return;
-      out.push({ produtoKey:key, id:r.id, cliente:nome, rotulo: ENTITIES[key].tabLabel + ' · ' + monthShort(r.mes) + '/' + (r.ano||2026) });
+      out.push({ produtoKey:key, id:r.id, cliente:nome, detalhe: r.tipo||'', valor: Number(r.valorContrato)||0, rotulo: ENTITIES[key].tabLabel + ' · ' + monthShort(r.mes) + '/' + (r.ano||2026) });
     });
   });
   return out.slice(0, 40);
