@@ -1857,6 +1857,7 @@ let assinaturaLancamentosCheck = null;
 let metas = [];      // regras de meta: gatilho da empresa que premia uma pessoa
 let metasNextId = 1;
 let pagamentosMonthFilter = "Todos";
+let pagamentosAgrupado = false;   // true = uma linha por cliente (soma), em vez de pagamento a pagamento
 let aReceberMonthFilter = "Todos";   // filtra "a receber" pelo mês da VENDA
 let vendasOrdem = "padrao";          // ordenação da aba Sistema (só exibição)
 
@@ -2000,7 +2001,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-24-01';
+const APP_BUILD = '2026-09-24-02';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -6609,6 +6610,7 @@ function onPagamentoMesSelect(el, entityKey){
   else persistAfterPayment(entityKey);
 }
 function setPagamentosMonthFilter(m){ pagamentosMonthFilter = m; render(); }
+function setPagamentosAgrupado(v){ pagamentosAgrupado = v; render(); }
 function setAReceberMonthFilter(m){ aReceberMonthFilter = m; render(); }
 
 /* Fita de meses reutilizável pelos quadros de comissão. */
@@ -6640,7 +6642,22 @@ function getPagamentosRealizados(){
   return out;
 }
 
-
+/* Uma linha por cliente (soma dos pagamentos dele no filtro atual), pra quem
+   prefere ver o resumo em vez de pagamento por pagamento. */
+function agruparPagamentosPorCliente(entries){
+  const porCliente = {};
+  const ordem = [];
+  entries.forEach(e => {
+    const chave = e.origem + '|' + e.label;
+    if(!porCliente[chave]){
+      porCliente[chave] = {origem:e.origem, label:e.label, valor:0, qtd:0};
+      ordem.push(chave);
+    }
+    porCliente[chave].valor += e.valor;
+    porCliente[chave].qtd += 1;
+  });
+  return ordem.map(chave => porCliente[chave]).sort((a,b) => b.valor - a.valor);
+}
 
 
 /* ---------------- Comissões por status de recebimento ----------------
@@ -6966,17 +6983,60 @@ function renderPagamentosSection(){
     return `<button class="pill${active}" onclick="setPagamentosMonthFilter('${m}')">${m}</button>`;
   }).join('');
 
-  const rowsHtml = entries.length === 0
-    ? `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhum pagamento marcado como realizado ainda neste filtro. Marque a caixinha "Pago" nas abas Sistema, Consultoria ou Consultorias e site para Órgãos Públicos.</td></tr>`
-    : entries.map(e => `
-      <tr>
-        <td>${monthShort(e.mesPagamento)}</td>
-        <td>${esc(e.origem)}</td>
-        <td>${esc(e.label)}</td>
-        <td class="num">${e.mesVenda===e.mesPagamento?'—':esc(e.mesVenda)}</td>
-        <td class="num col-valor">${fmtMoney(e.valor)}</td>
-      </tr>
-    `).join('');
+  const tabelaHtml = pagamentosAgrupado
+    ? (() => {
+        const agrupado = agruparPagamentosPorCliente(entries);
+        const linhas = agrupado.length === 0
+          ? `<tr class="empty-row"><td colspan="4"><span class="empty-icon">◌</span>Nenhum pagamento marcado como realizado ainda neste filtro. Marque a caixinha "Pago" nas abas Sistema, Consultoria ou Consultorias e site para Órgãos Públicos.</td></tr>`
+          : agrupado.map(c => `
+            <tr>
+              <td>${esc(c.origem)}</td>
+              <td>${esc(c.label)}</td>
+              <td class="num">${c.qtd}</td>
+              <td class="num col-valor">${fmtMoney(c.valor)}</td>
+            </tr>
+          `).join('');
+        return `
+          <table class="table-plain">
+            <thead>
+              <tr>
+                <th>Origem</th>
+                <th>Cliente / Empresa / Órgão</th>
+                <th class="num">Pagamentos</th>
+                <th class="num col-valor" title="Soma dos pagamentos do cliente no filtro atual">Total</th>
+              </tr>
+            </thead>
+            <tbody>${linhas}</tbody>
+          </table>
+        `;
+      })()
+    : (() => {
+        const linhas = entries.length === 0
+          ? `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhum pagamento marcado como realizado ainda neste filtro. Marque a caixinha "Pago" nas abas Sistema, Consultoria ou Consultorias e site para Órgãos Públicos.</td></tr>`
+          : entries.map(e => `
+            <tr>
+              <td>${monthShort(e.mesPagamento)}</td>
+              <td>${esc(e.origem)}</td>
+              <td>${esc(e.label)}</td>
+              <td class="num">${e.mesVenda===e.mesPagamento?'—':esc(e.mesVenda)}</td>
+              <td class="num col-valor">${fmtMoney(e.valor)}</td>
+            </tr>
+          `).join('');
+        return `
+          <table class="table-plain">
+            <thead>
+              <tr>
+                <th style="width:58px">Mês pgto.</th>
+                <th>Origem</th>
+                <th>Cliente / Empresa / Órgão</th>
+                <th class="num">Mês da venda (se diferente)</th>
+                <th class="num col-valor" title="Valor do Contrato">Valor</th>
+              </tr>
+            </thead>
+            <tbody>${linhas}</tbody>
+          </table>
+        `;
+      })();
 
   const realizadosHtml = panel('pag-realizados', '✅ Pagamentos realizados', `
       <div class="filters-row" style="margin:0 16px 12px;">
@@ -6989,22 +7049,12 @@ function renderPagamentosSection(){
         </div>
       </div>
       <div class="table-scroll">
-        <table class="table-plain">
-          <thead>
-            <tr>
-              <th style="width:58px">Mês pgto.</th>
-              <th>Origem</th>
-              <th>Cliente / Empresa / Órgão</th>
-              <th class="num">Mês da venda (se diferente)</th>
-              <th class="num col-valor" title="Valor do Contrato">Valor</th>
-            </tr>
-          </thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
+        ${tabelaHtml}
       </div>
   `, {
     flush: true,
     meta: `<b>${entries.length}</b> pagamento${entries.length===1?"":"s"} · ${fmtMoney(total)}`,
+    actions: `<button class="eye-toggle" onclick="setPagamentosAgrupado(${pagamentosAgrupado?'false':'true'})">${pagamentosAgrupado?'📋 Ver pagamento a pagamento':'👥 Agrupar por cliente'}</button>`,
   });
 
   return `
