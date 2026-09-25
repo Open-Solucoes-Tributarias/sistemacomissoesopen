@@ -2001,7 +2001,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-25-03';
+const APP_BUILD = '2026-09-25-04';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -2804,6 +2804,44 @@ async function tryLoadFromStorageAsync(){
 /* ---------- Consultoria / Órgãos Públicos / Cursos ---------- */
 const entityTimers = {};
 
+/* Mesmo formato de linha usado pelo autosave em lote (persistEntityRows)
+   e pela criação imediata de um lançamento a partir de um pedido de nota
+   (criarLancamentoDoPedido) — um só lugar decidindo o formato evita as
+   duas gravações divergirem. */
+function lancamentoParaDb(key, r){
+  const cfg = ENTITIES[key];
+  const row = {
+    id: r.id, entidade: key, ano: r.ano||2026, mes: r.mes,
+    comissao_percent: numOrNull(r.comissaoPercent), vendedor: r.vendedor||'',
+    comissao_percent2: numOrNull(r.comissaoPercent2), vendedor2: r.vendedor2||'',
+    comissao_percent3: numOrNull(r.comissaoPercent3), vendedor3: r.vendedor3||'',
+    parcela_label: r.parcelaLabel || null,
+    nome:'', valor_contrato:null, tipo:null,
+    parceiro: r.parceiro||'', participacao: numOrNull(r.participacao),
+    forma_pagamento:'', colaborador:'', observacoes:'',
+    pago:false, mes_pagamento:null, pago_em: timestampValidoOuNull(r.pagoEm), fechamento_mes: r.fechamentoMes || null,
+    // nota_emitida/pode_emitir (e seus "_em") ficam de fora deste
+    // payload de propósito — mesmo motivo do persist() de vendas
+    // (ver comentário lá): quem grava esses dois é só a RPC
+    // marcar_nota_emitida/marcar_pode_emitir, na hora do clique;
+    // mandar de novo aqui cria corrida com esse autosave em lote.
+    in_company: !!r.inCompany, renovacao: !!r.renovacao, upgrade: !!r.upgrade,
+    vendedor_responsavel: cfg.hasVendedorResponsavel ? (r.vendedorResponsavel || '') : null,
+    professor: r.professor||'', honorario_professor: numOrNull(r.honorarioProfessor),
+    professor2: r.professor2||'', honorario_professor2: numOrNull(r.honorarioProfessor2),
+  };
+  cfg.fields.forEach(function(f){
+    if(f.key === 'valorContrato') row.valor_contrato = numOrNull(r.valorContrato);
+    else if(f.key === 'tipo') row.tipo = r.tipo;
+    else if(f.key === 'parceiro' || f.key === 'participacao' || f.key === 'professor' || f.key === 'honorarioProfessor' || f.key === 'professor2' || f.key === 'honorarioProfessor2'){ /* já tratados acima, sempre preservados */ }
+    else if(f.key === 'formaPagamento') row.forma_pagamento = r.formaPagamento||'';
+    else if(f.key === 'colaborador') row.colaborador = r.colaborador||'';
+    else if(f.key === 'observacoes') row.observacoes = r.observacoes||'';
+    else row.nome = r[f.key] || '';
+  });
+  if(cfg.hasPagamento){ row.pago = !!r.pago; row.mes_pagamento = r.mesPagamento||null; }
+  return row;
+}
 function persistEntityRows(key){
   saving = true; updateSaveStatus();
   const tk = key+'-rows';
@@ -2812,39 +2850,7 @@ function persistEntityRows(key){
     (async function(){
       try{
         const cfg = ENTITIES[key];
-        const dbRows = state[key].rows.map(function(r){
-          const row = {
-            id: r.id, entidade: key, ano: r.ano||2026, mes: r.mes,
-            comissao_percent: numOrNull(r.comissaoPercent), vendedor: r.vendedor||'',
-            comissao_percent2: numOrNull(r.comissaoPercent2), vendedor2: r.vendedor2||'',
-            comissao_percent3: numOrNull(r.comissaoPercent3), vendedor3: r.vendedor3||'',
-            parcela_label: r.parcelaLabel || null,
-            nome:'', valor_contrato:null, tipo:null,
-            parceiro: r.parceiro||'', participacao: numOrNull(r.participacao),
-            forma_pagamento:'', colaborador:'', observacoes:'',
-            pago:false, mes_pagamento:null, pago_em: timestampValidoOuNull(r.pagoEm), fechamento_mes: r.fechamentoMes || null,
-            // nota_emitida/pode_emitir (e seus "_em") ficam de fora deste
-            // payload de propósito — mesmo motivo do persist() de vendas
-            // (ver comentário lá): quem grava esses dois é só a RPC
-            // marcar_nota_emitida/marcar_pode_emitir, na hora do clique;
-            // mandar de novo aqui cria corrida com esse autosave em lote.
-            in_company: !!r.inCompany, renovacao: !!r.renovacao, upgrade: !!r.upgrade,
-            vendedor_responsavel: cfg.hasVendedorResponsavel ? (r.vendedorResponsavel || '') : null,
-            professor: r.professor||'', honorario_professor: numOrNull(r.honorarioProfessor),
-            professor2: r.professor2||'', honorario_professor2: numOrNull(r.honorarioProfessor2),
-          };
-          cfg.fields.forEach(function(f){
-            if(f.key === 'valorContrato') row.valor_contrato = numOrNull(r.valorContrato);
-            else if(f.key === 'tipo') row.tipo = r.tipo;
-            else if(f.key === 'parceiro' || f.key === 'participacao' || f.key === 'professor' || f.key === 'honorarioProfessor' || f.key === 'professor2' || f.key === 'honorarioProfessor2'){ /* já tratados acima, sempre preservados */ }
-            else if(f.key === 'formaPagamento') row.forma_pagamento = r.formaPagamento||'';
-            else if(f.key === 'colaborador') row.colaborador = r.colaborador||'';
-            else if(f.key === 'observacoes') row.observacoes = r.observacoes||'';
-            else row.nome = r[f.key] || '';
-          });
-          if(cfg.hasPagamento){ row.pago = !!r.pago; row.mes_pagamento = r.mesPagamento||null; }
-          return row;
-        });
+        const dbRows = state[key].rows.map(function(r){ return lancamentoParaDb(key, r); });
         await sbUpsert('lancamentos', dbRows, 'id');
 
         await apagarMarcados('lancamentos');
@@ -2890,6 +2896,13 @@ function persistEntityRows(key){
       }
     })();
   }, 450);
+}
+/* Grava JÁ (sem o debounce de 450ms do autosave em lote) um lançamento
+   novo, sozinho — usado quando ele precisa existir no banco ANTES de
+   outra coisa depender dele (ex: a empresa que criarLancamentoDoPedido
+   encaixa dentro dele logo em seguida, presa por chave estrangeira). */
+async function salvarNovoLancamentoImediato(key, row){
+  await sbUpsert('lancamentos', [lancamentoParaDb(key, row)], 'id');
 }
 
 function persistEntityVendors(key){
@@ -5011,8 +5024,8 @@ function showConfirm(message, onConfirm, confirmLabel){
   modalState = {type:'confirm', message, onConfirm, confirmLabel: confirmLabel || 'Excluir'};
   render();
 }
-function showPrompt(message, onSubmit){
-  modalState = {type:'prompt', message, value:'', onSubmit};
+function showPrompt(message, onSubmit, defaultValue){
+  modalState = {type:'prompt', message, value: defaultValue||'', onSubmit};
   render();
 }
 function showAlert(message){
@@ -5412,6 +5425,7 @@ function renderModal(){
             </select>
             <input id="vincular-busca" class="search-input" type="text" placeholder="🔍 Buscar por cliente/empresa..." value="${esc(m.busca)}" style="flex:1;min-width:180px;" oninput="onVincularBuscaInput(this)" />
           </div>
+          ${m.produto ? `<button type="button" class="modal-btn modal-btn-ghost" style="margin:0 0 12px;" onclick="criarLancamentoDoPedido(${pedido.id},'${m.produto}')">+ Esse lançamento ainda não existe — criar agora</button>` : ''}
           <div class="table-scroll" style="max-height:340px;">
             <table class="table-plain">
               <thead><tr><th></th><th>Origem</th><th>Cliente / Empresa / Órgão / Curso</th><th>Venda / Tipo</th><th class="num">Valor</th></tr></thead>
@@ -6002,7 +6016,7 @@ function renderModal(){
       <button class="modal-btn modal-btn-danger" onclick="confirmModal()">${esc(m.confirmLabel)}</button>
     `;
   } else if(m.type === 'prompt'){
-    bodyHtml += `<input id="modal-input" class="modal-input" type="text" autofocus
+    bodyHtml += `<input id="modal-input" class="modal-input" type="text" autofocus value="${esc(m.value)}" onfocus="this.select()"
       oninput="onModalInputChange(this)" onkeydown="onModalInputKey(this, event)" />`;
     actionsHtml = `
       <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
@@ -9826,6 +9840,99 @@ function confirmarVinculoPedido(){
     render();
     finalizarVinculoPedido(pedido.id, 'lancamento_empresas', nova.id);
   }
+}
+/* Sugestão de nome pro lançamento novo: pra Cursos, o campo principal é
+   o nome do TREINAMENTO (não o cliente) — se o pedido já veio com um
+   "Produto" específico (ex: GTAP, e não um rótulo genérico como
+   "Cursos"), usa ele. Pros outros produtos o campo principal é o
+   cliente, então sugere o cliente do pedido direto. */
+function nomeSugeridoNovoLancamento(produto, pedido){
+  if(produto === 'cursos'){
+    const generico = ['sistema','consultoria','órgãos públicos','cursos',''];
+    const p = String(pedido.produto||'').trim();
+    return generico.indexOf(p.toLowerCase()) === -1 ? p : '';
+  }
+  return pedido.cliente || '';
+}
+/* "Vincular pedido de nota" só lista lançamentos que JÁ existem — mas às
+   vezes o pedido é de algo que ainda não foi lançado (ex: uma empresa
+   nova dentro de um curso que ainda não tem nenhum lançamento). Isso
+   cria o lançamento na hora, com os dados do pedido, e já vincula. */
+function criarLancamentoDoPedido(pedidoId, produto){
+  if(!isAdmin) return;
+  const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
+  if(!pedido) return;
+  const sugestao = nomeSugeridoNovoLancamento(produto, pedido);
+  showPrompt(
+    'Nome do cliente/empresa/curso pra esse lançamento novo:',
+    function(nome){ confirmarCriarLancamentoDoPedido(pedidoId, produto, nome); },
+    sugestao
+  );
+}
+async function confirmarCriarLancamentoDoPedido(pedidoId, produto, nomeBruto){
+  if(!isAdmin) return;
+  const nome = String(nomeBruto||'').trim();
+  if(!nome) return;
+  const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
+  if(!pedido) return;
+  const mes = MONTHS[new Date().getMonth()];
+  if(isMonthClosedFor(produto, yearFilter, mes)){
+    showAlert('Este mês está fechado para novos lançamentos. Reabra em Resumo Geral para poder editar.');
+    return;
+  }
+  closeModal();
+  const minima = pedido.dataMinimaEmissao || null;
+  if(produto === 'vendas'){
+    const novaRow = {
+      id: nextId++, mes, ano: yearFilter, cliente: nome, venda:"", valor: pedido.valor,
+      cnpj: pedido.cnpj||"", renovacao:false, novoContrato:false, upgrade:false,
+      parceiro:"", participacao:null, formaPagamento:"", colaborador:"", vendedor2:"", vendedor3:"",
+      vendedorResponsavel:"", pago:false, mesPagamento:null, observacoes: pedido.observacoes||"",
+      soraya:null, angela:null, rios:null, uilma:null, luciana:null, comissaoPercents:{},
+      dataMinimaEmissao: minima,
+    };
+    rows.unshift(novaRow);
+    persist();
+    render();
+    finalizarVinculoPedido(pedido.id, 'vendas', novaRow.id);
+    return;
+  }
+  const cfg = ENTITIES[produto];
+  const st = state[produto];
+  const mainField = cfg.fields[0].key;
+  const row = {id: st.nextId++, mes, ano: yearFilter, comissaoPercent:null, vendedor:"", comissaoPercent2:null, vendedor2:"", comissaoPercent3:null, vendedor3:""};
+  if(cfg.hasVendasPorVendedor) row.vendasVendedoras = [];
+  if(cfg.hasPagamento){ row.pago=false; row.mesPagamento=null; }
+  const CAMPOS_NUMERICOS = new Set(["valorContrato","participacao"]);
+  cfg.fields.forEach(function(f){ row[f.key] = f.type==="select" ? f.options[0] : ((f.type==="number"||CAMPOS_NUMERICOS.has(f.key)) ? null : ""); });
+  row[mainField] = nome;
+  row.empresas = [];
+  st.rows.unshift(row);
+  render();
+  // Precisa o lançamento já existir no banco ANTES da empresa (chave
+  // estrangeira lancamento_empresas -> lancamentos) — por isso aqui não
+  // dá pra usar o autosave em lote normal (persistEntityRows), que é
+  // debounced e sem garantia de ordem contra o insert da empresa logo
+  // abaixo.
+  try{
+    await salvarNovoLancamentoImediato(produto, row);
+  }catch(e){
+    console.error('Falha ao criar o lançamento a partir do pedido', e);
+    st.rows = st.rows.filter(function(r){ return r.id !== row.id; });
+    render();
+    showAlert('Não consegui criar o lançamento no banco. Tente de novo.');
+    return;
+  }
+  const nova = {
+    id: Date.now(), nome: pedido.cliente, cnpj: pedido.cnpj||'', responsavel: pedido.responsavel||'',
+    telefone: pedido.telefone||'', email: pedido.email||'', valor: pedido.valor,
+    observacoes: pedido.observacoes||'', notaEmitida:false, notaEmitidaEm:null,
+    dataMinimaEmissao: minima, podeEmitir:false, podeEmitirEm:null,
+  };
+  row.empresas.push(nova);
+  persistEmpresaCurso(nova, row.id, { pode_emitir: nova.podeEmitir, pode_emitir_em: nova.podeEmitirEm, data_minima_emissao: nova.dataMinimaEmissao });
+  render();
+  finalizarVinculoPedido(pedido.id, 'lancamento_empresas', nova.id);
 }
 /* Caminho INVERSO do "ver lançamento": a partir de uma venda ou de uma
    empresa (Consultoria/Órgãos Públicos/Cursos), acha o pedido de nota
