@@ -2001,7 +2001,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-25-02';
+const APP_BUILD = '2026-09-25-03';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -2242,6 +2242,7 @@ function renderSolicitarNotaScreen(){
                 <option value="Consultoria" ${f.produto==='Consultoria'?'selected':''}>Consultoria</option>
                 <option value="Órgãos Públicos" ${f.produto==='Órgãos Públicos'?'selected':''}>Órgãos Públicos</option>
                 <option value="Cursos" ${f.produto==='Cursos'?'selected':''}>Cursos</option>
+                <option value="GTAP" ${f.produto==='GTAP'?'selected':''}>GTAP</option>
               </select>
             </label>
             <label class="meta-field"><span>Não emitir antes de (opcional)</span>
@@ -10044,6 +10045,7 @@ function renderPedidosNotaPanel(){
         <option value="Consultoria" ${p.produto==='Consultoria'?'selected':''}>Consultoria</option>
         <option value="Órgãos Públicos" ${p.produto==='Órgãos Públicos'?'selected':''}>Órgãos Públicos</option>
         <option value="Cursos" ${p.produto==='Cursos'?'selected':''}>Cursos</option>
+        <option value="GTAP" ${p.produto==='GTAP'?'selected':''}>GTAP</option>
       </select></td>
       <td><input type="text" class="fin-empresa-campo" value="${esc(p.empenho||'')}" onchange="updatePedidoNotaCampo(${p.id},'empenho',this.value)" /></td>
       <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
