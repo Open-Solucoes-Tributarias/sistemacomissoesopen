@@ -2001,7 +2001,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-24-03';
+const APP_BUILD = '2026-09-25-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -2061,8 +2061,8 @@ async function loadCurrentUserAccess(){
    lida por essa conta — a fila em si é tudo que a RLS deixa passar. */
 let pedidosNota = null;
 let carregandoPedidosNota = false;
-let pedidoNotaForm = { cliente:'', cnpj:'', responsavel:'', telefone:'', email:'', valor:null, produto:'', observacoes:'', dataMinima:'', empenho:'' };
-let pedidoNotaArquivo = null;   // File escolhido no input — não dá pra guardar isso em pedidoNotaForm (não é serializável)
+let pedidoNotaForm = { solicitante:'', cliente:'', cnpj:'', responsavel:'', telefone:'', email:'', valor:null, produto:'', observacoes:'', dataMinima:'', empenho:'' };
+let pedidoNotaArquivos = [];   // File[] escolhidos — não dá pra guardar isso em pedidoNotaForm (não é serializável)
 let enviandoPedidoNota = false;
 let pedidoNotaErro = '';
 let pedidoNotaEnviado = false;
@@ -2078,7 +2078,7 @@ async function tryLoadPedidosNotaAsync(){
         observacoes: d.observacoes||'', status: d.status||'pendente', criadoEm: d.criado_em,
         vinculadoTabela: d.vinculado_tabela||null, vinculadoId: d.vinculado_id||null,
         dataMinimaEmissao: d.data_minima_emissao||null, empenho: d.empenho||'',
-        anexoPath: d.anexo_path||null, anexoNome: d.anexo_nome||null,
+        anexos: Array.isArray(d.anexos) ? d.anexos : [], solicitanteNome: d.solicitante_nome||'',
       };
     });
   }catch(e){
@@ -2093,34 +2093,43 @@ function onPedidoNotaInput(el, campo){
   pedidoNotaForm[campo] = campo === 'valor' ? (el.value === '' ? null : parseFloat(el.value)) : el.value;
 }
 function onPedidoNotaArquivoChange(input){
-  pedidoNotaArquivo = (input.files && input.files[0]) || null;
+  const novos = Array.from((input.files || []));
+  pedidoNotaArquivos = pedidoNotaArquivos.concat(novos);
+  input.value = '';   // permite escolher de novo o mesmo arquivo, se ela remover e se arrepender
+  render();
+}
+function removerPedidoNotaArquivoEscolhido(idx){
+  pedidoNotaArquivos.splice(idx, 1);
   render();
 }
 async function enviarPedidoNota(){
   const f = pedidoNotaForm;
+  if(!f.solicitante.trim()){ pedidoNotaErro = 'Informe quem está pedindo essa nota.'; render(); return; }
   if(!f.cliente.trim()){ pedidoNotaErro = 'Informe o nome do cliente/empresa.'; render(); return; }
   pedidoNotaErro = ''; pedidoNotaEnviado = false; enviandoPedidoNota = true; render();
   try{
-    let anexoPath = null, anexoNome = null;
-    if(pedidoNotaArquivo){
-      const nomeLimpo = pedidoNotaArquivo.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-      anexoPath = Date.now() + '-' + nomeLimpo;
-      await sbUploadFile('pedidos-nota-anexos', anexoPath, pedidoNotaArquivo);
-      anexoNome = pedidoNotaArquivo.name;
+    const anexos = [];
+    for(let i=0; i<pedidoNotaArquivos.length; i++){
+      const arquivo = pedidoNotaArquivos[i];
+      const nomeLimpo = arquivo.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+      const path = Date.now() + '-' + i + '-' + nomeLimpo;
+      await sbUploadFile('pedidos-nota-anexos', path, arquivo);
+      anexos.push({ path: path, nome: arquivo.name });
     }
     await sb('/rest/v1/pedidos_nota', {
       method: 'POST',
       headers: { 'Prefer': 'return=minimal' },
       body: [{
+        solicitante_nome: f.solicitante.trim(),
         cliente: f.cliente.trim(), cnpj: cnpjDigitos(f.cnpj), responsavel: f.responsavel.trim(),
         telefone: f.telefone.trim(), email: f.email.trim(), valor: numOrNull(f.valor),
         produto: f.produto || null, observacoes: f.observacoes.trim(),
         data_minima_emissao: f.dataMinima || null, empenho: f.empenho.trim() || null,
-        anexo_path: anexoPath, anexo_nome: anexoNome,
+        anexos: anexos,
       }],
     });
-    pedidoNotaForm = { cliente:'', cnpj:'', responsavel:'', telefone:'', email:'', valor:null, produto:'', observacoes:'', dataMinima:'', empenho:'' };
-    pedidoNotaArquivo = null;
+    pedidoNotaForm = { solicitante: f.solicitante, cliente:'', cnpj:'', responsavel:'', telefone:'', email:'', valor:null, produto:'', observacoes:'', dataMinima:'', empenho:'' };
+    pedidoNotaArquivos = [];
     pedidoNotaEnviado = true;
     await tryLoadPedidosNotaAsync();
   }catch(e){
@@ -2163,14 +2172,15 @@ function renderSolicitarNotaScreen(){
     : pedidosPendentes.length === 0
       ? `<div class="meta-empty" style="padding:16px 0;">${pedidosNota.length ? 'Todas as suas notas foram vinculadas.' : 'Você ainda não pediu nenhuma nota.'}</div>`
       : `<div class="table-scroll"><table class="table-plain">
-          <thead><tr><th>Cliente</th><th class="num">Valor</th><th>Pedido em</th><th>Não emitir antes de</th><th>Anexo</th><th>Situação</th><th></th></tr></thead>
+          <thead><tr><th>Solicitante</th><th>Cliente</th><th class="num">Valor</th><th>Pedido em</th><th>Não emitir antes de</th><th>Anexo</th><th>Situação</th><th></th></tr></thead>
           <tbody>${pedidosPendentes.map(function(p){ return `
             <tr>
+              <td>${esc(p.solicitanteNome) || '—'}</td>
               <td>${esc(p.cliente)}</td>
               <td class="num">${p.valor===null||p.valor===undefined?'—':fmtMoney(p.valor)}</td>
               <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
               <td>${p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—'}</td>
-              <td>${p.anexoPath ? '📎 ' + esc(p.anexoNome||'anexado') : '—'}</td>
+              <td>${p.anexos && p.anexos.length ? '📎 ' + p.anexos.length + (p.anexos.length===1?' anexo':' anexos') : '—'}</td>
               <td><span class="usuario-tag">Pendente</span></td>
               <td><button type="button" class="anexo-remover" title="Cancelar/excluir este pedido" onclick="excluirMeuPedidoNota(${p.id})">✕</button></td>
             </tr>
@@ -2196,6 +2206,10 @@ function renderSolicitarNotaScreen(){
           ${pedidoNotaErro ? `<div class="auth-error">${esc(pedidoNotaErro)}</div>` : ''}
           ${pedidoNotaEnviado ? `<div class="auth-notice">✅ Pedido enviado! Ele aparece na lista abaixo como "Pendente" até a administração vincular.</div>` : ''}
 
+          <div class="meta-form-grid">
+            <label class="meta-field"><span>Quem está pedindo essa nota *</span>
+              <input type="text" placeholder="Seu nome" value="${esc(f.solicitante)}" oninput="onPedidoNotaInput(this,'solicitante')" /></label>
+          </div>
           <div class="meta-form-grid">
             <label class="meta-field"><span>Cliente / Empresa *</span>
               <input type="text" placeholder="Razão social" value="${esc(f.cliente)}" oninput="onPedidoNotaInput(this,'cliente')" /></label>
@@ -2236,12 +2250,14 @@ function renderSolicitarNotaScreen(){
           <label class="meta-field"><span>Observações</span>
             <input type="text" value="${esc(f.observacoes)}" oninput="onPedidoNotaInput(this,'observacoes')" /></label>
 
-          <label class="meta-field"><span>Anexar arquivo (opcional)</span>
-            <label class="anexo-upload" title="Anexar PDF ou imagem de referência (ex: contrato, orçamento)">
-              📎 ${pedidoNotaArquivo ? 'Trocar arquivo' : 'Escolher arquivo'}
-              <input type="file" accept="application/pdf,image/*" onchange="onPedidoNotaArquivoChange(this)" />
+          <label class="meta-field"><span>Anexar arquivos (opcional)</span>
+            <label class="anexo-upload" title="Anexar PDF ou imagem de referência (ex: contrato, orçamento, comprovante) — pode escolher mais de um">
+              📎 ${pedidoNotaArquivos.length ? 'Adicionar outro arquivo' : 'Escolher arquivo'}
+              <input type="file" multiple accept="application/pdf,image/*" onchange="onPedidoNotaArquivoChange(this)" />
             </label>
-            ${pedidoNotaArquivo ? `<span class="anexo-arquivo" style="margin-left:10px;">📄 ${esc(pedidoNotaArquivo.name)}</span>` : ''}
+            ${pedidoNotaArquivos.length ? `<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+              ${pedidoNotaArquivos.map(function(a,idx){ return `<span class="anexo-arquivo">📄 ${esc(a.name)}<button type="button" class="anexo-remover" title="Remover" onclick="removerPedidoNotaArquivoEscolhido(${idx})">✕</button></span>`; }).join('')}
+            </div>` : ''}
           </label>
 
           <button class="auth-submit" ${enviandoPedidoNota?'disabled':''} onclick="enviarPedidoNota()">${enviandoPedidoNota?'Enviando...':'Solicitar nota'}</button>
@@ -5459,7 +5475,7 @@ function renderModal(){
           ${(p.observacoes || isAdmin) ? `<label class="meta-field"><span>Observações</span>${isAdmin
             ? `<textarea class="fin-empresa-campo" rows="3" onchange="updatePedidoNotaCampo(${p.id},'observacoes',this.value)">${esc(p.observacoes)}</textarea>`
             : `<div class="meta-field-valor">${esc(p.observacoes)}</div>`}</label>` : ''}
-          ${p.anexoPath ? `<button type="button" class="modal-btn modal-btn-ghost" onclick="verAnexoPedidoNota(${p.id})">📎 Ver anexo: ${esc(p.anexoNome||'arquivo')}</button>` : ''}
+          ${p.anexos && p.anexos.length ? `<div style="display:flex;flex-direction:column;gap:8px;">${p.anexos.map(function(a){ return `<button type="button" class="modal-btn modal-btn-ghost" onclick="verAnexoPedidoNota(${p.id},'${a.path}')">📎 Ver anexo: ${esc(a.nome||'arquivo')}</button>`; }).join('')}</div>` : ''}
           <div class="divisao-explica">Pedido em ${new Date(p.criadoEm).toLocaleDateString('pt-BR')}.${isAdmin ? '' : ' Pra corrigir algum desses dados, peça pra administração.'}</div>
           <div class="modal-actions">
             <button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button>
@@ -9903,14 +9919,15 @@ async function updatePedidoNotaCampo(pedidoId, campoJs, valorBruto){
 /* Anexo do PEDIDO (ex: contrato, orçamento que a solicitante anexou),
    guardado num bucket à parte — não é a nota fiscal emitida em si (essa
    continua vivendo em notas-fiscais, presa ao lançamento). */
-async function verAnexoPedidoNota(pedidoId){
+async function verAnexoPedidoNota(pedidoId, path){
   const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
-  if(!pedido || !pedido.anexoPath) return;
+  if(!pedido || !pedido.anexos || !pedido.anexos.length) return;
+  const alvo = pedido.anexos.find(function(a){ return a.path === path; }) || pedido.anexos[0];
   // Mesmo motivo do anexo de nota fiscal: abrir a aba ANTES do await,
   // senão o navegador bloqueia como pop-up.
   const aba = window.open('', '_blank');
   try{
-    const url = await sbSignedUrl('pedidos-nota-anexos', pedido.anexoPath, 120);
+    const url = await sbSignedUrl('pedidos-nota-anexos', alvo.path, 120);
     if(aba) aba.location.href = url;
     else window.open(url, '_blank');
   }catch(e){
@@ -9919,22 +9936,27 @@ async function verAnexoPedidoNota(pedidoId){
     showAlert('Não consegui abrir o arquivo anexado. Tente de novo.');
   }
 }
-function removerAnexoPedidoNota(pedidoId){
+function removerAnexoPedidoNota(pedidoId, path){
   if(!isAdmin) return;
   const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
-  if(!pedido || !pedido.anexoPath) return;
+  if(!pedido || !pedido.anexos || !pedido.anexos.length) return;
+  const alvo = pedido.anexos.find(function(a){ return a.path === path; });
+  if(!alvo) return;
   showConfirm(
-    'Remover o anexo "' + (pedido.anexoNome || 'arquivo') + '" deste pedido?',
+    'Remover o anexo "' + (alvo.nome || 'arquivo') + '" deste pedido?',
     async function(){
-      const caminho = pedido.anexoPath;
-      pedido.anexoPath = null; pedido.anexoNome = null;
+      const anteriores = pedido.anexos;
+      const novos = anteriores.filter(function(a){ return a.path !== path; });
+      pedido.anexos = novos;
       render();
       try{
         await sb('/rest/v1/pedidos_nota?id=eq.'+pedidoId, {
-          method:'PATCH', headers:{'Prefer':'return=minimal'}, body:{anexo_path:null, anexo_nome:null},
+          method:'PATCH', headers:{'Prefer':'return=minimal'}, body:{anexos: novos},
         });
-        sbDeleteFile('pedidos-nota-anexos', caminho).catch(function(e){ console.error('Falha ao apagar arquivo do storage', e); });
+        sbDeleteFile('pedidos-nota-anexos', alvo.path).catch(function(e){ console.error('Falha ao apagar arquivo do storage', e); });
       }catch(e){
+        pedido.anexos = anteriores;
+        render();
         console.error('Falha ao remover o anexo do pedido', e);
         showAlert('Não consegui remover o anexo no banco. Tente de novo.');
       }
@@ -9954,7 +9976,7 @@ function excluirPedidoNota(pedidoId){
     async function(){
       try{
         await sb('/rest/v1/pedidos_nota?id=eq.'+pedidoId, { method:'DELETE', headers:{'Prefer':'return=minimal'} });
-        if(pedido.anexoPath) sbDeleteFile('pedidos-nota-anexos', pedido.anexoPath).catch(function(e){ console.error('Falha ao apagar anexo do storage', e); });
+        (pedido.anexos||[]).forEach(function(a){ sbDeleteFile('pedidos-nota-anexos', a.path).catch(function(e){ console.error('Falha ao apagar anexo do storage', e); }); });
         pedidosNota = (pedidosNota||[]).filter(function(p){ return p.id !== pedidoId; });
         render();
       }catch(e){
@@ -9977,6 +9999,12 @@ function renderPedidosNotaPanel(){
   // admin, que é quem decide a qual lançamento cada pedido pertence.
   const podeAgir = isAdmin;
   const pendentes = lista;
+  const anexosCelula = function(p, podeRemover){
+    if(!p.anexos || !p.anexos.length) return '—';
+    return `<div style="display:flex;flex-direction:column;gap:4px;">${p.anexos.map(function(a){
+      return `<span class="anexo-arquivo"><button type="button" class="anexo-link" title="${esc(a.nome||'')}" onclick="verAnexoPedidoNota(${p.id},'${a.path}')">📎 ${esc(a.nome||'arquivo')}</button>${podeRemover ? `<button type="button" class="anexo-remover" title="Remover anexo" onclick="removerAnexoPedidoNota(${p.id},'${a.path}')">✕</button>` : ''}</span>`;
+    }).join('')}</div>`;
+  };
   const linha = function(p){
     if(!podeAgir){
       return `<tr>
@@ -9990,7 +10018,7 @@ function renderPedidosNotaPanel(){
         <td>${p.empenho ? esc(p.empenho) : '—'}</td>
         <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
         <td>${p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—'}</td>
-        <td>${p.anexoPath ? `<button type="button" class="anexo-link" title="${esc(p.anexoNome||'')}" onclick="verAnexoPedidoNota(${p.id})">📎 ${esc(p.anexoNome||'arquivo')}</button>` : '—'}</td>
+        <td>${anexosCelula(p, false)}</td>
         <td>${p.status==='vinculado'
           ? `<button type="button" class="usuario-tag fin link-tag" title="Ver o lançamento vinculado" onclick="irParaLancamentoVinculado(${p.id})">Vinculado ✓ — ver lançamento</button>`
           : '<span class="usuario-tag">Pendente</span>'}</td>
@@ -10018,9 +10046,7 @@ function renderPedidosNotaPanel(){
       <td><input type="text" class="fin-empresa-campo" value="${esc(p.empenho||'')}" onchange="updatePedidoNotaCampo(${p.id},'empenho',this.value)" /></td>
       <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
       <td><input type="date" class="fin-empresa-campo" value="${esc(p.dataMinimaEmissao||'')}" onchange="updatePedidoNotaCampo(${p.id},'dataMinimaEmissao',this.value)" /></td>
-      <td>${p.anexoPath
-        ? `<span class="anexo-arquivo"><button type="button" class="anexo-link" title="${esc(p.anexoNome||'')}" onclick="verAnexoPedidoNota(${p.id})">📎 ${esc(p.anexoNome||'arquivo')}</button><button type="button" class="anexo-remover" title="Remover anexo" onclick="removerAnexoPedidoNota(${p.id})">✕</button></span>`
-        : '—'}</td>
+      <td>${anexosCelula(p, true)}</td>
       <td>${p.status==='vinculado'
         ? `<button type="button" class="usuario-tag fin link-tag" title="Ver o lançamento vinculado" onclick="irParaLancamentoVinculado(${p.id})">Vinculado ✓ — ver lançamento</button>`
         : `<button class="modal-btn modal-btn-ghost" onclick="abrirVincularPedido(${p.id})">Vincular</button>`}</td>
