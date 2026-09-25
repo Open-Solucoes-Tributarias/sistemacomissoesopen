@@ -2001,7 +2001,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-25-01';
+const APP_BUILD = '2026-09-25-02';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -4887,22 +4887,24 @@ function escJs(s){
 /* ---------------- Painéis recolhíveis ----------------
    Cada bloco de tabela/resumo vira um painel que a pessoa pode minimizar.
    O que está aberto/fechado fica salvo no navegador de quem usa (não vai
-   pro banco), então cada um monta a tela do jeito que preferir. */
+   pro banco), então cada um monta a tela do jeito que preferir. Por
+   padrão — enquanto ninguém mexeu ainda naquele painel — ele já abre
+   suprimido; só fica lembrado aberto depois que a pessoa clica pra abrir. */
 const COLLAPSE_KEY = 'comissoes_paineis_v1';
 let collapsedSections = {};
 try{
   collapsedSections = JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '{}') || {};
 } catch(e){ collapsedSections = {}; }
 
-function isSectionCollapsed(id){ return !!collapsedSections[id]; }
+function isSectionCollapsed(id){ return collapsedSections[id] !== false; }
 function toggleSection(id){
-  collapsedSections[id] = !collapsedSections[id];
+  collapsedSections[id] = isSectionCollapsed(id) ? false : true;
   try{ localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsedSections)); } catch(e){}
   const el = document.getElementById('sec-'+id);
   if(el){
-    el.classList.toggle('collapsed', collapsedSections[id]);
+    el.classList.toggle('collapsed', isSectionCollapsed(id));
     const btn = el.querySelector('.panel-toggle');
-    if(btn) btn.setAttribute('aria-expanded', collapsedSections[id] ? 'false' : 'true');
+    if(btn) btn.setAttribute('aria-expanded', isSectionCollapsed(id) ? 'false' : 'true');
   }
 }
 function setAllSections(collapsed){
@@ -9289,7 +9291,7 @@ function irParaNotasProntas(){
   // localStorage de uma sessão anterior) ou lá embaixo da tela — sem
   // isso, o filtro muda por baixo dos panos e a pessoa não vê nada
   // acontecer quando clica em "Ver notas".
-  if(collapsedSections['fin-notas']){
+  if(isSectionCollapsed('fin-notas')){
     collapsedSections['fin-notas'] = false;
     try{ localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsedSections)); }catch(e){}
   }
