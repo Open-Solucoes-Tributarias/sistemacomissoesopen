@@ -2001,7 +2001,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-25-04';
+const APP_BUILD = '2026-09-28-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5246,9 +5246,13 @@ function renderModal(){
                    📎 Anexar<input type="file" accept="application/pdf,image/*" onchange="anexarNotaArquivo('lancamento_empresas',${e.id},'',this)" />
                  </label>`)
             : (e.notaArquivoPath ? `<button type="button" class="anexo-link" title="${esc(e.notaArquivoNome||'')}" onclick="verNotaAnexada('lancamento_empresas',${e.id},'')">📎 ${esc(e.notaArquivoNome||'arquivo')}</button>` : '—')}</td>
+          <td>${podeVisar
+            ? `<input type="text" class="fin-empresa-campo" value="${esc(e.observacoes)}" placeholder="Observações"
+                     onchange="updateEmpresaCurso(${e.id},'observacoes',this.value)" />`
+            : (esc(e.observacoes) || '—')}</td>
           ${podeVisar ? `<td><button class="action-btn danger" title="Remover" onclick="removeEmpresaCurso(${e.id})">✕</button></td>` : ''}
         </tr>`;
-    }).join('') : `<tr class="empty-row"><td colspan="${podeVisar?9:8}"><span class="empty-icon">◌</span>Nenhuma empresa cadastrada ainda.</td></tr>`;
+    }).join('') : `<tr class="empty-row"><td colspan="${podeVisar?10:9}"><span class="empty-icon">◌</span>Nenhuma empresa cadastrada ainda.</td></tr>`;
 
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
@@ -5262,7 +5266,7 @@ function renderModal(){
           <div class="table-scroll">
             <table class="table-plain">
               <thead><tr>
-                <th style="min-width:340px;">Empresa</th><th style="min-width:140px;">CNPJ</th><th style="min-width:150px;">Responsável</th><th style="min-width:140px;">Telefone</th><th style="min-width:180px;">E-mail</th><th class="num" style="min-width:110px;">Valor</th><th style="min-width:120px;">Nota fiscal</th><th style="min-width:130px;">Anexo</th>${podeVisar?'<th></th>':''}
+                <th style="min-width:340px;">Empresa</th><th style="min-width:140px;">CNPJ</th><th style="min-width:150px;">Responsável</th><th style="min-width:140px;">Telefone</th><th style="min-width:180px;">E-mail</th><th class="num" style="min-width:110px;">Valor</th><th style="min-width:120px;">Nota fiscal</th><th style="min-width:130px;">Anexo</th><th style="min-width:200px;">Observações</th>${podeVisar?'<th></th>':''}
               </tr></thead>
               <tbody>${linhas}</tbody>
             </table>
