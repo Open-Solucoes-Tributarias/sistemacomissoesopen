@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-29-04';
+const APP_BUILD = '2026-09-29-05';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -4774,12 +4774,25 @@ function addParcelaDivisao(pessoa, ano, mes, tipo){
   render();
   persistDivisaoFechamento(item);
 }
+const divisaoDataRenderTimers = {};
 function updateParcelaDivisao(id, campo, valorBruto){
   if(!isAdmin) return;
   const item = fechamentoDivisoes.find(function(d){ return d.id === id; });
   if(!item) return;
   item[campo] = campo === 'valor' ? (valorBruto === '' ? null : parseFloat(valorBruto)) : valorBruto;
-  render();
+  if(campo === 'data'){
+    // input type="date" dispara "change" assim que dia+mês+QUALQUER ano
+    // parcial já formam uma data "válida" — mesmo com só o primeiro
+    // dígito do ano digitado. Se a gente re-renderiza nesse instante (o
+    // render() troca o <input> inteiro no DOM), o foco se perde e o
+    // resto da digitação do ano vai pro limbo — por isso espera a
+    // pessoa parar de digitar antes de redesenhar a tela.
+    const tk = 'divisao-data-' + id;
+    if(divisaoDataRenderTimers[tk]) clearTimeout(divisaoDataRenderTimers[tk]);
+    divisaoDataRenderTimers[tk] = setTimeout(render, 900);
+  } else {
+    render();
+  }
   persistDivisaoFechamento(item);
 }
 function removerParcelaDivisao(id){
@@ -9775,24 +9788,39 @@ function acharAlvoNota(tabela, id, entKey){
    RPC, porque esse campo não é protegido pelo gatilho
    protege_campos_emissao — só pode_emitir/nota_emitida/nota_arquivo_path
    são. */
-async function editarDataMinimaEmissao(tabela, id, entKey, valorBruto){
+const dataMinimaEmissaoTimers = {};
+const dataMinimaEmissaoOriginal = {};
+function editarDataMinimaEmissao(tabela, id, entKey, valorBruto){
   if(!isAdmin) return;
   const alvo = acharAlvoNota(tabela, id, entKey);
   if(!alvo) return;
-  const anterior = alvo.dataMinimaEmissao;
-  const novo = valorBruto || null;
-  alvo.dataMinimaEmissao = novo;
-  render();
-  try{
-    await sb('/rest/v1/'+tabela+'?id=eq.'+id, {
-      method:'PATCH', headers:{'Prefer':'return=minimal'}, body:{ data_minima_emissao: novo },
-    });
-  }catch(e){
-    console.error('Falha ao editar a data mínima de emissão', e);
-    alvo.dataMinimaEmissao = anterior;
+  const tk = tabela + '-' + id;
+  // input type="date" dispara "change" assim que dia+mês+QUALQUER ano
+  // parcial já formam uma data "válida" — mesmo com só o primeiro
+  // dígito do ano digitado. Se a gente re-renderiza nesse instante (o
+  // render() troca o <input> inteiro no DOM), o foco se perde e o resto
+  // da digitação do ano vai pro limbo — por isso espera a pessoa parar
+  // de digitar antes de redesenhar a tela e de gravar no banco.
+  if(!(tk in dataMinimaEmissaoOriginal)) dataMinimaEmissaoOriginal[tk] = alvo.dataMinimaEmissao;
+  alvo.dataMinimaEmissao = valorBruto || null;
+  if(dataMinimaEmissaoTimers[tk]) clearTimeout(dataMinimaEmissaoTimers[tk]);
+  dataMinimaEmissaoTimers[tk] = setTimeout(function(){
     render();
-    showAlert('Não consegui salvar essa data. Confira a internet e tente de novo.');
-  }
+    const anterior = dataMinimaEmissaoOriginal[tk];
+    delete dataMinimaEmissaoOriginal[tk];
+    (async function(){
+      try{
+        await sb('/rest/v1/'+tabela+'?id=eq.'+id, {
+          method:'PATCH', headers:{'Prefer':'return=minimal'}, body:{ data_minima_emissao: alvo.dataMinimaEmissao },
+        });
+      }catch(e){
+        console.error('Falha ao editar a data mínima de emissão', e);
+        alvo.dataMinimaEmissao = anterior;
+        render();
+        showAlert('Não consegui salvar essa data. Confira a internet e tente de novo.');
+      }
+    })();
+  }, 900);
 }
 
 async function toggleNotaEmitida(tabela, id, entKey){
