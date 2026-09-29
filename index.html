@@ -2001,7 +2001,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-29-01';
+const APP_BUILD = '2026-09-29-02';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -10152,6 +10152,7 @@ function renderPedidosNotaPanel(){
   const linha = function(p){
     if(!podeAgir){
       return `<tr>
+        <td>${esc(p.solicitanteNome) || '—'}</td>
         <td>${esc(p.cliente)}</td>
         <td>${esc(formatCnpj(p.cnpj)) || '—'}</td>
         <td>${esc(p.responsavel) || '—'}</td>
@@ -10173,6 +10174,7 @@ function renderPedidosNotaPanel(){
     // às vezes digita algo errado, e sem isso a única saída seria
     // excluir e pedir pra ela mandar tudo de novo.
     return `<tr>
+      <td>${esc(p.solicitanteNome) || '—'}</td>
       <td><input type="text" class="fin-empresa-campo" value="${esc(p.cliente)}" onchange="updatePedidoNotaCampo(${p.id},'cliente',this.value)" /></td>
       <td><input type="text" class="fin-empresa-campo" value="${esc(formatCnpj(p.cnpj))}" oninput="this.value=formatCnpj(this.value)" onchange="updatePedidoNotaCampo(${p.id},'cnpj',this.value)" /></td>
       <td><input type="text" class="fin-empresa-campo" value="${esc(p.responsavel)}" onchange="updatePedidoNotaCampo(${p.id},'responsavel',this.value)" /></td>
@@ -10201,7 +10203,7 @@ function renderPedidosNotaPanel(){
   return panel('pedidos-nota', '📋 Pedidos de Nota' + (pendentes.length ? ` (${pendentes.length} pendente${pendentes.length===1?'':'s'})` : ''), `
     <div class="table-scroll">
       <table class="table-plain">
-        <thead><tr><th>Cliente</th><th>CNPJ</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th class="num">Valor</th><th>Produto</th><th>Empenho</th><th>Pedido em</th><th>Não emitir antes de</th><th>Anexo</th><th></th><th></th></tr></thead>
+        <thead><tr><th>Solicitante</th><th>Cliente</th><th>CNPJ</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th class="num">Valor</th><th>Produto</th><th>Empenho</th><th>Pedido em</th><th>Não emitir antes de</th><th>Anexo</th><th></th><th></th></tr></thead>
         <tbody>${pendentes.map(linha).join('')}</tbody>
       </table>
     </div>
