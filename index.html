@@ -1848,6 +1848,7 @@ let trafegoFilter = "Todos";
 let trafegoMetricaFoco = 'gasto';
 let closedMonths = [];
 let fechamentosMes = [];   // [{ano, mes, fechadoEm}] — quando cada mês foi fechado pra pagamento (não confundir com closedMonths, que é o mês fechado pra EDIÇÃO)
+let fechamentoDivisoes = [];   // [{id, pessoa, ano, mes, tipo:'clt'|'nota', data, valor, observacoes}] — como o "Total a pagar" de cada pessoa vai sair de fato (folha x nota PJ), digitado à mão porque varia todo mês
 let prazosEmissaoNota = [];   // [{id, entidade, nomeCliente, dia, avista}] — dia fixo do mês combinado pra emitir a nota de um contrato Mensal/Plano Premium (lembrete só pro financeiro); avista=true marca "pago à vista, sem nota recorrente" (dia fica null)
 let atualizandoNotas = false;   // "↻ Atualizar" do quadro de notas — busca de novo do banco, sem recarregar a página inteira
 let novaVersaoDisponivel = false;   // true quando checkForNewVersion() percebe que o HTML publicado mudou — ver checkForNewVersion()
@@ -2001,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-29-03';
+const APP_BUILD = '2026-09-29-04';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -4723,6 +4724,98 @@ async function tryLoadMetasFromStorageAsync(){
   } catch(e){ console.error(e); }
 }
 
+async function tryLoadFechamentoDivisoesAsync(){
+  try{
+    const dbRows = await sbSelectTudo('fechamento_divisoes', 'select=*&order=id.asc');
+    if(dbRows){
+      fechamentoDivisoes = dbRows.map(function(d){
+        return { id: d.id, pessoa: d.pessoa, ano: d.ano, mes: d.mes, tipo: d.tipo, data: d.data||null, valor: d.valor===null||d.valor===undefined?null:Number(d.valor), observacoes: d.observacoes||'' };
+      });
+      render();
+    }
+  } catch(e){ console.error('Falha ao carregar a divisão do fechamento', e); }
+}
+const divisaoFechamentoTimers = {};
+function persistDivisaoFechamento(item){
+  if(!isAdmin) return;
+  saving = true; updateSaveStatus();
+  const tk = 'divisao-' + item.id;
+  if(divisaoFechamentoTimers[tk]) clearTimeout(divisaoFechamentoTimers[tk]);
+  divisaoFechamentoTimers[tk] = setTimeout(function(){
+    (async function(){
+      try{
+        await sbUpsert('fechamento_divisoes', [{
+          id: item.id, pessoa: item.pessoa, ano: item.ano, mes: item.mes,
+          tipo: item.tipo, data: item.data || null, valor: numOrNull(item.valor),
+          observacoes: item.observacoes || '',
+        }], 'id');
+        saveError = false;
+      }catch(e){
+        console.error('Falha ao salvar a divisão do fechamento', e);
+        saveError = true;
+        showAlert('Não consegui salvar essa parcela. Confira a internet e tente de novo.');
+      }finally{ saving = false; updateSaveStatus(); }
+    })();
+  }, 450);
+}
+function parcelasDivisao(pessoa, ano, mes){
+  return fechamentoDivisoes.filter(function(d){ return d.pessoa === pessoa && d.ano === ano && d.mes === mes; });
+}
+function abrirDivisaoFechamento(pessoa, mes){
+  if(!isAdmin) return;
+  if(!mes || mes === 'Todos'){ showAlert('Escolha um mês específico no filtro pra dividir o pagamento desta pessoa.'); return; }
+  modalState = { type:'divisao-fechamento', pessoa: pessoa, mes: mes };
+  render();
+}
+function addParcelaDivisao(pessoa, ano, mes, tipo){
+  if(!isAdmin) return;
+  const item = { id: Date.now(), pessoa: pessoa, ano: ano, mes: mes, tipo: tipo, data: null, valor: null, observacoes: '' };
+  fechamentoDivisoes.push(item);
+  render();
+  persistDivisaoFechamento(item);
+}
+function updateParcelaDivisao(id, campo, valorBruto){
+  if(!isAdmin) return;
+  const item = fechamentoDivisoes.find(function(d){ return d.id === id; });
+  if(!item) return;
+  item[campo] = campo === 'valor' ? (valorBruto === '' ? null : parseFloat(valorBruto)) : valorBruto;
+  render();
+  persistDivisaoFechamento(item);
+}
+function removerParcelaDivisao(id){
+  if(!isAdmin) return;
+  const item = fechamentoDivisoes.find(function(d){ return d.id === id; });
+  if(!item) return;
+  fechamentoDivisoes = fechamentoDivisoes.filter(function(d){ return d.id !== id; });
+  render();
+  sb('/rest/v1/fechamento_divisoes?id=eq.'+id, { method:'DELETE', headers:{'Prefer':'return=minimal'} }).catch(function(e){
+    console.error('Falha ao excluir a parcela', e);
+    fechamentoDivisoes.push(item);
+    render();
+    showAlert('Não consegui excluir essa parcela. Tente de novo.');
+  });
+}
+function exportDivisaoFechamentoCSV(pessoa, mes){
+  try{
+    const linha = fechamentoPagamentos(mes).find(function(l){ return l.pessoa === pessoa; });
+    const totalPagar = linha ? linha.aPagar : 0;
+    const parcelas = parcelasDivisao(pessoa, yearFilter, mes);
+    const somaParcelas = parcelas.reduce(function(a,p){ return a + (Number(p.valor)||0); }, 0);
+    let csv = 'Divisao do pagamento - ' + pessoa + ' - ' + mes + '/' + yearFilter + '\n\n';
+    csv += 'Tipo;Data;Valor;Observacoes\n';
+    parcelas.forEach(function(p){
+      csv += [p.tipo === 'clt' ? 'Folha de pagamento (CLT)' : 'Nota fiscal (PJ)', p.data ? formatarDataIso(p.data) : '', csvNum(p.valor), csvTexto(p.observacoes)].join(';') + '\n';
+    });
+    csv += '\nTotal a pagar;;' + csvNum(totalPagar) + '\n';
+    csv += 'Somado nas parcelas;;' + csvNum(somaParcelas) + '\n';
+
+    baixarTexto('divisao-pagamento-' + pessoa.replace(/[^a-zA-Z0-9]/g,'_') + '-' + mes + '-' + yearFilter + '.csv', csv);
+  }catch(e){
+    console.error('Falha ao exportar a divisão do fechamento', e);
+    showAlert('Não foi possível gerar o arquivo. Tente novamente.');
+  }
+}
+
 /* ---------- Relatórios mensais da equipe ---------- */
 let relatoriosTimer = null;
 function persistRelatorios(){
@@ -5330,6 +5423,58 @@ function renderModal(){
             Somado: <b>${fmtMoney(d.somado)}</b> de ${fmtMoney(d.total)}${d.fecha ? ' — confere' : ' — <b>'+esc(d.rotuloDiferenca)+'</b>'}
           </div>
           <div class="modal-actions"><button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button></div>
+        </div>
+      </div>
+    `;
+  }
+  if(m.type === 'divisao-fechamento'){
+    const pessoa = m.pessoa, mes = m.mes;
+    const linha = fechamentoPagamentos(mes).find(function(l){ return l.pessoa === pessoa; });
+    const totalPagar = linha ? linha.aPagar : 0;
+    const parcelas = parcelasDivisao(pessoa, yearFilter, mes);
+    const somaParcelas = parcelas.reduce(function(a,p){ return a + (Number(p.valor)||0); }, 0);
+    const diferenca = totalPagar - somaParcelas;
+    const fecha = Math.abs(diferenca) < 0.005;
+    const linhasHtml = parcelas.length ? parcelas.map(function(p){
+      return `<tr>
+        <td><select class="fin-empresa-campo" onchange="updateParcelaDivisao(${p.id},'tipo',this.value)">
+          <option value="clt" ${p.tipo==='clt'?'selected':''}>Folha de pagamento (CLT)</option>
+          <option value="nota" ${p.tipo==='nota'?'selected':''}>Nota fiscal (PJ)</option>
+        </select></td>
+        <td><input type="date" class="fin-empresa-campo" value="${esc(p.data||'')}" onchange="updateParcelaDivisao(${p.id},'data',this.value)" /></td>
+        <td class="col-valor"><div class="currency-wrap"><span class="currency-prefix">R$</span>
+          <input class="num fin-empresa-campo" type="number" step="0.01" value="${p.valor===null||p.valor===undefined?'':p.valor}" onchange="updateParcelaDivisao(${p.id},'valor',this.value)" /></div></td>
+        <td><input type="text" class="fin-empresa-campo" value="${esc(p.observacoes||'')}" placeholder="Ex: nota do dia 15" onchange="updateParcelaDivisao(${p.id},'observacoes',this.value)" /></td>
+        <td><button class="action-btn danger" title="Remover" onclick="removerParcelaDivisao(${p.id})">✕</button></td>
+      </tr>`;
+    }).join('') : `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhuma parcela ainda.</td></tr>`;
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-xwide">
+          <div class="modal-msg">Divisão do pagamento — ${esc(pessoa)}</div>
+          <div class="divisao-explica">
+            Total a pagar em ${esc(mes)}/${yearFilter}: <b>${fmtMoney(totalPagar)}</b>. Registre aqui como esse
+            valor vai sair de fato — parte na folha, parte em nota fiscal PJ, cada uma com sua data — pra gerar
+            o relatório pra encaminhar ao financeiro.
+          </div>
+          <div class="table-scroll">
+            <table class="table-plain">
+              <thead><tr><th>Tipo</th><th>Data</th><th class="num">Valor</th><th>Observações</th><th></th></tr></thead>
+              <tbody>${linhasHtml}</tbody>
+            </table>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button class="modal-btn modal-btn-ghost" style="flex:1;" onclick="addParcelaDivisao('${escJs(pessoa)}',${yearFilter},'${escJs(mes)}','clt')">+ Parte na folha (CLT)</button>
+            <button class="modal-btn modal-btn-ghost" style="flex:1;" onclick="addParcelaDivisao('${escJs(pessoa)}',${yearFilter},'${escJs(mes)}','nota')">+ Nota fiscal (PJ)</button>
+          </div>
+          <div class="divisao-conferencia${fecha?' ok':''}">
+            Somado: <b>${fmtMoney(somaParcelas)}</b> de ${fmtMoney(totalPagar)}${fecha ? ' — confere' : (diferenca > 0 ? ' — falta ' + fmtMoney(diferenca) : ' — ' + fmtMoney(-diferenca) + ' a mais')}
+          </div>
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-ghost" onclick="exportDivisaoFechamentoCSV('${escJs(pessoa)}','${escJs(mes)}')">📊 Baixar CSV</button>
+            <button class="modal-btn modal-btn-ghost" onclick="imprimirComprovanteFechamento('${escJs(pessoa)}','${escJs(mes)}')">🧾 Gerar PDF</button>
+            <button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button>
+          </div>
         </div>
       </div>
     `;
@@ -7721,7 +7866,10 @@ function renderBonusSection(){
         ${celulaFechamento(l.pessoa, 'consultoria', 'Consultoria', l.consultoria, bonusFilter, dinheiro(l.consultoria), 'col-apoio', bonusValuesRevealed)}
         <td class="num" style="font-weight:800;">${dinheiro(l.aPagar)}</td>
         <td class="num col-apoio" title="Já ganhou, mas ainda espera o cliente pagar">${dinheiro(l.pendente)}</td>
-        <td class="del-cell">${bonusFilter!=="Todos" ? `<button class="action-btn" title="Gerar comprovante em PDF dos recebíveis de ${esc(l.pessoa)} em ${esc(bonusFilter)}" onclick="imprimirComprovanteFechamento('${escJs(l.pessoa)}','${escJs(bonusFilter)}')">🧾</button>` : ''}</td>
+        <td class="del-cell">${bonusFilter!=="Todos" ? `
+          ${isAdmin ? `<button class="action-btn" title="Dividir esse pagamento entre folha (CLT) e nota(s) fiscal(is) PJ" onclick="abrirDivisaoFechamento('${escJs(l.pessoa)}','${escJs(bonusFilter)}')">💰</button>` : ''}
+          <button class="action-btn" title="Gerar comprovante em PDF dos recebíveis de ${esc(l.pessoa)} em ${esc(bonusFilter)}" onclick="imprimirComprovanteFechamento('${escJs(l.pessoa)}','${escJs(bonusFilter)}')">🧾</button>
+        ` : ''}</td>
       </tr>`).join('');
 
   const editorFechamentoHtml = (isAdmin && fechamentoEditando) ? panel('bonus-fechamento-quem', 'Quem entra no fechamento', `
@@ -13582,6 +13730,26 @@ function montarComprovanteFechamento(pessoa, mes){
       <td class="num destaque">${fmtMoney(l.comissao)}</td></tr>`;
   });
 
+  // Como esse total vai sair de fato — parte na folha (CLT), parte em
+  // nota(s) fiscal(is) PJ com data — só aparece quando alguém já
+  // preencheu essa divisão em "💰 Dividir pagamento".
+  const parcelas = parcelasDivisao(pessoa, ano, mes);
+  const somaParcelas = parcelas.reduce(function(a,p){ return a + (Number(p.valor)||0); }, 0);
+  const divisaoHtml = parcelas.length ? `
+    <section class="rel-sec">
+      <h2>Como pagar</h2>
+      ${relTabela(
+        [{label:'Tipo'},{label:'Data'},{label:'Valor',num:true},{label:'Observações'}],
+        parcelas.map(function(p){
+          return `<tr><td>${p.tipo==='clt'?'Folha de pagamento (CLT)':'Nota fiscal (PJ)'}</td>
+            <td>${p.data ? formatarDataIso(p.data) : '—'}</td>
+            <td class="num destaque">${fmtMoney(Number(p.valor)||0)}</td>
+            <td>${esc(p.observacoes) || '—'}</td></tr>`;
+        }), '')}
+      <p class="rel-nota">Somado: ${fmtMoney(somaParcelas)} de ${fmtMoney(total)}${Math.abs(total-somaParcelas)<0.005 ? ' — confere.' : (total-somaParcelas>0 ? ' — falta '+fmtMoney(total-somaParcelas)+'.' : ' — '+fmtMoney(somaParcelas-total)+' a mais.')}</p>
+    </section>
+  ` : '';
+
   return `
     <div class="rel-doc">
       <header class="rel-faixa">
@@ -13610,6 +13778,7 @@ function montarComprovanteFechamento(pessoa, mes){
           linhasHtml, 'Nenhum recebível de ' + pessoa + ' em ' + mes + '.')}
         <p class="rel-nota">Considera só o que já está liberado para pagamento em ${esc(mes)} — o que ainda espera o cliente pagar não entra aqui.</p>
       </section>
+      ${divisaoHtml}
     </div>
   `;
 }
@@ -15673,6 +15842,7 @@ function boot(){
     tryLoadMarketingLeadsAsync(),
     tryLoadClosedMonthsFromStorageAsync(),
     tryLoadMetasFromStorageAsync(),
+    tryLoadFechamentoDivisoesAsync(),
     tryLoadRelatoriosFromStorageAsync(),
     tryLoadPainelPesosAsync(),
     tryLoadPainelTotaisAsync(),
