@@ -2001,7 +2001,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-28-01';
+const APP_BUILD = '2026-09-29-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5235,6 +5235,10 @@ function renderModal(){
                      oninput="onEmpresaValorInput(this,${e.id})" onchange="updateEmpresaCurso(${e.id},'valor',this.value)" />
             </div>
           </td>
+          <td>${isAdmin
+            ? `<input type="date" class="fin-empresa-campo" value="${esc(e.dataMinimaEmissao||'')}" title="Não emitir antes desta data"
+                     onchange="editarDataMinimaEmissao('lancamento_empresas',${e.id},'',this.value)" />`
+            : (e.dataMinimaEmissao ? formatarDataIso(e.dataMinimaEmissao) : '—')}</td>
           <td>${notaEmissaoBotoesHtml('lancamento_empresas', e.id, '', e.podeEmitir, e.podeEmitirEm, e.notaEmitida, e.notaEmitidaEm, podeVisar, e.dataMinimaEmissao)}</td>
           <td>${podeVisar
             ? (e.notaArquivoPath
@@ -5252,7 +5256,7 @@ function renderModal(){
             : (esc(e.observacoes) || '—')}</td>
           ${podeVisar ? `<td><button class="action-btn danger" title="Remover" onclick="removeEmpresaCurso(${e.id})">✕</button></td>` : ''}
         </tr>`;
-    }).join('') : `<tr class="empty-row"><td colspan="${podeVisar?10:9}"><span class="empty-icon">◌</span>Nenhuma empresa cadastrada ainda.</td></tr>`;
+    }).join('') : `<tr class="empty-row"><td colspan="${podeVisar?11:10}"><span class="empty-icon">◌</span>Nenhuma empresa cadastrada ainda.</td></tr>`;
 
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
@@ -5266,7 +5270,7 @@ function renderModal(){
           <div class="table-scroll">
             <table class="table-plain">
               <thead><tr>
-                <th style="min-width:340px;">Empresa</th><th style="min-width:140px;">CNPJ</th><th style="min-width:150px;">Responsável</th><th style="min-width:140px;">Telefone</th><th style="min-width:180px;">E-mail</th><th class="num" style="min-width:110px;">Valor</th><th style="min-width:120px;">Nota fiscal</th><th style="min-width:130px;">Anexo</th><th style="min-width:200px;">Observações</th>${podeVisar?'<th></th>':''}
+                <th style="min-width:340px;">Empresa</th><th style="min-width:140px;">CNPJ</th><th style="min-width:150px;">Responsável</th><th style="min-width:140px;">Telefone</th><th style="min-width:180px;">E-mail</th><th class="num" style="min-width:110px;">Valor</th><th style="min-width:150px;">Não emitir antes de</th><th style="min-width:120px;">Nota fiscal</th><th style="min-width:130px;">Anexo</th><th style="min-width:200px;">Observações</th>${podeVisar?'<th></th>':''}
               </tr></thead>
               <tbody>${linhas}</tbody>
             </table>
@@ -9569,6 +9573,32 @@ function acharAlvoNota(tabela, id, entKey){
   if(tabela === 'vendas') return rows.find(function(r){ return r.id === id; });
   if(tabela === 'lancamento_empresas') return acharEmpresaPorId(id);
   return state[entKey] ? state[entKey].rows.find(function(r){ return r.id === id; }) : null;
+}
+/* "Não emitir antes de" — só o admin mexe aqui, de propósito: é a trava
+   que o pedido de nota original pediu, e deixar o financeiro mudar
+   destravaria a própria trava que ela deveria respeitar. Grava direto
+   na tabela (a RLS já deixa o admin dar UPDATE nela) sem precisar de
+   RPC, porque esse campo não é protegido pelo gatilho
+   protege_campos_emissao — só pode_emitir/nota_emitida/nota_arquivo_path
+   são. */
+async function editarDataMinimaEmissao(tabela, id, entKey, valorBruto){
+  if(!isAdmin) return;
+  const alvo = acharAlvoNota(tabela, id, entKey);
+  if(!alvo) return;
+  const anterior = alvo.dataMinimaEmissao;
+  const novo = valorBruto || null;
+  alvo.dataMinimaEmissao = novo;
+  render();
+  try{
+    await sb('/rest/v1/'+tabela+'?id=eq.'+id, {
+      method:'PATCH', headers:{'Prefer':'return=minimal'}, body:{ data_minima_emissao: novo },
+    });
+  }catch(e){
+    console.error('Falha ao editar a data mínima de emissão', e);
+    alvo.dataMinimaEmissao = anterior;
+    render();
+    showAlert('Não consegui salvar essa data. Confira a internet e tente de novo.');
+  }
 }
 
 async function toggleNotaEmitida(tabela, id, entKey){
