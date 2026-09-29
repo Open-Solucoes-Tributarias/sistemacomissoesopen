@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-29-05';
+const APP_BUILD = '2026-09-29-06';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -4808,10 +4808,17 @@ function removerParcelaDivisao(id){
     showAlert('Não consegui excluir essa parcela. Tente de novo.');
   });
 }
+/* A Consultoria paga no dia 15 do mesmo mês, num ciclo à parte do resto
+   da folha (que só sai no dia 05 do mês seguinte) — "Total a pagar" bruto
+   mistura os dois. A divisão CLT/nota PJ é sempre sobre esse resto (dia
+   05), nunca sobre a Consultoria, que já saiu por outro caminho. */
+function totalParaDividir(linha){
+  return linha ? linha.aPagar - linha.consultoria : 0;
+}
 function exportDivisaoFechamentoCSV(pessoa, mes){
   try{
     const linha = fechamentoPagamentos(mes).find(function(l){ return l.pessoa === pessoa; });
-    const totalPagar = linha ? linha.aPagar : 0;
+    const totalPagar = totalParaDividir(linha);
     const parcelas = parcelasDivisao(pessoa, yearFilter, mes);
     const somaParcelas = parcelas.reduce(function(a,p){ return a + (Number(p.valor)||0); }, 0);
     let csv = 'Divisao do pagamento - ' + pessoa + ' - ' + mes + '/' + yearFilter + '\n\n';
@@ -5443,7 +5450,7 @@ function renderModal(){
   if(m.type === 'divisao-fechamento'){
     const pessoa = m.pessoa, mes = m.mes;
     const linha = fechamentoPagamentos(mes).find(function(l){ return l.pessoa === pessoa; });
-    const totalPagar = linha ? linha.aPagar : 0;
+    const totalPagar = totalParaDividir(linha);
     const parcelas = parcelasDivisao(pessoa, yearFilter, mes);
     const somaParcelas = parcelas.reduce(function(a,p){ return a + (Number(p.valor)||0); }, 0);
     const diferenca = totalPagar - somaParcelas;
@@ -5457,7 +5464,7 @@ function renderModal(){
         <td><input type="date" class="fin-empresa-campo" value="${esc(p.data||'')}" onchange="updateParcelaDivisao(${p.id},'data',this.value)" /></td>
         <td class="col-valor"><div class="currency-wrap"><span class="currency-prefix">R$</span>
           <input class="num fin-empresa-campo" type="number" step="0.01" value="${p.valor===null||p.valor===undefined?'':p.valor}" onchange="updateParcelaDivisao(${p.id},'valor',this.value)" /></div></td>
-        <td><input type="text" class="fin-empresa-campo" value="${esc(p.observacoes||'')}" placeholder="Ex: nota do dia 15" onchange="updateParcelaDivisao(${p.id},'observacoes',this.value)" /></td>
+        <td><input type="text" class="fin-empresa-campo" value="${esc(p.observacoes||'')}" placeholder="Ex: 2ª nota do mês" onchange="updateParcelaDivisao(${p.id},'observacoes',this.value)" /></td>
         <td><button class="action-btn danger" title="Remover" onclick="removerParcelaDivisao(${p.id})">✕</button></td>
       </tr>`;
     }).join('') : `<tr class="empty-row"><td colspan="5"><span class="empty-icon">◌</span>Nenhuma parcela ainda.</td></tr>`;
@@ -5466,7 +5473,7 @@ function renderModal(){
         <div class="modal-box modal-box-xwide">
           <div class="modal-msg">Divisão do pagamento — ${esc(pessoa)}</div>
           <div class="divisao-explica">
-            Total a pagar em ${esc(mes)}/${yearFilter}: <b>${fmtMoney(totalPagar)}</b>. Registre aqui como esse
+            A dividir em ${esc(mes)}/${yearFilter}: <b>${fmtMoney(totalPagar)}</b>${linha && linha.consultoria ? ' (o total a pagar já sem a Consultoria, que paga à parte no dia 15)' : ''}. Registre aqui como esse
             valor vai sair de fato — parte na folha, parte em nota fiscal PJ, cada uma com sua data — pra gerar
             o relatório pra encaminhar ao financeiro.
           </div>
@@ -7880,7 +7887,6 @@ function renderBonusSection(){
         <td class="num" style="font-weight:800;">${dinheiro(l.aPagar)}</td>
         <td class="num col-apoio" title="Já ganhou, mas ainda espera o cliente pagar">${dinheiro(l.pendente)}</td>
         <td class="del-cell">${bonusFilter!=="Todos" ? `
-          ${isAdmin ? `<button class="action-btn" title="Dividir esse pagamento entre folha (CLT) e nota(s) fiscal(is) PJ" onclick="abrirDivisaoFechamento('${escJs(l.pessoa)}','${escJs(bonusFilter)}')">💰</button>` : ''}
           <button class="action-btn" title="Gerar comprovante em PDF dos recebíveis de ${esc(l.pessoa)} em ${esc(bonusFilter)}" onclick="imprimirComprovanteFechamento('${escJs(l.pessoa)}','${escJs(bonusFilter)}')">🧾</button>
         ` : ''}</td>
       </tr>`).join('');
@@ -8725,7 +8731,10 @@ function renderParceirosSection(){
         ${celulaFechamento(l.pessoa, 'consultoria', 'Consultoria', l.consultoria, partnerMonthFilter, maskOr(l.consultoria), 'col-apoio', partnersValuesRevealed)}
         <td class="num" style="font-weight:800;">${maskOr(l.aPagar)}${datasFechamentoHtml(l.consultoria, l.aPagar)}</td>
         <td class="num col-apoio" title="Já ganhou, mas ainda espera o cliente pagar">${maskOr(l.pendente)}</td>
-        <td class="del-cell">${partnerMonthFilter!=="Todos" ? `<button class="action-btn" title="Gerar comprovante em PDF dos recebíveis de ${esc(l.pessoa)} em ${esc(partnerMonthFilter)}" onclick="imprimirComprovanteFechamento('${escJs(l.pessoa)}','${escJs(partnerMonthFilter)}')">🧾</button>` : ''}</td>
+        <td class="del-cell">${partnerMonthFilter!=="Todos" ? `
+          ${isAdmin ? `<button class="action-btn" title="Dividir esse pagamento entre folha (CLT) e nota(s) fiscal(is) PJ" onclick="abrirDivisaoFechamento('${escJs(l.pessoa)}','${escJs(partnerMonthFilter)}')">💰</button>` : ''}
+          <button class="action-btn" title="Gerar comprovante em PDF dos recebíveis de ${esc(l.pessoa)} em ${esc(partnerMonthFilter)}" onclick="imprimirComprovanteFechamento('${escJs(l.pessoa)}','${escJs(partnerMonthFilter)}')">🧾</button>
+        ` : ''}</td>
       </tr>`).join('');
 
   const sellerBreakdownRowsHtml = sellersForCurrentUser().map(s => {
@@ -13760,7 +13769,11 @@ function montarComprovanteFechamento(pessoa, mes){
 
   // Como esse total vai sair de fato — parte na folha (CLT), parte em
   // nota(s) fiscal(is) PJ com data — só aparece quando alguém já
-  // preencheu essa divisão em "💰 Dividir pagamento".
+  // preencheu essa divisão em "💰 Dividir pagamento". A conferência é
+  // contra o total SEM a Consultoria (ela paga à parte, dia 15) — mesma
+  // regra de totalParaDividir().
+  const linhaPessoa = fechamentoPagamentos(mes).find(function(l){ return l.pessoa === pessoa; });
+  const totalDividir = totalParaDividir(linhaPessoa);
   const parcelas = parcelasDivisao(pessoa, ano, mes);
   const somaParcelas = parcelas.reduce(function(a,p){ return a + (Number(p.valor)||0); }, 0);
   const divisaoHtml = parcelas.length ? `
@@ -13774,7 +13787,7 @@ function montarComprovanteFechamento(pessoa, mes){
             <td class="num destaque">${fmtMoney(Number(p.valor)||0)}</td>
             <td>${esc(p.observacoes) || '—'}</td></tr>`;
         }), '')}
-      <p class="rel-nota">Somado: ${fmtMoney(somaParcelas)} de ${fmtMoney(total)}${Math.abs(total-somaParcelas)<0.005 ? ' — confere.' : (total-somaParcelas>0 ? ' — falta '+fmtMoney(total-somaParcelas)+'.' : ' — '+fmtMoney(somaParcelas-total)+' a mais.')}</p>
+      <p class="rel-nota">Somado: ${fmtMoney(somaParcelas)} de ${fmtMoney(totalDividir)}${Math.abs(totalDividir-somaParcelas)<0.005 ? ' — confere.' : (totalDividir-somaParcelas>0 ? ' — falta '+fmtMoney(totalDividir-somaParcelas)+'.' : ' — '+fmtMoney(somaParcelas-totalDividir)+' a mais.')}${linhaPessoa && linhaPessoa.consultoria ? ' A Consultoria ('+fmtMoney(linhaPessoa.consultoria)+') paga à parte, no dia 15, e não entra nessa divisão.' : ''}</p>
     </section>
   ` : '';
 
