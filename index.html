@@ -2001,7 +2001,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-29-02';
+const APP_BUILD = '2026-09-29-03';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -2066,6 +2066,7 @@ let pedidoNotaArquivos = [];   // File[] escolhidos — não dá pra guardar iss
 let enviandoPedidoNota = false;
 let pedidoNotaErro = '';
 let pedidoNotaEnviado = false;
+let pedidoNotaBuscaHistorico = '';   // busca "já pedi essa nota?" — olha TODOS os pedidos, inclusive já vinculados
 
 async function tryLoadPedidosNotaAsync(){
   carregandoPedidosNota = true;
@@ -2158,6 +2159,14 @@ async function excluirMeuPedidoNota(pedidoId){
   }
 }
 
+function onPedidoNotaBuscaHistoricoInput(el){
+  const pos = el.selectionStart;
+  pedidoNotaBuscaHistorico = el.value;
+  render();
+  const novo = document.getElementById('pedido-busca-historico');
+  if(novo){ novo.focus(); try{ novo.setSelectionRange(pos, pos); }catch(e){} }
+}
+
 function renderSolicitarNotaScreen(){
   const root = document.getElementById('root');
   if(pedidosNota === null && !carregandoPedidosNota) tryLoadPedidosNotaAsync().then(render);
@@ -2186,6 +2195,41 @@ function renderSolicitarNotaScreen(){
             </tr>
           `; }).join('')}</tbody>
         </table></div>`;
+
+  // "Já pedi essa nota?" — só busca quando alguém digita algo, e olha
+  // TODOS os pedidos (inclusive os já vinculados, que somem da lista
+  // acima). Não é uma lista fixa de propósito: mostrar todo o histórico
+  // sempre aberto é o mesmo problema de poluição que tirou os vinculados
+  // da tela — aqui só aparece o que a pessoa está procurando.
+  const termoBusca = String(pedidoNotaBuscaHistorico||'').trim().toLowerCase();
+  const resultadosBusca = termoBusca
+    ? (pedidosNota||[]).filter(function(p){
+        return String(p.cliente||'').toLowerCase().indexOf(termoBusca) !== -1
+            || String(p.solicitanteNome||'').toLowerCase().indexOf(termoBusca) !== -1;
+      })
+    : [];
+  const buscaHistoricoHtml = `
+    <div style="margin-top:30px;">
+      <div class="auth-eyebrow">Já pedi essa nota?</div>
+      <p class="auth-sub" style="margin-top:0;">Busque pelo cliente ou por quem pediu — olha em todos os pedidos, mesmo os que já foram vinculados.</p>
+      <input id="pedido-busca-historico" class="search-input" type="text" placeholder="🔍 Nome do cliente ou de quem pediu..." value="${esc(pedidoNotaBuscaHistorico)}" style="width:100%;" oninput="onPedidoNotaBuscaHistoricoInput(this)" />
+      ${termoBusca ? (
+        resultadosBusca.length === 0
+          ? `<div class="meta-empty" style="padding:12px 0;">Nenhum pedido encontrado com esse termo.</div>`
+          : `<div class="table-scroll" style="margin-top:10px;"><table class="table-plain">
+              <thead><tr><th>Solicitante</th><th>Cliente</th><th>Pedido em</th><th>Situação</th></tr></thead>
+              <tbody>${resultadosBusca.map(function(p){ return `
+                <tr>
+                  <td>${esc(p.solicitanteNome) || '—'}</td>
+                  <td>${esc(p.cliente)}</td>
+                  <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
+                  <td>${p.status==='vinculado' ? '<span class="usuario-tag fin">Vinculado ✓</span>' : '<span class="usuario-tag">Pendente</span>'}</td>
+                </tr>
+              `; }).join('')}</tbody>
+            </table></div>`
+      ) : ''}
+    </div>
+  `;
 
   root.innerHTML = `
     ${novaVersaoDisponivel ? `
@@ -2267,6 +2311,8 @@ function renderSolicitarNotaScreen(){
             <div class="auth-eyebrow">Seus pedidos</div>
             ${listaHtml}
           </div>
+
+          ${buscaHistoricoHtml}
 
           <div class="auth-foot"><button type="button" class="auth-link" onclick="logout()">Sair</button></div>
         </div>
