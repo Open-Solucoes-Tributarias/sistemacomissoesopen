@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-30-02';
+const APP_BUILD = '2026-09-30-03';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -6341,10 +6341,14 @@ function exportResumoCSV(){
 
 /* O fechamento em CSV: é o arquivo que a Soraya manda para a
    contabilidade, então sai com uma linha por pessoa e o total no fim. */
-function exportFechamentoCSV(){
+/* Usado pelo "Baixar CSV" tanto do fechamento em Bônus e Metas (mes =
+   bonusFilter) quanto do "Fechamento — o que tem pra receber" no Resumo
+   Geral (mes = partnerMonthFilter) — mesma tabela, dois lugares que a
+   mostram com filtros de mês independentes. */
+function exportFechamentoCSV(mes){
   try{
-    const periodo = bonusFilter === 'Todos' ? ('Ano ' + yearFilter) : (bonusFilter + '/' + yearFilter);
-    const linhas = fechamentoPagamentos(bonusFilter);
+    const periodo = mes === 'Todos' ? ('Ano ' + yearFilter) : (mes + '/' + yearFilter);
+    const linhas = fechamentoPagamentos(mes);
     let csv = 'Fechamento para a contabilidade - ' + periodo + '\n\n';
     csv += 'Pessoa;Sistema;Orgaos Publicos;Cursos;Bonus;Salario fixo;Consultoria (liberada);Total a pagar;Pendente (aguardando pagamento)\n';
     const soma = {sistema:0, publicos:0, cursos:0, bonus:0, salario:0, aPagar:0, consultoria:0, pendente:0};
@@ -6358,15 +6362,7 @@ function exportFechamentoCSV(){
     csv += '\nRios, Angela, Soraya, Luciana e Uilma: Sistema, Orgaos Publicos, Cursos e Bonus liberam na hora; so a Consultoria delas espera o cliente pagar.\n';
     csv += 'Demais pessoas (Arick, Gustavo, Matheus Costa e outras): tudo espera o cliente pagar, qualquer produto.\n';
 
-    const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'fechamento-' + yearFilter + (bonusFilter !== 'Todos' ? '-'+bonusFilter : '') + '.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    baixarTexto('fechamento-' + yearFilter + (mes !== 'Todos' ? '-'+mes : '') + '.csv', csv);
   } catch(e){
     console.error('Falha ao exportar o fechamento', e);
     showAlert('Não foi possível gerar o arquivo. Tente novamente.');
@@ -7990,7 +7986,7 @@ function renderBonusSection(){
     `, {
       flush: true,
       meta: `${bonusFilter !== "Todos" ? "em <b>"+esc(bonusFilter)+"</b>" : "no ano de <b>"+yearFilter+"</b>"}${fechamento.length ? ' · a pagar <b>'+(bonusValuesRevealed ? fmtMoney(somaCols.aPagar) : '••••')+'</b>' : ''}${fechamentoFora.length ? ' · <span title="'+esc(fechamentoFora.join(', '))+'">'+fechamentoFora.length+' fora</span>' : ''}`,
-      actions: `${fechamentoActionButtonHtml(bonusFilter)}${isAdmin ? `<button class="eye-toggle" onclick="setFechamentoEditando(${fechamentoEditando?'false':'true'})">${fechamentoEditando?'✕ Fechar':'👥 Quem entra'}</button>` : ''}<button class="eye-toggle" onclick="exportFechamentoCSV()">📊 Baixar CSV</button>`,
+      actions: `${fechamentoActionButtonHtml(bonusFilter)}${isAdmin ? `<button class="eye-toggle" onclick="setFechamentoEditando(${fechamentoEditando?'false':'true'})">${fechamentoEditando?'✕ Fechar':'👥 Quem entra'}</button>` : ''}<button class="eye-toggle" onclick="exportFechamentoCSV('${escJs(bonusFilter)}')">📊 Baixar CSV</button>`,
     })}
     ${editorFechamentoHtml}
 
@@ -8893,7 +8889,7 @@ function renderParceirosSection(){
         automaticamente no próximo.
       </div>
     `, {flush: true, meta: `${partnerMonthFilter !== "Todos" ? "em <b>"+esc(partnerMonthFilter)+"</b>" : "no ano de <b>"+yearFilter+"</b>"}${fechamento.length ? ' · a pagar <b>'+(partnersValuesRevealed ? fmtMoney(fechamentoSomaCols.aPagar) : '••••')+'</b>' : ''}`,
-      actions: fechamentoActionButtonHtml(partnerMonthFilter)})}
+      actions: `${fechamentoActionButtonHtml(partnerMonthFilter)}<button class="eye-toggle" onclick="exportFechamentoCSV('${escJs(partnerMonthFilter)}')">📊 Baixar CSV</button>`})}
 
     ${panel('resumo-vendedoras', 'Vendedoras — ganhos totais', `
       <div class="kpis" style="margin:0 16px 14px;">${sellerKpiCardsHtml}</div>
