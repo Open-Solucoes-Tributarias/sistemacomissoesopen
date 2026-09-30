@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-30-01';
+const APP_BUILD = '2026-09-30-02';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -10403,6 +10403,7 @@ function renderPedidosNotaPanel(){
         <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
         <td>${p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—'}</td>
         <td>${anexosCelula(p, false)}</td>
+        <td>${esc(p.observacoes) || '—'}</td>
         <td>${p.status==='vinculado'
           ? `<button type="button" class="usuario-tag fin link-tag" title="Ver o lançamento vinculado" onclick="irParaLancamentoVinculado(${p.id})">Vinculado ✓ — ver lançamento</button>`
           : '<span class="usuario-tag">Pendente</span>'}</td>
@@ -10433,6 +10434,7 @@ function renderPedidosNotaPanel(){
       <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
       <td><input type="date" class="fin-empresa-campo" value="${esc(p.dataMinimaEmissao||'')}" onchange="updatePedidoNotaCampo(${p.id},'dataMinimaEmissao',this.value)" /></td>
       <td>${anexosCelula(p, true)}</td>
+      <td><input type="text" class="fin-empresa-campo" value="${esc(p.observacoes||'')}" onchange="updatePedidoNotaCampo(${p.id},'observacoes',this.value)" /></td>
       <td>${p.status==='vinculado'
         ? `<button type="button" class="usuario-tag fin link-tag" title="Ver o lançamento vinculado" onclick="irParaLancamentoVinculado(${p.id})">Vinculado ✓ — ver lançamento</button>`
         : `<button class="modal-btn modal-btn-ghost" onclick="abrirVincularPedido(${p.id})">Vincular</button>`}</td>
@@ -10442,7 +10444,7 @@ function renderPedidosNotaPanel(){
   return panel('pedidos-nota', '📋 Pedidos de Nota' + (pendentes.length ? ` (${pendentes.length} pendente${pendentes.length===1?'':'s'})` : ''), `
     <div class="table-scroll">
       <table class="table-plain">
-        <thead><tr><th>Solicitante</th><th>Cliente</th><th>CNPJ</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th class="num">Valor</th><th>Produto</th><th>Empenho</th><th>Pedido em</th><th>Não emitir antes de</th><th>Anexo</th><th></th><th></th></tr></thead>
+        <thead><tr><th>Solicitante</th><th>Cliente</th><th>CNPJ</th><th>Responsável</th><th>Telefone</th><th>E-mail</th><th class="num">Valor</th><th>Produto</th><th>Empenho</th><th>Pedido em</th><th>Não emitir antes de</th><th>Anexo</th><th>Observações</th><th></th><th></th></tr></thead>
         <tbody>${pendentes.map(linha).join('')}</tbody>
       </table>
     </div>
