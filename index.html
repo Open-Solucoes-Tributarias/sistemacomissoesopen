@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-29-06';
+const APP_BUILD = '2026-09-30-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5955,7 +5955,8 @@ function renderModal(){
   }
 
   if(m.type === 'lancar-renovacoes'){
-    const total = m.lista.reduce(function(a,r){ return a + valorDeRenovacao(r); }, 0);
+    const selecionadas = m.lista.filter(function(r){ return m.selecionados[r.id]; });
+    const total = selecionadas.reduce(function(a,r){ return a + valorDeRenovacao(r); }, 0);
     const previa = m.lista.slice(0, 60);
     // O produto escolhido decide a aba de destino: premium vai para Órgãos
     // Públicos, o resto para Sistema.
@@ -5969,6 +5970,7 @@ function renderModal(){
             Vão virar <b>lançamento do mês</b> na aba <b>${esc(abaDestino)}</b>, cada uma no nome de quem
             cuidou da renovação, e entram na sua lista de comissões — o percentual de cada uma você
             preenche por lá. Só entram as marcadas como <b>Renovado</b> que ainda não foram lançadas.
+            Desmarque abaixo quem não deve entrar agora.
           </div>
           ${ehPremium ? `<div class="import-resumo import-alerta">
             📍 <b>${esc(m.produto)}</b> é plano premium, então o destino é
@@ -5977,7 +5979,7 @@ function renderModal(){
             e a comissão é por <b>percentual</b>, não por valor.
           </div>` : ''}
           <div class="import-resumo">
-            <b>${m.lista.length}</b> ${m.lista.length===1?'renovação':'renovações'} · <b>${fmtMoney(total)}</b>
+            <b>${selecionadas.length}</b> de ${m.lista.length} ${m.lista.length===1?'renovação marcada':'renovações marcadas'} · <b>${fmtMoney(total)}</b>
             ${renovacaoMes !== 'Todos' ? ' · ' + esc(rotuloRenovacao()) : ' · todo o ano de ' + yearFilter}
           </div>
           ${vendaProducts.length ? `
@@ -5988,11 +5990,17 @@ function renderModal(){
                 ${vendaProducts.map(function(pr){ return `<option value="${esc(pr)}" ${m.produto===pr?'selected':''}>${esc(pr)}</option>`; }).join('')}
               </select>
             </label>` : ''}
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <button class="modal-btn modal-btn-ghost" onclick="marcarTodosLancarRenovacao(true)">Marcar todos</button>
+            <button class="modal-btn modal-btn-ghost" onclick="marcarTodosLancarRenovacao(false)">Desmarcar todos</button>
+          </div>
           <div class="table-scroll import-previa">
             <table class="table-plain">
-              <thead><tr><th>Empresa</th><th class="num">Valor</th><th>Mês</th><th>Quem vendeu</th></tr></thead>
+              <thead><tr><th></th><th>Empresa</th><th class="num">Valor</th><th>Mês</th><th>Quem vendeu</th></tr></thead>
               <tbody>${previa.map(function(r){
+                const marcado = !!m.selecionados[r.id];
                 return `<tr class="${r.pessoa ? '' : 'row-pending'}">
+                  <td><input type="checkbox" ${marcado?'checked':''} onchange="toggleSelecaoLancarRenovacao(${r.id}, this.checked)" /></td>
                   <td>${esc(r.empresa)}${r.upgrade ? ' <span class="selo-upgrade">⬆ Upgrade</span>' : ''}</td>
                   <td class="num">${valorDeRenovacao(r) ? fmtMoney(valorDeRenovacao(r)) : '—'}</td>
                   <td>${esc(r.mes)}</td>
@@ -6005,7 +6013,7 @@ function renderModal(){
           <div class="import-resumo">Nascem com a observação <b>“Renovação”</b> (ou <b>“Upgrade de plano”</b>), para você distinguir na aba de destino.${ehPremium ? ' Lançamento de Órgãos Públicos <b>não conta</b> nos indicadores de venda de sistema do ranking.' : ' Só o upgrade conta no ranking.'}</div>
           <div class="modal-actions">
             <button class="modal-btn modal-btn-ghost" onclick="closeModal()">Cancelar</button>
-            <button class="modal-btn modal-btn-primary" onclick="confirmarLancarNoSistema()">Lançar ${m.lista.length === 1 ? 'a renovação' : 'as ' + m.lista.length} em ${esc(ehPremium ? 'Órgãos Públicos' : 'Sistema')}</button>
+            <button class="modal-btn modal-btn-primary" ${selecionadas.length?'':'disabled'} onclick="confirmarLancarNoSistema()">Lançar ${selecionadas.length === 1 ? 'a renovação' : 'as ' + selecionadas.length} em ${esc(ehPremium ? 'Órgãos Públicos' : 'Sistema')}</button>
           </div>
         </div>
       </div>`;
@@ -12989,24 +12997,36 @@ function abrirLancarNoSistema(){
       : 'Marque as empresas como “Renovado” primeiro — só as renovadas viram venda no Sistema.');
     return;
   }
-  modalState = { type:'lancar-renovacoes', lista: lista, produto: '' };
+  // Vem tudo marcado por padrão — é raríssimo não querer lançar uma
+  // renovação que já foi conferida como "Renovado"; desmarcar é a
+  // exceção, não a regra.
+  const selecionados = {};
+  lista.forEach(function(r){ selecionados[r.id] = true; });
+  modalState = { type:'lancar-renovacoes', lista: lista, produto: '', selecionados: selecionados };
   render();
 }
 
 /* Redesenha: é o produto que decide a aba de destino, e o modal mostra
    qual é — sem render o aviso ficaria desatualizado. */
 function setLancarProduto(el){ modalState.produto = el.value; render(); }
+function toggleSelecaoLancarRenovacao(id, marcado){ modalState.selecionados[id] = marcado; render(); }
+function marcarTodosLancarRenovacao(marcado){
+  modalState.lista.forEach(function(r){ modalState.selecionados[r.id] = marcado; });
+  render();
+}
 
 function confirmarLancarNoSistema(){
   const m = modalState;
   if(!m || !m.lista || !m.lista.length) return;
+  const selecionadas = m.lista.filter(function(r){ return m.selecionados[r.id]; });
+  if(!selecionadas.length) return;
   const fechados = [];
   let lancadas = 0;
   /* Premium não é venda de Sistema: vai para a aba de Órgãos Públicos. É o
      produto escolhido aqui que decide, e ele vale para o lote inteiro. */
   const destino = produtoEhPremium(m.produto) ? 'publicos' : 'vendas';
 
-  m.lista.forEach(function(r){
+  selecionadas.forEach(function(r){
     if(isMonthClosedFor(destino, r.ano, r.mes)){ fechados.push(r.mes); return; }
     // Renovar não é venda nova e fica fora do ranking. Subir o plano de um
     // cliente é: vai com a etiqueta de upgrade e conta no desempenho.
