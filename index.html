@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-30-03';
+const APP_BUILD = '2026-09-30-04';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5473,7 +5473,7 @@ function renderModal(){
         <div class="modal-box modal-box-xwide">
           <div class="modal-msg">Divisão do pagamento — ${esc(pessoa)}</div>
           <div class="divisao-explica">
-            A dividir em ${esc(mes)}/${yearFilter}: <b>${fmtMoney(totalPagar)}</b>${linha && linha.consultoria ? ' (o total a pagar já sem a Consultoria, que paga à parte no dia 15)' : ''}. Registre aqui como esse
+            A dividir em ${esc(mes)}/${yearFilter}: <b>${fmtMoney(totalPagar)}</b>${linha && linha.consultoria ? ' (o total a pagar já sem a Consultoria, que paga à parte no dia 15/'+esc(mes).slice(0,3)+')' : ''}. Registre aqui como esse
             valor vai sair de fato — parte na folha, parte em nota fiscal PJ, cada uma com sua data — pra gerar
             o relatório pra encaminhar ao financeiro.
           </div>
@@ -8722,7 +8722,7 @@ function renderParceirosSection(){
   const fechamentoProximoMes = partnerMonthFilter !== "Todos" ? MONTHS[(MONTHS.indexOf(partnerMonthFilter) + 1) % 12] : null;
   const datasFechamentoHtml = function(consultoria, aPagar){
     if(partnerMonthFilter === "Todos" || !consultoria) return '';
-    return `<div class="fechamento-datas">dia 15: ${maskOr(consultoria)} · dia 05/${fechamentoProximoMes.slice(0,3)}: ${maskOr(aPagar - consultoria)}</div>`;
+    return `<div class="fechamento-datas">dia 15/${partnerMonthFilter.slice(0,3)}: ${maskOr(consultoria)} · dia 05/${fechamentoProximoMes.slice(0,3)}: ${maskOr(aPagar - consultoria)}</div>`;
   };
   const fechamentoRowsHtml = fechamento.map(l => `
       <tr>
@@ -8857,7 +8857,7 @@ function renderParceirosSection(){
               <th class="num">Cursos</th>
               <th class="num">Bônus</th>
               <th class="num">Salário fixo</th>
-              <th class="num col-apoio" title="Consultoria paga em data própria — dia 15 deste mês, separado do resto da folha">Consultoria <span class="col-apoio-nota">(dia 15)</span></th>
+              <th class="num col-apoio" title="Consultoria paga em data própria — dia 15 deste mês, separado do resto da folha">Consultoria <span class="col-apoio-nota">(dia 15${partnerMonthFilter!=="Todos" ? '/'+partnerMonthFilter.slice(0,3) : ''})</span></th>
               <th class="num">Total a pagar</th>
               <th class="num col-apoio">Pendente</th>
               <th style="width:40px"></th>
@@ -13805,7 +13805,7 @@ function montarComprovanteFechamento(pessoa, mes){
             <td class="num destaque">${fmtMoney(Number(p.valor)||0)}</td>
             <td>${esc(p.observacoes) || '—'}</td></tr>`;
         }), '')}
-      <p class="rel-nota">Somado: ${fmtMoney(somaParcelas)} de ${fmtMoney(totalDividir)}${Math.abs(totalDividir-somaParcelas)<0.005 ? ' — confere.' : (totalDividir-somaParcelas>0 ? ' — falta '+fmtMoney(totalDividir-somaParcelas)+'.' : ' — '+fmtMoney(somaParcelas-totalDividir)+' a mais.')}${linhaPessoa && linhaPessoa.consultoria ? ' A Consultoria ('+fmtMoney(linhaPessoa.consultoria)+') paga à parte, no dia 15, e não entra nessa divisão.' : ''}</p>
+      <p class="rel-nota">Somado: ${fmtMoney(somaParcelas)} de ${fmtMoney(totalDividir)}${Math.abs(totalDividir-somaParcelas)<0.005 ? ' — confere.' : (totalDividir-somaParcelas>0 ? ' — falta '+fmtMoney(totalDividir-somaParcelas)+'.' : ' — '+fmtMoney(somaParcelas-totalDividir)+' a mais.')}${linhaPessoa && linhaPessoa.consultoria ? ' A Consultoria ('+fmtMoney(linhaPessoa.consultoria)+') paga à parte, no dia 15/'+esc(mes).slice(0,3)+', e não entra nessa divisão.' : ''}</p>
     </section>
   ` : '';
 
