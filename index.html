@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-09-30-04';
+const APP_BUILD = '2026-10-05-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5399,16 +5399,7 @@ function renderModal(){
                      onchange="editarDataMinimaEmissao('lancamento_empresas',${e.id},'',this.value)" />`
             : (e.dataMinimaEmissao ? formatarDataIso(e.dataMinimaEmissao) : '—')}</td>
           <td>${notaEmissaoBotoesHtml('lancamento_empresas', e.id, '', e.podeEmitir, e.podeEmitirEm, e.notaEmitida, e.notaEmitidaEm, podeVisar, e.dataMinimaEmissao)}</td>
-          <td>${podeVisar
-            ? (e.notaArquivoPath
-              ? `<span class="anexo-arquivo">
-                   <button type="button" class="anexo-link" title="${esc(e.notaArquivoNome||'')}" onclick="verNotaAnexada('lancamento_empresas',${e.id},'')">📎 ${esc(e.notaArquivoNome||'arquivo')}</button>
-                   <button type="button" class="anexo-remover" title="Remover anexo" onclick="removerNotaAnexada('lancamento_empresas',${e.id},'')">✕</button>
-                 </span>`
-              : `<label class="anexo-upload" title="Anexar PDF ou imagem da nota">
-                   📎 Anexar<input type="file" accept="application/pdf,image/*" onchange="anexarNotaArquivo('lancamento_empresas',${e.id},'',this)" />
-                 </label>`)
-            : (e.notaArquivoPath ? `<button type="button" class="anexo-link" title="${esc(e.notaArquivoNome||'')}" onclick="verNotaAnexada('lancamento_empresas',${e.id},'')">📎 ${esc(e.notaArquivoNome||'arquivo')}</button>` : '—')}</td>
+          <td>${anexoNotaCelulaHtml('lancamento_empresas', e.id, '', e.notaArquivoPath, e.notaArquivoNome, podeVisar)}</td>
           <td>${podeVisar
             ? `<input type="text" class="fin-empresa-campo" value="${esc(e.observacoes)}" placeholder="Observações"
                      onchange="updateEmpresaCurso(${e.id},'observacoes',this.value)" />`
@@ -10213,6 +10204,33 @@ async function confirmarCriarLancamentoDoPedido(pedidoId, produto, nomeBruto){
 function pedidoVinculadoDe(tabela, id){
   return (pedidosNota||[]).find(function(p){ return p.status === 'vinculado' && p.vinculadoTabela === tabela && p.vinculadoId === id; }) || null;
 }
+/* Coluna "Anexo" de toda nota (Empresas por lançamento, Notas lançadas,
+   Sistema): sem isto, só o arquivo da nota EMITIDA (notaArquivoPath)
+   aparecia — os anexos que vieram junto do pedido de nota (contrato,
+   empenho, relatório que a solicitante já mandou) ficavam escondidos
+   atrás do ícone 📋, e sumiam de vista assim que o pedido saía da lista
+   de pendentes. Agora os dois aparecem juntos, na mesma célula. */
+function anexoNotaCelulaHtml(tabela, id, entKey, notaArquivoPath, notaArquivoNome, podeVisar){
+  const pedido = pedidoVinculadoDe(tabela, id);
+  const anexosPedidoHtml = (pedido && pedido.anexos && pedido.anexos.length)
+    ? pedido.anexos.map(function(a){
+        return `<span class="anexo-arquivo"><button type="button" class="anexo-link" title="${esc(a.nome||'')} — anexado no pedido de nota" onclick="verAnexoPedidoNota(${pedido.id},'${a.path}')">📎 ${esc(a.nome||'arquivo')}</button></span>`;
+      }).join('')
+    : '';
+  if(!podeVisar){
+    const notaHtml = notaArquivoPath ? `<button type="button" class="anexo-link" title="${esc(notaArquivoNome||'')}" onclick="verNotaAnexada('${tabela}',${id},'${escJs(entKey)}')">📎 ${esc(notaArquivoNome||'arquivo')}</button>` : '';
+    return (anexosPedidoHtml + notaHtml) || '—';
+  }
+  const notaHtml = notaArquivoPath
+    ? `<span class="anexo-arquivo">
+         <button type="button" class="anexo-link" title="${esc(notaArquivoNome||'')}" onclick="verNotaAnexada('${tabela}',${id},'${escJs(entKey)}')">📎 ${esc(notaArquivoNome||'arquivo')}</button>
+         <button type="button" class="anexo-remover" title="Remover anexo" onclick="removerNotaAnexada('${tabela}',${id},'${escJs(entKey)}')">✕</button>
+       </span>`
+    : `<label class="anexo-upload" title="Anexar PDF ou imagem da nota">
+         📎 Anexar<input type="file" accept="application/pdf,image/*" onchange="anexarNotaArquivo('${tabela}',${id},'${escJs(entKey)}',this)" />
+       </label>`;
+  return anexosPedidoHtml + notaHtml;
+}
 function abrirDadosPedidoVinculado(tabela, id){
   if(!isAdmin && !isFinanceiro) return;
   const pedido = pedidoVinculadoDe(tabela, id);
@@ -10516,16 +10534,7 @@ function renderNotasPanel(){
             <td>${n.pago ? 'Pago' + (n.mesPagamento ? ' · ' + esc(monthShort(n.mesPagamento)) : '') : 'Pendente'}</td>
             <td class="num col-valor-larga">${fmtMoney(n.valor)}</td>
             <td>${notaEmissaoBotoesHtml(n.tabela, n.id, escJs(n.entKey), n.podeEmitir, n.podeEmitirEm, n.emitida, n.emitidaEm, podeVisar, n.dataMinimaEmissao)}</td>
-            <td>${podeVisar
-              ? (n.notaArquivoPath
-                ? `<span class="anexo-arquivo">
-                     <button type="button" class="anexo-link" title="${esc(n.notaArquivoNome||'')}" onclick="verNotaAnexada('${n.tabela}',${n.id},'${escJs(n.entKey)}')">📎 ${esc(n.notaArquivoNome||'arquivo')}</button>
-                     <button type="button" class="anexo-remover" title="Remover anexo" onclick="removerNotaAnexada('${n.tabela}',${n.id},'${escJs(n.entKey)}')">✕</button>
-                   </span>`
-                : `<label class="anexo-upload" title="Anexar PDF ou imagem da nota">
-                     📎 Anexar<input type="file" accept="application/pdf,image/*" onchange="anexarNotaArquivo('${n.tabela}',${n.id},'${escJs(n.entKey)}',this)" />
-                   </label>`)
-              : (n.notaArquivoPath ? `<button type="button" class="anexo-link" title="${esc(n.notaArquivoNome||'')}" onclick="verNotaAnexada('${n.tabela}',${n.id},'${escJs(n.entKey)}')">📎 ${esc(n.notaArquivoNome||'arquivo')}</button>` : '—')}</td>
+            <td>${anexoNotaCelulaHtml(n.tabela, n.id, n.entKey, n.notaArquivoPath, n.notaArquivoNome, podeVisar)}</td>
           </tr>`;
         }).join('') : `<tr class="empty-row"><td colspan="8"><span class="empty-icon">◌</span>Nenhuma nota neste filtro.</td></tr>`}</tbody>
         ${notas.length ? `<tfoot><tr><td>Total</td><td></td><td></td><td></td><td></td><td class="num">${fmtMoney(total)}</td><td></td><td></td></tr></tfoot>` : ''}
@@ -10706,16 +10715,7 @@ function renderVendasSection(){
                   onchange="onPagamentoMesSelect(this)">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>` : ''}
         </td>
         <td>${notaEmissaoBotoesHtml('vendas', row.id, '', row.podeEmitir, row.podeEmitirEm, row.notaEmitida, row.notaEmitidaEm, podeVisar, row.dataMinimaEmissao)}</td>
-        <td>${podeVisar
-          ? (row.notaArquivoPath
-            ? `<span class="anexo-arquivo">
-                 <button type="button" class="anexo-link" title="${esc(row.notaArquivoNome||'')}" onclick="verNotaAnexada('vendas',${row.id},'')">📎 ${esc(row.notaArquivoNome||'arquivo')}</button>
-                 <button type="button" class="anexo-remover" title="Remover anexo" onclick="removerNotaAnexada('vendas',${row.id},'')">✕</button>
-               </span>`
-            : `<label class="anexo-upload" title="Anexar PDF ou imagem da nota">
-                 📎 Anexar<input type="file" accept="application/pdf,image/*" onchange="anexarNotaArquivo('vendas',${row.id},'',this)" />
-               </label>`)
-          : (row.notaArquivoPath ? `<button type="button" class="anexo-link" title="${esc(row.notaArquivoNome||'')}" onclick="verNotaAnexada('vendas',${row.id},'')">📎 ${esc(row.notaArquivoNome||'arquivo')}</button>` : '—')}</td>
+        <td>${anexoNotaCelulaHtml('vendas', row.id, '', row.notaArquivoPath, row.notaArquivoNome, podeVisar)}</td>
         <td class="obs-cell"><input type="text" data-id="${row.id}" data-field="observacoes" value="${esc(row.observacoes)}" placeholder="Anotação livre..." oninput="onTextInput(this)" /></td>
         ${visibleSellers.map(s => {
           const pct = (row.comissaoPercents||{})[s.key];
