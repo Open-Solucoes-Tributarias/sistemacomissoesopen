@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-10-09-02';
+const APP_BUILD = '2026-10-09-03';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5374,11 +5374,13 @@ function renderModal(){
     const podeVisar = isAdmin || isFinanceiro;
     const busca = (m.busca||'').trim().toLowerCase();
     const buscaDigitos = busca.replace(/\D/g,'');
-    const listaFiltrada = busca ? d.lista.filter(function(e){
+    const listaFiltrada = (busca ? d.lista.filter(function(e){
       return (e.nome||'').toLowerCase().includes(busca)
         || (e.responsavel||'').toLowerCase().includes(busca)
         || (buscaDigitos && cnpjDigitos(e.cnpj||'').includes(buscaDigitos));
-    }) : d.lista;
+    }) : d.lista.slice()).sort(function(a,b){
+      return (a.nome||'').localeCompare(b.nome||'', 'pt-BR', {sensitivity:'base'});
+    });
     const linhas = listaFiltrada.length ? listaFiltrada.map(function(e){
       return `
         <tr>
