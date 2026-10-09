@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-10-05-01';
+const APP_BUILD = '2026-10-09-02';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5372,11 +5372,18 @@ function renderModal(){
     const nome = r[mainField] || 'este lançamento';
     const d = resumoEmpresas(r);
     const podeVisar = isAdmin || isFinanceiro;
-    const linhas = d.lista.length ? d.lista.map(function(e){
+    const busca = (m.busca||'').trim().toLowerCase();
+    const buscaDigitos = busca.replace(/\D/g,'');
+    const listaFiltrada = busca ? d.lista.filter(function(e){
+      return (e.nome||'').toLowerCase().includes(busca)
+        || (e.responsavel||'').toLowerCase().includes(busca)
+        || (buscaDigitos && cnpjDigitos(e.cnpj||'').includes(buscaDigitos));
+    }) : d.lista;
+    const linhas = listaFiltrada.length ? listaFiltrada.map(function(e){
       return `
         <tr>
           <td><input type="text" class="fin-empresa-campo" list="empresas-datalist" value="${esc(e.nome)}" placeholder="Razão social" ${podeVisar?'':'disabled'}
-                 onchange="onEmpresaCursoNomeChange(this,${e.id})" />${podeVisar && pedidoVinculadoDe('lancamento_empresas', e.id) ? `<button type="button" class="selo-empresas" title="Ver dados do pedido de nota (empenho, etc.)" onclick="abrirDadosPedidoVinculado('lancamento_empresas',${e.id})">📋</button>` : ''}</td>
+                 onchange="onEmpresaCursoNomeChange(this,${e.id})" />${podeVisar && pedidoVinculadoDe('lancamento_empresas', e.id) ? `<button type="button" class="selo-empresas" title="Ver dados do pedido de nota (empenho, etc.)" onclick="abrirDadosPedidoVinculado('lancamento_empresas',${e.id})">📋</button>` : ''}${podeVisar ? `<button type="button" class="action-btn danger" title="Excluir esta empresa" onclick="removeEmpresaCurso(${e.id})">✕</button>` : ''}</td>
           <td>
             <input type="text" class="fin-empresa-campo" value="${esc(formatCnpj(e.cnpj))}" placeholder="00.000.000/0000-00" ${podeVisar?'':'disabled'}
                    oninput="this.value=formatCnpj(this.value)" onchange="updateEmpresaCurso(${e.id},'cnpj',this.value)" />
@@ -5404,9 +5411,8 @@ function renderModal(){
             ? `<input type="text" class="fin-empresa-campo" value="${esc(e.observacoes)}" placeholder="Observações"
                      onchange="updateEmpresaCurso(${e.id},'observacoes',this.value)" />`
             : (esc(e.observacoes) || '—')}</td>
-          ${podeVisar ? `<td><button class="action-btn danger" title="Remover" onclick="removeEmpresaCurso(${e.id})">✕</button></td>` : ''}
         </tr>`;
-    }).join('') : `<tr class="empty-row"><td colspan="${podeVisar?11:10}"><span class="empty-icon">◌</span>Nenhuma empresa cadastrada ainda.</td></tr>`;
+    }).join('') : `<tr class="empty-row"><td colspan="10"><span class="empty-icon">◌</span>${busca ? 'Nenhuma empresa encontrada para "'+esc(m.busca)+'".' : 'Nenhuma empresa cadastrada ainda.'}</td></tr>`;
 
     return `
       <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
@@ -5417,10 +5423,16 @@ function renderModal(){
             que precisa pra emitir a nota fiscal dela — CNPJ, responsável e valor. O financeiro marca "Emitida"
             conforme for emitindo, igual às outras notas do sistema.
           </div>
+          <div class="busca-empresas-row" style="margin:0 0 10px;display:flex;align-items:center;gap:8px;">
+            <input type="text" id="busca-empresas-curso" class="fin-empresa-campo" style="max-width:320px;"
+                   placeholder="🔍 Buscar por empresa, CNPJ ou responsável..." value="${esc(m.busca||'')}"
+                   oninput="onBuscaEmpresaCursoInput(this)" />
+            ${busca ? `<span class="painel-equipe-nota" style="margin:0;">${listaFiltrada.length} de ${d.lista.length}</span>` : ''}
+          </div>
           <div class="table-scroll">
             <table class="table-plain">
               <thead><tr>
-                <th style="min-width:340px;">Empresa</th><th style="min-width:140px;">CNPJ</th><th style="min-width:150px;">Responsável</th><th style="min-width:140px;">Telefone</th><th style="min-width:180px;">E-mail</th><th class="num" style="min-width:110px;">Valor</th><th style="min-width:150px;">Não emitir antes de</th><th style="min-width:120px;">Nota fiscal</th><th style="min-width:130px;">Anexo</th><th style="min-width:200px;">Observações</th>${podeVisar?'<th></th>':''}
+                <th style="min-width:340px;">Empresa</th><th style="min-width:140px;">CNPJ</th><th style="min-width:150px;">Responsável</th><th style="min-width:140px;">Telefone</th><th style="min-width:180px;">E-mail</th><th class="num" style="min-width:110px;">Valor</th><th style="min-width:150px;">Não emitir antes de</th><th style="min-width:120px;">Nota fiscal</th><th style="min-width:130px;">Anexo</th><th style="min-width:200px;">Observações</th>
               </tr></thead>
               <tbody>${linhas}</tbody>
             </table>
@@ -12463,9 +12475,26 @@ function resumoEmpresas(row){
   };
 }
 
+/* Lista pode passar de 20-30 empresas num lançamento só (GTAP, por
+   exemplo) — sem busca, achar uma nota específica pra conferir ou
+   excluir virava rolar a tabela inteira. oninput + render() destruiria
+   o campo a cada letra (mesmo bug do input de data); por isso o render
+   espera uma pausa na digitação, e depois devolve o foco pro campo. */
+let buscaEmpresaCursoTimer = null;
+function onBuscaEmpresaCursoInput(el){
+  if(!modalState || modalState.type !== 'empresas-curso') return;
+  modalState.busca = el.value;
+  if(buscaEmpresaCursoTimer) clearTimeout(buscaEmpresaCursoTimer);
+  buscaEmpresaCursoTimer = setTimeout(function(){
+    render();
+    const campo = document.getElementById('busca-empresas-curso');
+    if(campo){ campo.focus(); const pos = campo.value.length; campo.setSelectionRange(pos,pos); }
+  }, 350);
+}
+
 function abrirEmpresasCurso(entKey, rowId){
   if(!isAdmin && !isFinanceiro) return;
-  modalState = { type:'empresas-curso', entKey: entKey, rowId: rowId };
+  modalState = { type:'empresas-curso', entKey: entKey, rowId: rowId, busca: '' };
   render();
   // A tela carrega os dados uma vez só, quando a aba abre — se alguém
   // mexeu nas empresas deste lançamento depois disso (outra pessoa
@@ -12661,10 +12690,25 @@ function addEmpresaCurso(){
 function removeEmpresaCurso(empresaId){
   const r = empresasRowAtual();
   if(!r || (!isAdmin && !isFinanceiro)) return;
-  r.empresas = (r.empresas||[]).filter(function(x){ return x.id !== empresaId; });
-  if(empresaTimers['empresa-'+empresaId]) clearTimeout(empresaTimers['empresa-'+empresaId]);
-  sbDeleteAll('lancamento_empresas', 'id=eq.'+empresaId).catch(function(e){ console.error('Falha ao excluir empresa', e); });
-  render();
+  const item = (r.empresas||[]).find(function(x){ return x.id === empresaId; });
+  const entKey = modalState.entKey, rowId = modalState.rowId, busca = modalState.busca;
+  showConfirm(
+    'Excluir a empresa "' + (item && item.nome ? item.nome : 'sem nome') + '" deste lançamento? Isso apaga os dados dela (CNPJ, nota, anexo) e não pode ser desfeito.',
+    function(){
+      r.empresas = (r.empresas||[]).filter(function(x){ return x.id !== empresaId; });
+      if(empresaTimers['empresa-'+empresaId]) clearTimeout(empresaTimers['empresa-'+empresaId]);
+      sbDeleteAll('lancamento_empresas', 'id=eq.'+empresaId).catch(function(e){ console.error('Falha ao excluir empresa', e); });
+      // Volta pro mesmo modal (com as empresas que sobraram) em vez de
+      // fechar tudo — ela veio aqui pra revisar a lista inteira, não só
+      // pra apagar uma e perder o resto de vista. Sem passar por
+      // abrirEmpresasCurso: isso buscaria do banco de novo, e como o
+      // DELETE acima ainda pode não ter sido confirmado, o refresh
+      // (que só soma, nunca remove) traria essa mesma empresa de volta.
+      modalState = { type:'empresas-curso', entKey: entKey, rowId: rowId, busca: busca };
+      render();
+    },
+    'Excluir'
+  );
 }
 
 function updateEmpresaCurso(empresaId, campo, valor){
