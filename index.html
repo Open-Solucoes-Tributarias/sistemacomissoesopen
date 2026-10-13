@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-10-09-03';
+const APP_BUILD = '2026-10-13-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5385,7 +5385,7 @@ function renderModal(){
       return `
         <tr>
           <td><input type="text" class="fin-empresa-campo" list="empresas-datalist" value="${esc(e.nome)}" placeholder="Razão social" ${podeVisar?'':'disabled'}
-                 onchange="onEmpresaCursoNomeChange(this,${e.id})" />${podeVisar && pedidoVinculadoDe('lancamento_empresas', e.id) ? `<button type="button" class="selo-empresas" title="Ver dados do pedido de nota (empenho, etc.)" onclick="abrirDadosPedidoVinculado('lancamento_empresas',${e.id})">📋</button>` : ''}${podeVisar ? `<button type="button" class="action-btn danger" title="Excluir esta empresa" onclick="removeEmpresaCurso(${e.id})">✕</button>` : ''}</td>
+                 onchange="onEmpresaCursoNomeChange(this,${e.id})" />${podeVisar && pedidoVinculadoDe('lancamento_empresas', e.id) ? `<button type="button" class="selo-empresas" title="Ver dados do pedido de nota (empenho, etc.)" onclick="abrirDadosPedidoVinculado('lancamento_empresas',${e.id})">📋</button>` : ''}${podeVisar ? `<button type="button" class="action-btn" title="Mover para outro lançamento" onclick="abrirMoverEmpresa(${e.id})">➡️</button>` : ''}${podeVisar ? `<button type="button" class="action-btn danger" title="Excluir esta empresa" onclick="removeEmpresaCurso(${e.id})">✕</button>` : ''}</td>
           <td>
             <input type="text" class="fin-empresa-campo" value="${esc(formatCnpj(e.cnpj))}" placeholder="00.000.000/0000-00" ${podeVisar?'':'disabled'}
                    oninput="this.value=formatCnpj(this.value)" onchange="updateEmpresaCurso(${e.id},'cnpj',this.value)" />
@@ -5448,6 +5448,48 @@ function renderModal(){
             Somado: <b>${fmtMoney(d.somado)}</b> de ${fmtMoney(d.total)}${d.fecha ? ' — confere' : ' — <b>'+esc(d.rotuloDiferenca)+'</b>'}
           </div>
           <div class="modal-actions"><button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button></div>
+        </div>
+      </div>
+    `;
+  }
+  if(m.type === 'mover-empresa'){
+    const origem = state[m.origemEntKey] && state[m.origemEntKey].rows.find(function(r){ return r.id === m.origemRowId; });
+    const empresa = origem && (origem.empresas||[]).find(function(e){ return e.id === m.empresaId; });
+    if(!origem || !empresa) return '';
+    const mainField = ENTITIES[m.origemEntKey].fields[0].key;
+    const busca = (m.busca||'').trim().toLowerCase();
+    const candidatos = state[m.origemEntKey].rows
+      .filter(function(r){ return r.id !== m.origemRowId; })
+      .filter(function(r){ return !busca || (r[mainField]||'').toLowerCase().includes(busca) || (r.mes||'').toLowerCase().includes(busca); })
+      .sort(function(a,b){ return (a[mainField]||'').localeCompare(b[mainField]||'', 'pt-BR', {sensitivity:'base'}); });
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-wide">
+          <div class="modal-msg">Mover "${esc(empresa.nome||'empresa sem nome')}" para outro lançamento</div>
+          <div class="divisao-explica">
+            Está em <b>${esc(origem[mainField]||'—')} — ${esc(origem.mes)}/${origem.ano||yearFilter}</b>. Escolha o lançamento de
+            destino (mesma aba, ${esc(ENTITIES[m.origemEntKey].tabLabel)}) — a empresa sai de um e entra no outro,
+            sem perder nada dela (CNPJ, nota, anexo, observações).
+          </div>
+          <input id="mover-empresa-busca" class="search-input" type="text" placeholder="🔍 Buscar lançamento de destino..."
+                 value="${esc(m.busca||'')}" style="margin:0 0 10px;width:100%;" oninput="onMoverEmpresaBuscaInput(this)" />
+          <div class="table-scroll" style="max-height:320px;">
+            <table class="table-plain">
+              <thead><tr><th></th><th>Lançamento</th><th>Mês</th></tr></thead>
+              <tbody>${candidatos.length ? candidatos.map(function(r){
+                const sel = m.destinoRowId === r.id;
+                return `<tr style="cursor:pointer;" class="${sel?'row-pending':''}" onclick="escolherDestinoMoverEmpresa(${r.id})">
+                  <td><input type="radio" ${sel?'checked':''} onchange="escolherDestinoMoverEmpresa(${r.id})" /></td>
+                  <td>${esc(r[mainField]||'—')}</td>
+                  <td>${esc(r.mes)}/${r.ano||yearFilter}</td>
+                </tr>`;
+              }).join('') : `<tr><td colspan="3" style="text-align:center;color:var(--ink-faint);padding:16px;">Nada encontrado.</td></tr>`}</tbody>
+            </table>
+          </div>
+          <div class="modal-actions">
+            <button class="modal-btn modal-btn-ghost" onclick="cancelarMoverEmpresa()">Cancelar</button>
+            <button class="modal-btn modal-btn-primary" ${m.destinoRowId?'':'disabled'} onclick="confirmarMoverEmpresa()">Mover</button>
+          </div>
         </div>
       </div>
     `;
@@ -12711,6 +12753,58 @@ function removeEmpresaCurso(empresaId){
     },
     'Excluir'
   );
+}
+
+/* "Mover" existe pra corrigir empresa lançada no contrato errado (ex:
+   nota do GTAP que na verdade é de outro curso) sem ter que excluir e
+   recadastrar tudo de novo (CNPJ, responsável, nota já emitida, anexo).
+   Só entre lançamentos da MESMA aba (entKey) — mover entre Consultoria
+   e Cursos, por exemplo, não faz sentido de negócio. */
+function abrirMoverEmpresa(empresaId){
+  if(!modalState || modalState.type !== 'empresas-curso') return;
+  if(!isAdmin && !isFinanceiro) return;
+  modalState = {
+    type:'mover-empresa', origemEntKey: modalState.entKey, origemRowId: modalState.rowId,
+    origemBusca: modalState.busca || '', empresaId: empresaId, busca:'', destinoRowId: null,
+  };
+  render();
+}
+function cancelarMoverEmpresa(){
+  if(!modalState || modalState.type !== 'mover-empresa') return;
+  modalState = { type:'empresas-curso', entKey: modalState.origemEntKey, rowId: modalState.origemRowId, busca: modalState.origemBusca };
+  render();
+}
+function escolherDestinoMoverEmpresa(rowId){
+  if(!modalState || modalState.type !== 'mover-empresa') return;
+  modalState.destinoRowId = rowId;
+  render();
+}
+let moverEmpresaBuscaTimer = null;
+function onMoverEmpresaBuscaInput(el){
+  if(!modalState || modalState.type !== 'mover-empresa') return;
+  modalState.busca = el.value;
+  if(moverEmpresaBuscaTimer) clearTimeout(moverEmpresaBuscaTimer);
+  moverEmpresaBuscaTimer = setTimeout(function(){
+    render();
+    const campo = document.getElementById('mover-empresa-busca');
+    if(campo){ campo.focus(); const pos = campo.value.length; campo.setSelectionRange(pos,pos); }
+  }, 300);
+}
+function confirmarMoverEmpresa(){
+  if(!modalState || modalState.type !== 'mover-empresa' || !modalState.destinoRowId) return;
+  if(!isAdmin && !isFinanceiro) return;
+  const m = modalState;
+  const origem = state[m.origemEntKey] && state[m.origemEntKey].rows.find(function(r){ return r.id === m.origemRowId; });
+  const destino = state[m.origemEntKey] && state[m.origemEntKey].rows.find(function(r){ return r.id === m.destinoRowId; });
+  if(!origem || !destino) return;
+  const item = (origem.empresas||[]).find(function(e){ return e.id === m.empresaId; });
+  if(!item) return;
+  origem.empresas = (origem.empresas||[]).filter(function(e){ return e.id !== m.empresaId; });
+  if(!Array.isArray(destino.empresas)) destino.empresas = [];
+  destino.empresas.push(item);
+  persistEmpresaCurso(item, destino.id);
+  modalState = { type:'empresas-curso', entKey: m.origemEntKey, rowId: m.origemRowId, busca: m.origemBusca || '' };
+  render();
 }
 
 function updateEmpresaCurso(empresaId, campo, valor){
