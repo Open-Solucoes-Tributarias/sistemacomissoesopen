@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-10-13-01';
+const APP_BUILD = '2026-10-13-02';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -2092,7 +2092,14 @@ async function tryLoadPedidosNotaAsync(){
 }
 
 function onPedidoNotaInput(el, campo){
-  pedidoNotaForm[campo] = campo === 'valor' ? (el.value === '' ? null : parseFloat(el.value)) : el.value;
+  // O campo de valor virou texto (em vez de type="number") porque quem
+  // pede a nota normalmente digita no formato brasileiro — vírgula
+  // decimal, às vezes ponto de milhar ("7.979,98") — e um input number
+  // nativo só entende ponto como decimal: a vírgula era simplesmente
+  // ignorada, o que trocava o valor digitado por outro bem menor sem
+  // avisar ninguém. valorDaPlanilha() já resolve esse mesmo problema na
+  // importação de planilhas — reaproveitado aqui.
+  pedidoNotaForm[campo] = campo === 'valor' ? valorDaPlanilha(el.value) : el.value;
 }
 function onPedidoNotaArquivoChange(input){
   const novos = Array.from((input.files || []));
@@ -2276,7 +2283,7 @@ function renderSolicitarNotaScreen(){
               <input type="email" value="${esc(f.email)}" oninput="onPedidoNotaInput(this,'email')" /></label>
             <label class="meta-field"><span>Valor</span>
               <div class="meta-field-money"><span class="currency-prefix">R$</span>
-                <input type="number" step="0.01" placeholder="0,00" value="${f.valor===null||f.valor===undefined?'':f.valor}" oninput="onPedidoNotaInput(this,'valor')" /></div>
+                <input type="text" inputmode="decimal" placeholder="0,00" value="${f.valor===null||f.valor===undefined?'':f.valor}" oninput="onPedidoNotaInput(this,'valor')" /></div>
             </label>
           </div>
           <div class="meta-form-grid">
