@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-10-13-02';
+const APP_BUILD = '2026-10-14-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5765,7 +5765,11 @@ function renderModal(){
           ${(p.observacoes || isAdmin) ? `<label class="meta-field"><span>Observações</span>${isAdmin
             ? `<textarea class="fin-empresa-campo" rows="3" onchange="updatePedidoNotaCampo(${p.id},'observacoes',this.value)">${esc(p.observacoes)}</textarea>`
             : `<div class="meta-field-valor">${esc(p.observacoes)}</div>`}</label>` : ''}
-          ${p.anexos && p.anexos.length ? `<div style="display:flex;flex-direction:column;gap:8px;">${p.anexos.map(function(a){ return `<button type="button" class="modal-btn modal-btn-ghost" onclick="verAnexoPedidoNota(${p.id},'${a.path}')">📎 Ver anexo: ${esc(a.nome||'arquivo')}</button>`; }).join('')}</div>` : ''}
+          ${p.anexos && p.anexos.length ? `<div style="display:flex;flex-direction:column;gap:8px;">${p.anexos.map(function(a){ return `
+            <div style="display:flex;gap:6px;align-items:center;">
+              <button type="button" class="modal-btn modal-btn-ghost" style="flex:1;" onclick="verAnexoPedidoNota(${p.id},'${a.path}')">📎 Ver anexo: ${esc(a.nome||'arquivo')}</button>
+              ${isAdmin ? `<button type="button" class="anexo-remover" title="Remover este anexo do pedido" onclick="removerAnexoPedidoNota(${p.id},'${a.path}')">✕</button>` : ''}
+            </div>`; }).join('')}</div>` : ''}
           <div class="divisao-explica">Pedido em ${new Date(p.criadoEm).toLocaleDateString('pt-BR')}.${isAdmin ? '' : ' Pra corrigir algum desses dados, peça pra administração.'}</div>
           <div class="modal-actions">
             <button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button>
@@ -10277,7 +10281,13 @@ function anexoNotaCelulaHtml(tabela, id, entKey, notaArquivoPath, notaArquivoNom
   const pedido = pedidoVinculadoDe(tabela, id);
   const anexosPedidoHtml = (pedido && pedido.anexos && pedido.anexos.length)
     ? pedido.anexos.map(function(a){
-        return `<span class="anexo-arquivo"><button type="button" class="anexo-link" title="${esc(a.nome||'')} — anexado no pedido de nota" onclick="verAnexoPedidoNota(${pedido.id},'${a.path}')">📎 ${esc(a.nome||'arquivo')}</button></span>`;
+        // Mesmo depois de vinculado, o anexo que veio junto do PEDIDO (não
+        // o da nota emitida) pode ter sido carregado errado — sem um jeito
+        // de tirar só ele aqui, o remédio virava excluir a empresa inteira.
+        return `<span class="anexo-arquivo">
+          <button type="button" class="anexo-link" title="${esc(a.nome||'')} — anexado no pedido de nota" onclick="verAnexoPedidoNota(${pedido.id},'${a.path}')">📎 ${esc(a.nome||'arquivo')}</button>
+          ${isAdmin ? `<button type="button" class="anexo-remover" title="Remover este anexo do pedido" onclick="removerAnexoPedidoNota(${pedido.id},'${a.path}')">✕</button>` : ''}
+        </span>`;
       }).join('')
     : '';
   if(!podeVisar){
