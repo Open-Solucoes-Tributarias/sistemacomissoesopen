@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-10-15-01';
+const APP_BUILD = '2026-10-15-02';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -2927,6 +2927,19 @@ function persistEntityRows(key){
         });
         if(extraRows.length) await sbUpsert('lancamentos_extra_vendedores', extraRows, 'id');
 
+        // Mais de um parceiro no mesmo contrato (hoje só a Consultoria usa) —
+        // mesmo padrão de apagar e reinserir, escopado pelos ids desta aba.
+        if(key === 'consultoria' && localIds.length){
+          await sbDeleteAll('lancamentos_extra_parceiros', 'lancamento_id=in.(' + localIds.join(',') + ')');
+          const extraParceiroRows = [];
+          state[key].rows.forEach(function(r){
+            (r.extraParceiros||[]).forEach(function(p){
+              extraParceiroRows.push({ id: p.id, lancamento_id: r.id, parceiro: p.parceiro||'', percent: numOrNull(p.percent) });
+            });
+          });
+          if(extraParceiroRows.length) await sbUpsert('lancamentos_extra_parceiros', extraParceiroRows, 'id');
+        }
+
         // Divisão do faturamento por vendedora (hoje só a aba Cursos usa)
         if(cfg.hasVendasPorVendedor && localIds.length){
           await sbDeleteAll('lancamento_vendas', 'lancamento_id=in.(' + localIds.join(',') + ')');
@@ -3002,6 +3015,11 @@ async function tryLoadEntityFromStorageAsync(key){
     const divisoes = cfg.hasVendasPorVendedor
       ? await sbSelectOpcional('lancamento_vendas', 'select=*&order=id.asc', [])
       : [];
+    // Mais de um parceiro no mesmo contrato — por enquanto só Consultoria
+    // precisa disso (o parceiro principal continua em parceiro/participacao).
+    const extrasParceiros = key === 'consultoria'
+      ? await sbSelectOpcional('lancamentos_extra_parceiros', 'select=*&order=id.asc', [])
+      : [];
     // Empresas por curso: RLS só devolve linha pra admin/financeiro —
     // pra quem mais não é, a consulta volta vazia (não é erro).
     const empresasDb = cfg.hasEmpresas
@@ -3019,6 +3037,11 @@ async function tryLoadEntityFromStorageAsync(key){
       (divisoes||[]).forEach(function(d){
         if(!divisaoByLanc[d.lancamento_id]) divisaoByLanc[d.lancamento_id] = [];
         divisaoByLanc[d.lancamento_id].push({id: d.id, vendedor: d.vendedor||'', valor: d.valor});
+      });
+      const extrasParceirosByLanc = {};
+      (extrasParceiros||[]).forEach(function(p){
+        if(!extrasParceirosByLanc[p.lancamento_id]) extrasParceirosByLanc[p.lancamento_id] = [];
+        extrasParceirosByLanc[p.lancamento_id].push({id: p.id, parceiro: p.parceiro||'', percent: p.percent});
       });
       const empresasByLanc = {};
       (empresasDb||[]).forEach(function(e){
@@ -3046,6 +3069,7 @@ async function tryLoadEntityFromStorageAsync(key){
           notaArquivoPath: d.nota_arquivo_path || null, notaArquivoNome: d.nota_arquivo_nome || null,
           inCompany: !!d.in_company, renovacao: !!d.renovacao, upgrade: !!d.upgrade,
           parceiro: d.parceiro||'', participacao: d.participacao,
+          extraParceiros: extrasParceirosByLanc[d.id] || [],
           professor: d.professor||'', honorarioProfessor: d.honorario_professor,
           professor2: d.professor2||'', honorarioProfessor2: d.honorario_professor2,
         };
@@ -5160,6 +5184,7 @@ function normalizeAllText(){
           r.parceiro = upperOrKeep(r.parceiro);
           r.colaborador = upperOrKeep(r.colaborador);
           r.formaPagamento = upperOrKeep(r.formaPagamento);
+          if(Array.isArray(r.extraParceiros)) r.extraParceiros.forEach(p => { p.parceiro = upperOrKeep(p.parceiro); });
         });
         persistEntityRows(key);
       });
@@ -5365,6 +5390,47 @@ function renderModal(){
           ${isAdmin ? `<button class="modal-btn modal-btn-ghost" style="width:100%;margin-top:10px;" onclick="addDivisaoVenda()">+ Adicionar vendedora</button>` : ''}
           <div id="divisao-conferencia" class="divisao-conferencia${d.fecha?' ok':''}">
             Somado: <b>${fmtMoney(d.somado)}</b> de ${fmtMoney(d.total)}${d.fecha ? ' — confere' : ' — <b>'+esc(d.rotuloDiferenca)+'</b>'}
+          </div>
+          <div class="modal-actions"><button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button></div>
+        </div>
+      </div>
+    `;
+  }
+  if(m.type === 'mais-parceiros'){
+    const r = state[m.key] && state[m.key].rows.find(function(x){ return x.id === m.rowId; });
+    if(!r) return '';
+    const cfg = ENTITIES[m.key];
+    const nome = r[cfg.fields[0].key] || 'este lançamento';
+    const extras = Array.isArray(r.extraParceiros) ? r.extraParceiros : [];
+    const totalPct = parsePercent(r.participacao) + extras.reduce(function(a,p){ return a + parsePercent(p.percent); }, 0);
+    const restante = entityRemainingAfterPartner(r);
+    const linhas = extras.length ? extras.map(function(p){
+      return `
+        <div class="divisao-linha">
+          <select onchange="updateExtraParceiroField('${m.key}',${r.id},${p.id},'parceiro',this.value)">${partnerOptionsHtml(p.parceiro)}</select>
+          <div class="divisao-money">
+            <input class="num" type="number" step="0.1" min="0" placeholder="0"
+                   value="${p.percent===null||p.percent===undefined?'':p.percent}"
+                   oninput="updateExtraParceiroField('${m.key}',${r.id},${p.id},'percent',this.value===''?null:parseFloat(this.value))" />
+            <span class="pct-suffix">%</span>
+          </div>
+          <button class="action-btn danger" title="Remover" onclick="removeExtraParceiro('${m.key}',${r.id},${p.id})">✕</button>
+        </div>`;
+    }).join('') : `<div class="divisao-vazio">Só o parceiro principal${r.parceiro ? ' ('+esc(r.parceiro)+' — '+parsePercent(r.participacao).toLocaleString('pt-BR')+'%)' : ' (nenhum ainda)'}. Adicione outro abaixo.</div>`;
+
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-wide">
+          <div class="modal-msg">Parceiros — ${esc(nome)}</div>
+          <div class="divisao-explica">
+            Parceiro principal: <b>${r.parceiro ? esc(r.parceiro)+' ('+parsePercent(r.participacao).toLocaleString('pt-BR')+'%)' : '—'}</b> —
+            edite ele direto na tabela. Aqui você adiciona os <b>demais</b> parceiros deste contrato, cada um com
+            a própria porcentagem — o que sobra pra comissão da equipe já desconta a soma de todas.
+          </div>
+          <div class="divisao-lista">${linhas}</div>
+          <button class="modal-btn modal-btn-ghost" style="width:100%;margin-top:10px;" onclick="addExtraParceiro('${m.key}',${r.id})">+ Adicionar parceiro</button>
+          <div class="divisao-conferencia ok">
+            Total entre todos os parceiros: <b>${totalPct.toLocaleString('pt-BR')}%</b> · Sobra pra comissão da equipe: <b>${fmtMoney(restante)}</b>
           </div>
           <div class="modal-actions"><button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button></div>
         </div>
@@ -6649,13 +6715,13 @@ function ensureVendaProductsIncludeCurrent(){
 function ensurePartnersIncludeCurrent(){
   let changed = false;
   const scan = (list) => list.forEach(r => {
-    if(r.parceiro && r.parceiro.trim()){
-      const v = r.parceiro.trim();
-      if(!partners.some(p => p.toLowerCase() === v.toLowerCase())){
+    allParceirosDaLinha(r).forEach(function(p){
+      const v = p.nome.trim();
+      if(!partners.some(x => x.toLowerCase() === v.toLowerCase())){
         partners.push(v);
         changed = true;
       }
-    }
+    });
   });
   scan(rows);
   ENTITY_KEYS.forEach(key => scan(state[key].rows));
@@ -6718,6 +6784,65 @@ function onEntityParceiroSelect(el){
   updateEntityCell(key, id, 'parceiro', el.value);
 }
 
+/* Mais de um parceiro no mesmo contrato (hoje só Consultoria) — o
+   principal continua editado direto na tabela (parceiro/participacao,
+   como sempre foi); esta é só a lista dos demais, mesmo padrão de
+   add/remove das vendedoras extras (extraVendedores). */
+function abrirMaisParceiros(key, rowId){
+  if(!isAdmin) return;
+  modalState = { type:'mais-parceiros', key: key, rowId: rowId };
+  render();
+}
+function addExtraParceiro(key, rowId){
+  const r = state[key].rows.find(function(x){ return x.id === rowId; });
+  if(!r) return;
+  if(isMonthClosedFor(key, r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    return;
+  }
+  if(!Array.isArray(r.extraParceiros)) r.extraParceiros = [];
+  r.extraParceiros.push({ id: Date.now() + r.extraParceiros.length, parceiro:'', percent:null });
+  persistEntityRows(key);
+  render();
+}
+function removeExtraParceiro(key, rowId, slotId){
+  const r = state[key].rows.find(function(x){ return x.id === rowId; });
+  if(!r || !Array.isArray(r.extraParceiros)) return;
+  r.extraParceiros = r.extraParceiros.filter(function(p){ return p.id !== slotId; });
+  persistEntityRows(key);
+  render();
+}
+function updateExtraParceiroField(key, rowId, slotId, field, value){
+  const r = state[key].rows.find(function(x){ return x.id === rowId; });
+  if(!r || !Array.isArray(r.extraParceiros)) return;
+  if(isMonthClosedFor(key, r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    render();
+    return;
+  }
+  const p = r.extraParceiros.find(function(x){ return x.id === slotId; });
+  if(!p) return;
+  if(field === 'parceiro' && value === '__new__'){
+    showPrompt("Nome do novo parceiro:", function(name){
+      if(!name) return;
+      const trimmed = upperOrKeep(name.trim());
+      if(!trimmed) return;
+      if(!partners.some(function(x){ return x.toLowerCase() === trimmed.toLowerCase(); })){
+        partners.push(trimmed);
+        partners.sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
+        persistPartners();
+      }
+      p.parceiro = trimmed;
+      persistEntityRows(key);
+      render();
+    });
+    return;
+  }
+  p[field] = value;
+  persistEntityRows(key);
+  render();
+}
+
 function parsePercent(v){
   if(v===null || v===undefined || v==='') return 0;
   const n = parseFloat(String(v).replace('%','').replace(',','.').trim());
@@ -6768,6 +6893,7 @@ function isEntityRowPending(r){
     if(Array.isArray(r.extraVendedores) && r.extraVendedores.some(ev => ev.vendedor && !(Number(ev.percent) > 0))) return true;
   }
   if(r.parceiro && !(Number(r.participacao) > 0)) return true;
+  if(Array.isArray(r.extraParceiros) && r.extraParceiros.some(p => p.parceiro && !(Number(p.percent) > 0))) return true;
   /* Honorário do professor pode ser zero de propósito (aula sem custo
      extra) — o que falta marcar como pendente é NUNCA ter respondido,
      não ter respondido "zero". Por isso aqui olha se o campo foi
@@ -7681,7 +7807,8 @@ function getPartnerEntries(){
   ];
   sources.forEach(src => {
     src.list.forEach(r => {
-      if(!r.parceiro) return;
+      const parceiros = allParceirosDaLinha(r);
+      if(!parceiros.length) return;
       if((r.ano||2026) !== yearFilter) return;
       /* Comissão de parceiro só entra depois que o cliente PAGOU — o mesmo
          padrão que já vale pra comissão de vendedora (elegivelNoFechamento).
@@ -7691,9 +7818,10 @@ function getPartnerEntries(){
          não pagas entravam no total junto com a de Ago, já paga). */
       if(!elegivelNoFechamento(r, partnerMonthFilter)) return;
       const valorContrato = Number(r[src.valorField])||0;
-      const pct = parsePercent(r.participacao);
-      const honorario = valorContrato * (pct/100);
-      out.push({ origem: src.origem, mes: r.mes, label: src.labelFn(r), valorContrato, parceiro: r.parceiro, pct, honorario });
+      parceiros.forEach(function(p){
+        const honorario = valorContrato * (p.percent/100);
+        out.push({ origem: src.origem, mes: r.mes, label: src.labelFn(r), valorContrato, parceiro: p.nome, pct: p.percent, honorario });
+      });
     });
   });
   return out;
@@ -8613,19 +8741,21 @@ function getPartnerBreakdown(){
 
   rows.forEach(r => {
     if((r.ano||2026) !== yearFilter) return;
-    if(!r.parceiro) return;
     if(!elegivelNoFechamento(r, partnerMonthFilter)) return;
-    ensure(r.parceiro);
-    by[r.parceiro].sistema += (Number(r.valor)||0) * (parsePercent(r.participacao)/100);
+    allParceirosDaLinha(r).forEach(function(p){
+      ensure(p.nome);
+      by[p.nome].sistema += (Number(r.valor)||0) * (p.percent/100);
+    });
   });
 
   ENTITY_KEYS.forEach(key => {
     state[key].rows.forEach(r => {
       if((r.ano||2026) !== yearFilter) return;
-      if(!r.parceiro) return;
       if(!elegivelNoFechamento(r, partnerMonthFilter)) return;
-      ensure(r.parceiro);
-      by[r.parceiro][key] += (Number(r.valorContrato)||0) * (parsePercent(r.participacao)/100);
+      allParceirosDaLinha(r).forEach(function(p){
+        ensure(p.nome);
+        by[p.nome][key] += (Number(r.valorContrato)||0) * (p.percent/100);
+      });
     });
   });
 
@@ -11182,7 +11312,7 @@ function getEntityVisible(key){
   }
   if(st.search.parceiro.trim()){
     const q = st.search.parceiro.trim().toLowerCase();
-    list = list.filter(r => (r.parceiro||"").toLowerCase().includes(q));
+    list = list.filter(r => allParceirosDaLinha(r).some(p => p.nome.toLowerCase().includes(q)));
   }
   if(st.search.colaborador.trim()){
     const q = st.search.colaborador.trim().toLowerCase();
@@ -11233,11 +11363,25 @@ function onEntitySearchInput(el, key, field){
   if(ne){ ne.focus(); try{ ne.setSelectionRange(pos,pos); }catch(e){} }
 }
 
+/* Todos os parceiros de um lançamento — o principal (parceiro/participacao,
+   único até aqui) mais os extras (extraParceiros, hoje só em Consultoria,
+   pro caso de mais de um parceiro no mesmo contrato). Centralizado aqui
+   porque é usado tanto pra calcular quanto sobra pra comissão da equipe
+   quanto pra saber quem recebe o quê. */
+function allParceirosDaLinha(row){
+  const lista = [];
+  if(row.parceiro && String(row.parceiro).trim()) lista.push({ nome: row.parceiro, percent: parsePercent(row.participacao) });
+  (row.extraParceiros||[]).forEach(function(p){
+    if(p.parceiro && String(p.parceiro).trim()) lista.push({ nome: p.parceiro, percent: parsePercent(p.percent) });
+  });
+  return lista;
+}
 function entityRemainingAfterPartner(row){
   const valorContrato = Number(row.valorContrato)||0;
-  if(!row.parceiro) return valorContrato;
-  const partnerPct = parsePercent(row.participacao);
-  return valorContrato - (valorContrato * (partnerPct/100));
+  const parceiros = allParceirosDaLinha(row);
+  if(!parceiros.length) return valorContrato;
+  const totalPct = parceiros.reduce(function(a,p){ return a + p.percent; }, 0);
+  return valorContrato - (valorContrato * (totalPct/100));
 }
 
 function getRowSellerAssignments(r){
@@ -11547,9 +11691,11 @@ function renderEntitySection(key){
           if(f.key === "parceiro"){
             cells += `<td><select data-entity="${key}" data-id="${row.id}" onchange="onEntityParceiroSelect(this)">${partnerOptionsHtml(row.parceiro)}</select></td>`;
           } else if(f.key === "participacao"){
+            const extrasParceiro = Array.isArray(row.extraParceiros) ? row.extraParceiros.filter(p => p.parceiro && p.parceiro.trim()) : [];
             cells += `<td class="col-pct">
               <div class="pct-wrap"><input class="num" type="number" step="0.1" min="0" placeholder="0" value="${row.participacao===null||row.participacao===undefined?'':row.participacao}" data-entity="${key}" data-id="${row.id}" data-field="participacao" oninput="onEntityNumInput(this)" /><span class="pct-suffix">%</span></div>
               ${row.parceiro ? `<div class="calc-value" id="calcParceiro-${key}-${row.id}">${fmtMoney((Number(row.valorContrato)||0) * (parsePercent(row.participacao)/100))}</div>` : ''}
+              ${key === 'consultoria' ? `<button type="button" class="selo-empresas${extrasParceiro.length?'':' selo-empresas-vazio'}" title="${extrasParceiro.length ? 'Mais '+extrasParceiro.length+' parceiro'+(extrasParceiro.length===1?'':'s')+' neste contrato — clique pra ver' : 'Este contrato tem mais de um parceiro? Clique pra adicionar'}" onclick="abrirMaisParceiros('${key}',${row.id})">👥${extrasParceiro.length?' +'+extrasParceiro.length:''}</button>` : ''}
             </td>`;
           } else if(f.type === "text"){
             const seloInCompany = (key === 'cursos' && fi === 0 && row.inCompany) ? '<span class="selo-incompany">🏢 In Company</span>' : '';
