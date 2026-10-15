@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-10-14-01';
+const APP_BUILD = '2026-10-15-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -6794,11 +6794,17 @@ function persistAfterPayment(entityKey){
   if(entityKey) persistEntityRows(entityKey); else persist();
 }
 /* vendas/lancamentos só aceitam UPDATE de admin (RLS) — o upsert normal
-   de persist()/persistEntityRows() é rejeitado em silêncio pro
-   financeiro (ex: Deborah): a marca fica só na tela, nunca grava. Essa
-   porta estreita (mesmo padrão da "nota emitida") é liberada pra
-   financeiro também, e mexe só nas colunas de pagamento. */
-async function persistirPagamentoRPC(entityKey, r){
+   de persist()/persistEntityRows() é rejeitado em silêncio pra qualquer
+   sessão não-admin (financeiro, ou uma sessão com o papel mal detectado
+   por qualquer motivo): a marca fica só na tela, nunca grava, e sem
+   aviso nenhum — foi exatamente isso que fez uma conferência de
+   pagamentos inteira (IZI, Dor Zero...) sumir de um dia pro outro. Por
+   isso: 1) todo mundo que não é admin passa por aqui, pela RPC
+   (SECURITY DEFINER, confere permissão de verdade e nunca falha calado)
+   em vez do caminho genérico; 2) se mesmo assim a gravação falhar, a
+   marca volta pro estado anterior NA TELA e avisa explicitamente — não
+   fica um "pago" fantasma que só existe no navegador de quem clicou. */
+async function persistirPagamentoRPC(entityKey, r, anterior){
   saving = true; updateSaveStatus();
   try{
     await sbRpc('marcar_pago', {
@@ -6809,11 +6815,16 @@ async function persistirPagamentoRPC(entityKey, r){
   }catch(e){
     console.error('Falha ao marcar pagamento', e);
     saveError = true;
+    if(anterior){
+      r.pago = anterior.pago; r.mesPagamento = anterior.mesPagamento;
+      r.pagoEm = anterior.pagoEm; r.fechamentoMes = anterior.fechamentoMes;
+    }
+    showAlert(mensagemErroSupabase(e) || 'Não consegui salvar essa marcação de pagamento. A tela voltou como estava antes — confira a internet e tente de novo.');
   } finally {
     saving = false; updateSaveStatus();
   }
 }
-async function corrigirMesPagamentoRPC(entityKey, r){
+async function corrigirMesPagamentoRPC(entityKey, r, anterior){
   saving = true; updateSaveStatus();
   try{
     await sbRpc('corrigir_mes_pagamento', {
@@ -6823,6 +6834,10 @@ async function corrigirMesPagamentoRPC(entityKey, r){
   }catch(e){
     console.error('Falha ao corrigir mês de pagamento', e);
     saveError = true;
+    if(anterior){
+      r.mesPagamento = anterior.mesPagamento; r.fechamentoMes = anterior.fechamentoMes;
+    }
+    showAlert(mensagemErroSupabase(e) || 'Não consegui salvar essa correção de mês de pagamento. A tela voltou como estava antes — confira a internet e tente de novo.');
   } finally {
     saving = false; updateSaveStatus();
   }
@@ -6898,6 +6913,7 @@ function onPagamentoToggle(el, entityKey){
     render();
     return;
   }
+  const anterior = { pago: r.pago, mesPagamento: r.mesPagamento, pagoEm: r.pagoEm, fechamentoMes: r.fechamentoMes };
   r.pago = el.checked;
   if(r.pago){
     if(!r.mesPagamento) r.mesPagamento = mesPagamentoPadrao(r);
@@ -6907,7 +6923,9 @@ function onPagamentoToggle(el, entityKey){
     r.pagoEm = null;
     r.fechamentoMes = null;   // desmarcou pago: solta a trava, se tinha
   }
-  if(isFinanceiro && !isAdmin) persistirPagamentoRPC(entityKey, r);
+  // Qualquer sessão não-admin passa pela RPC (não só financeiro) — ver
+  // nota acima de por quê: é a única via que nunca falha sem avisar.
+  if(!isAdmin) persistirPagamentoRPC(entityKey, r, anterior);
   else persistAfterPayment(entityKey);
   render();
 }
@@ -6920,9 +6938,10 @@ function onPagamentoMesSelect(el, entityKey){
     render();
     return;
   }
+  const anterior = { mesPagamento: r.mesPagamento, fechamentoMes: r.fechamentoMes };
   r.mesPagamento = el.value;
   r.fechamentoMes = null;   // corrigir o mês de pagamento invalida uma trava antiga — sem isso, a nota fica presa no mês errado
-  if(isFinanceiro && !isAdmin) corrigirMesPagamentoRPC(entityKey, r);
+  if(!isAdmin) corrigirMesPagamentoRPC(entityKey, r, anterior);
   else persistAfterPayment(entityKey);
 }
 function setPagamentosMonthFilter(m){ pagamentosMonthFilter = m; render(); }
@@ -10782,8 +10801,8 @@ function renderVendasSection(){
         </td>
         <td><input type="text" data-id="${row.id}" data-field="formaPagamento" value="${esc(row.formaPagamento)}" placeholder="Forma de pagamento" oninput="onTextInput(this)" /></td>
         <td class="pagamento-cell">
-          <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" onchange="onPagamentoToggle(this)" /><span>${row.pago?'Pago':'Pendente'}</span></label>
-          ${row.pago ? `<select class="${pagoEmOutroMes(row) ? 'sel-pgto-outro-mes' : ''}" data-id="${row.id}"
+          <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" data-pagamento="1" onchange="onPagamentoToggle(this)" /><span>${row.pago?'Pago':'Pendente'}</span></label>
+          ${row.pago ? `<select class="${pagoEmOutroMes(row) ? 'sel-pgto-outro-mes' : ''}" data-id="${row.id}" data-pagamento="1"
                   title="${pagoEmOutroMes(row) ? 'Nota de ' + esc(row.mes) + ' paga em ' + esc(row.mesPagamento) + ' — a comissão libera em ' + esc(row.mesPagamento) : 'Mês em que o cliente pagou'}"
                   onchange="onPagamentoMesSelect(this)">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>` : ''}
         </td>
@@ -11556,8 +11575,8 @@ function renderEntitySection(key){
             cells += `<td${fi===0?' class="col-nome"':''}><input type="text" ${fi===0?'list="empresas-datalist"':''} data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}${seloRenovacao}${seloUpgrade}${seloEmpresas}${seloPrazo}</td>`;
             if(f.key === "formaPagamento" && cfg.hasPagamento){
               cells += `<td class="pagamento-cell">
-                <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" onchange="onPagamentoToggle(this,'${key}')" /><span>${row.pago?'Pago':'Pendente'}</span></label>
-                ${row.pago ? `<select class="${pagoEmOutroMes(row) ? 'sel-pgto-outro-mes' : ''}" data-id="${row.id}"
+                <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" data-pagamento="1" onchange="onPagamentoToggle(this,'${key}')" /><span>${row.pago?'Pago':'Pendente'}</span></label>
+                ${row.pago ? `<select class="${pagoEmOutroMes(row) ? 'sel-pgto-outro-mes' : ''}" data-id="${row.id}" data-pagamento="1"
                         title="${pagoEmOutroMes(row) ? 'Nota de ' + esc(row.mes) + ' paga em ' + esc(row.mesPagamento) + ' — a comissão libera em ' + esc(row.mesPagamento) : 'Mês em que o cliente pagou'}"
                         onchange="onPagamentoMesSelect(this,'${key}')">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>` : ''}
               </td>`;
@@ -16023,9 +16042,16 @@ function render(){
     // .fin-empresa-campo é o modal "Empresas por lançamento" — essa
     // tabela não tem coluna de comissão nenhuma, então o financeiro tem
     // UPDATE/INSERT/DELETE direto (RLS), sem precisar de RPC.
+    // [data-pagamento] é o checkbox "Pago" e o seletor de mês de
+    // pagamento — sem essa exceção, eles ficavam travados pro financeiro
+    // (não têm data-field, então caíam direto no disabled=true abaixo),
+    // apesar de existir uma RPC (marcar_pago/corrigir_mes_pagamento)
+    // feita bem pra isso: conferir pagamento é o trabalho do financeiro,
+    // e esse travamento silencioso impedia exatamente essa conferência.
     root.querySelectorAll('tbody td input, tbody td select, .meta-input-wrap input').forEach(function(el){
       if(el.closest('.anexo-upload')) return;
       if(isFinanceiro && el.classList.contains('fin-empresa-campo')) return;
+      if(isFinanceiro && el.dataset.pagamento) return;
       if(isFinanceiro && el.dataset.field){
         const campoDb = el.dataset.entity ? campoFinanceiroEntidade(el.dataset.entity, el.dataset.field) : VENDAS_CAMPOS_FINANCEIRO[el.dataset.field];
         if(campoDb) return;
