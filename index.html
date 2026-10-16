@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-10-16-01';
+const APP_BUILD = '2026-10-16-02';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -13251,13 +13251,18 @@ function vendasParaCarteira(anoOrigem, anoDestino){
   return candidatos;
 }
 
+/* Só quem JÁ renovou (ou fez upgrade, que por dentro conta como renovado)
+   é candidato a renovar de novo no ano seguinte — "em aberto" ainda não
+   se sabe se fica, e "não renovado" já se sabe que não fica. Levar esses
+   dois pra frente infla a previsão de faturamento do ano que vem com
+   clientes que nem decidiram ou que já saíram. */
 function renovacoesParaCarteira(anoOrigem, anoDestino){
   const jaLa = {};
   renovacoes.forEach(function(r){
     if(r.ano === anoDestino) jaLa[semAcento(r.empresa) + '|' + r.mes] = true;
   });
   return renovacoes.filter(function(r){
-    return r.ano === anoOrigem && r.empresa && r.empresa.trim()
+    return r.ano === anoOrigem && r.empresa && r.empresa.trim() && r.renovado === true
         && !jaLa[semAcento(r.empresa) + '|' + r.mes];
   });
 }
