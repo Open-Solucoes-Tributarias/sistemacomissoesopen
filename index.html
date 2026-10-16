@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-10-16-02';
+const APP_BUILD = '2026-10-16-03';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -13289,9 +13289,19 @@ function montarCarteira(anoOrigem, anoDestino){
   if(daCarteira.length) partes.push('<b>' + daCarteira.length + '</b> ' + (daCarteira.length===1?'renovação':'renovações') + ' de ' + anoOrigem);
   if(dosNovos.length)   partes.push('<b>' + dosNovos.length + '</b> contrato' + (dosNovos.length===1?'':'s') + ' do Sistema/Órgãos Públicos de ' + anoOrigem + ' (que vencem em ' + anoDestino + ')');
 
+  // Sem isso, quem já tem a carteira de anoDestino quase pronta (de uma
+  // importação, ou de um "Montar" anterior) lê "9 renovações" e entende
+  // que é TUDO que vai ter lá — quando na verdade são só as que ainda
+  // faltavam, em cima do que já existe.
+  const jaExistentes = renovacoes.filter(function(r){ return r.ano === anoDestino; });
+  const avisoJaTem = jaExistentes.length
+    ? ' Isso é só o que falta: a carteira de ' + anoDestino + ' já tem <b>' + jaExistentes.length + '</b> empresa' + (jaExistentes.length===1?'':'s') +
+      ', somando ' + fmtMoney(jaExistentes.reduce(function(a,r){ return a + valorDeRenovacao(r); }, 0)) + '.'
+    : '';
+
   showConfirm(
     'Montar a carteira de ' + anoDestino + ' com ' + partes.join(' e ').replace(/<\/?b>/g,'') +
-    ', somando ' + fmtMoney(total) + '? Todas entram no mesmo mês, como "em aberto" — a situação e o lançamento no Sistema recomeçam do zero.',
+    ', somando ' + fmtMoney(total) + '?' + avisoJaTem.replace(/<\/?b>/g,'') + ' Todas entram no mesmo mês, como "em aberto" — a situação e o lançamento no Sistema recomeçam do zero.',
     function(){
       daCarteira.forEach(function(r){
         renovacoes.push({
