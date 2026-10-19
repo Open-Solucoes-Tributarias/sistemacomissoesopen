@@ -2002,7 +2002,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-10-16-03';
+const APP_BUILD = '2026-10-19-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -13235,6 +13235,19 @@ function vendasParaCarteira(anoOrigem, anoDestino){
   renovacoes.forEach(function(r){
     if(r.ano === anoDestino) jaLa[semAcento(r.empresa) + '|' + r.mes] = true;
   });
+  // Às vezes a renovação do ano seguinte já foi lançada direto como venda
+  // nova (Sistema/Publicos) em vez de passar por aqui — nesse caso ela já
+  // é real, não só previsão, e trazer de novo como "em aberto" duplicaria.
+  rows.forEach(function(v){
+    if((v.ano||2026) !== anoDestino) return;
+    if(!v.cliente || !v.cliente.trim()) return;
+    jaLa[semAcento(v.cliente) + '|' + v.mes] = true;
+  });
+  state.publicos.rows.forEach(function(v){
+    if((v.ano||2026) !== anoDestino) return;
+    if(!v.orgao || !v.orgao.trim()) return;
+    jaLa[semAcento(v.orgao) + '|' + v.mes] = true;
+  });
   const candidatos = [];
   rows.forEach(function(v){
     if((v.ano||2026) !== anoOrigem) return;
@@ -13242,10 +13255,22 @@ function vendasParaCarteira(anoOrigem, anoDestino){
     if(jaLa[semAcento(v.cliente) + '|' + v.mes]) return;
     candidatos.push({ mes: v.mes, vendedorResponsavel: v.vendedorResponsavel, cliente: v.cliente.trim(), valor: v.valor });
   });
+  // Órgão Público de contrato Mensal lança uma linha por mês (uma por
+  // fatura) — é o MESMO contrato se repetindo, não 12 renovações
+  // diferentes. Por isso agrupamos por órgão antes de virar candidato,
+  // ficando com a primeira ocorrência do ano.
+  const publicosPorOrgao = {};
   state.publicos.rows.forEach(function(v){
     if((v.ano||2026) !== anoOrigem) return;
     if(!v.orgao || !v.orgao.trim()) return;
-    if(jaLa[semAcento(v.orgao) + '|' + v.mes]) return;
+    const chave = semAcento(v.orgao.trim());
+    if(!publicosPorOrgao[chave] || MONTHS.indexOf(v.mes) < MONTHS.indexOf(publicosPorOrgao[chave].mes)){
+      publicosPorOrgao[chave] = v;
+    }
+  });
+  Object.keys(publicosPorOrgao).forEach(function(chave){
+    const v = publicosPorOrgao[chave];
+    if(jaLa[chave + '|' + v.mes]) return;
     candidatos.push({ mes: v.mes, vendedorResponsavel: v.vendedorResponsavel, cliente: v.orgao.trim(), valor: v.valorContrato });
   });
   return candidatos;
