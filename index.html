@@ -1850,6 +1850,12 @@ let closedMonths = [];
 let fechamentosMes = [];   // [{ano, mes, fechadoEm}] — quando cada mês foi fechado pra pagamento (não confundir com closedMonths, que é o mês fechado pra EDIÇÃO)
 let fechamentoDivisoes = [];   // [{id, pessoa, ano, mes, tipo:'clt'|'nota', data, valor, observacoes}] — como o "Total a pagar" de cada pessoa vai sair de fato (folha x nota PJ), digitado à mão porque varia todo mês
 let prazosEmissaoNota = [];   // [{id, entidade, nomeCliente, dia, avista}] — dia fixo do mês combinado pra emitir a nota de um contrato Mensal/Plano Premium (lembrete só pro financeiro); avista=true marca "pago à vista, sem nota recorrente" (dia fica null)
+// Anexos extras da nota (além do arquivo principal) — um lançamento pode
+// precisar de mais de um arquivo (nota + comprovante + contrato, etc.).
+// [{id, tabela, registroId, path, nome}], achados por tabela+registroId
+// na hora de renderizar (não precisa saber em qual aba/entKey cada
+// "lancamentos" está — mais simples que carregar isso em cada linha).
+let notaAnexosExtra = [];
 let atualizandoNotas = false;   // "↻ Atualizar" do quadro de notas — busca de novo do banco, sem recarregar a página inteira
 let novaVersaoDisponivel = false;   // true quando checkForNewVersion() percebe que o HTML publicado mudou — ver checkForNewVersion()
 let dadosDesatualizados = false;   // true quando verificarDadosDesatualizados() percebe que vendas/lançamentos mudaram no banco depois que esta aba carregou — ver verificarDadosDesatualizados()
@@ -2002,7 +2008,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-10-19-01';
+const APP_BUILD = '2026-10-22-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -8625,6 +8631,13 @@ async function tryLoadPrazosEmissaoNotaAsync(){
     render();
   }catch(e){ console.error(e); }
 }
+async function tryLoadNotaAnexosExtraAsync(){
+  try{
+    const db = await sbSelectOpcional('nota_anexos_extra', 'select=*&removido=eq.false&order=created_at.asc', []);
+    notaAnexosExtra = (db||[]).map(function(a){ return {id: a.id, tabela: a.tabela, registroId: a.registro_id, path: a.path, nome: a.nome}; });
+    render();
+  }catch(e){ console.error(e); }
+}
 
 function persistFechamentoFora(){
   saving = true; updateSaveStatus();
@@ -10439,9 +10452,18 @@ function anexoNotaCelulaHtml(tabela, id, entKey, notaArquivoPath, notaArquivoNom
         </span>`;
       }).join('')
     : '';
+  // Além do arquivo principal da nota, dá pra anexar mais — contrato,
+  // comprovante, etc. — sem precisar tirar o que já tem pra colocar outro.
+  const extras = notaAnexosExtra.filter(function(a){ return a.tabela === tabela && a.registroId === id; });
+  const extrasHtml = extras.map(function(a){
+    return `<span class="anexo-arquivo">
+      <button type="button" class="anexo-link" title="${esc(a.nome||'')}" onclick="verAnexoExtra('${escJs(a.path)}','${escJs(a.nome||'')}')">📎 ${esc(a.nome||'arquivo')}</button>
+      ${podeVisar ? `<button type="button" class="anexo-remover" title="Remover este anexo" onclick="removerAnexoExtra(${a.id})">✕</button>` : ''}
+    </span>`;
+  }).join('');
   if(!podeVisar){
     const notaHtml = notaArquivoPath ? `<button type="button" class="anexo-link" title="${esc(notaArquivoNome||'')}" onclick="verNotaAnexada('${tabela}',${id},'${escJs(entKey)}')">📎 ${esc(notaArquivoNome||'arquivo')}</button>` : '';
-    return (anexosPedidoHtml + notaHtml) || '—';
+    return (anexosPedidoHtml + notaHtml + extrasHtml) || '—';
   }
   const notaHtml = notaArquivoPath
     ? `<span class="anexo-arquivo">
@@ -10451,7 +10473,10 @@ function anexoNotaCelulaHtml(tabela, id, entKey, notaArquivoPath, notaArquivoNom
     : `<label class="anexo-upload" title="Anexar PDF ou imagem da nota">
          📎 Anexar<input type="file" accept="application/pdf,image/*" onchange="anexarNotaArquivo('${tabela}',${id},'${escJs(entKey)}',this)" />
        </label>`;
-  return anexosPedidoHtml + notaHtml;
+  const maisHtml = `<label class="anexo-upload" title="Anexar mais um arquivo (ex: comprovante, contrato)">
+       📎 +<input type="file" accept="application/pdf,image/*" onchange="anexarAnexoExtra('${tabela}',${id},this)" />
+     </label>`;
+  return anexosPedidoHtml + notaHtml + extrasHtml + maisHtml;
 }
 function abrirDadosPedidoVinculado(tabela, id){
   if(!isAdmin && !isFinanceiro) return;
@@ -12861,6 +12886,66 @@ function removerNotaAnexada(tabela, id, entKey){
       }catch(e){
         console.error('Falha ao remover o anexo', e);
         showAlert('Não consegui remover o anexo no banco. Tente de novo.');
+      }
+    },
+    'Remover'
+  );
+}
+
+/* Anexos extras (além do arquivo principal da nota) — mesma ideia do
+   "Solicitar nota", que já deixa anexar mais de um arquivo de
+   referência. Pela mesma porta estreita (RPC), pelo mesmo motivo do
+   anexo principal: financeiro não tem INSERT/DELETE direto na tabela. */
+async function anexarAnexoExtra(tabela, id, input){
+  if(!isAdmin && !isFinanceiro) return;
+  const arq = input.files && input.files[0];
+  if(!arq) return;
+  saving = true; updateSaveStatus();
+  try{
+    const nomeLimpo = arq.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    const path = tabela + '-' + id + '/extra-' + Date.now() + '-' + nomeLimpo;
+    await sbUploadFile('notas-fiscais', path, arq);
+    const novoId = await sbRpc('adicionar_anexo_extra', { p_tabela: tabela, p_id: id, p_path: path, p_nome: arq.name });
+    notaAnexosExtra.push({ id: novoId, tabela: tabela, registroId: id, path: path, nome: arq.name });
+    saveError = false;
+  }catch(e){
+    console.error('Falha ao anexar arquivo extra', e);
+    saveError = true;
+    showAlert('Não consegui anexar o arquivo. Confira a internet e tente de novo.');
+  }finally{
+    saving = false; updateSaveStatus(); input.value = ''; render();
+  }
+}
+async function verAnexoExtra(path, nome){
+  const aba = window.open('', '_blank');
+  try{
+    const url = await sbSignedUrl('notas-fiscais', path, 120);
+    if(aba) aba.location.href = url;
+    else window.open(url, '_blank');
+  }catch(e){
+    if(aba) aba.close();
+    console.error('Falha ao abrir o anexo extra', e);
+    showAlert('Não consegui abrir o arquivo anexado. Tente de novo.');
+  }
+}
+function removerAnexoExtra(anexoId){
+  if(!isAdmin && !isFinanceiro) return;
+  const anexo = notaAnexosExtra.find(function(a){ return a.id === anexoId; });
+  if(!anexo) return;
+  showConfirm(
+    'Remover o anexo "' + (anexo.nome || 'arquivo') + '"?',
+    async function(){
+      const anterior = notaAnexosExtra.slice();
+      notaAnexosExtra = notaAnexosExtra.filter(function(a){ return a.id !== anexoId; });
+      render();
+      try{
+        await sbRpc('remover_anexo_extra', { p_anexo_id: anexoId });
+        sbDeleteFile('notas-fiscais', anexo.path).catch(function(e){ console.error('Falha ao apagar arquivo do storage', e); });
+      }catch(e){
+        console.error('Falha ao remover o anexo extra', e);
+        notaAnexosExtra = anterior;
+        render();
+        showAlert(mensagemErroSupabase(e) || 'Não consegui remover o anexo no banco. Tente de novo.');
       }
     },
     'Remover'
@@ -16297,6 +16382,7 @@ function boot(){
     tryLoadRenovacaoPessoasAsync(),
     tryLoadRenovacoesAsync(),
     tryLoadPedidosNotaAsync(),
+    tryLoadNotaAnexosExtraAsync(),
   ];
   Promise.allSettled(loaders).then(function(){
     initialDataLoaded = true;
