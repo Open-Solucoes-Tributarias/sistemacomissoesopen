@@ -2008,7 +2008,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-10-29-01';
+const APP_BUILD = '2026-10-29-02';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5799,11 +5799,15 @@ function renderModal(){
     const p = m.pedido;
     // Desde que o pedido vinculado saiu da lista "Pedidos de Nota" (ela só
     // mostra os pendentes agora), este modal virou o único lugar pra
-    // corrigir um dado errado — por isso, pra admin, os campos viram
-    // inputs de verdade em vez de texto fixo (mesma RPC/porta estreita de
-    // updatePedidoNotaCampo, já usada no painel).
+    // corrigir um dado errado — por isso os campos viram inputs de
+    // verdade em vez de texto fixo (mesma RPC/porta estreita de
+    // updatePedidoNotaCampo, já usada no painel). A solicitante só
+    // encontra ESTE modal através da própria busca de "Já pedi essa
+    // nota?" — e a RLS de pedidos_nota já restringe o que ela vê ali aos
+    // pedidos que ela mesma criou, então deixar editar aqui é seguro.
+    const podeEditarPedido = isAdmin || isSolicitante;
     const campo = function(rotulo, campoJs, valorAtual, tipo){
-      if(!isAdmin) return `<label class="meta-field"><span>${rotulo}</span><div class="meta-field-valor">${valorAtual || '—'}</div></label>`;
+      if(!podeEditarPedido) return `<label class="meta-field"><span>${rotulo}</span><div class="meta-field-valor">${valorAtual || '—'}</div></label>`;
       const valorInput = campoJs === 'cnpj' ? formatCnpj(p.cnpj)
         : campoJs === 'valor' ? (p.valor===null||p.valor===undefined?'':p.valor)
         : campoJs === 'dataMinimaEmissao' ? (p.dataMinimaEmissao||'')
@@ -5835,15 +5839,15 @@ function renderModal(){
             ${campo('Empenho', 'empenho', esc(p.empenho))}
             ${campo('Não emitir antes de', 'dataMinimaEmissao', p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—', 'data')}
           </div>
-          ${(p.observacoes || isAdmin) ? `<label class="meta-field"><span>Observações</span>${isAdmin
+          ${(p.observacoes || podeEditarPedido) ? `<label class="meta-field"><span>Observações</span>${podeEditarPedido
             ? `<textarea class="fin-empresa-campo" rows="3" onchange="updatePedidoNotaCampo(${p.id},'observacoes',this.value)">${esc(p.observacoes)}</textarea>`
             : `<div class="meta-field-valor">${esc(p.observacoes)}</div>`}</label>` : ''}
           ${p.anexos && p.anexos.length ? `<div style="display:flex;flex-direction:column;gap:8px;">${p.anexos.map(function(a){ return `
             <div style="display:flex;gap:6px;align-items:center;">
               <button type="button" class="modal-btn modal-btn-ghost" style="flex:1;" onclick="verAnexoPedidoNota(${p.id},'${a.path}')">📎 Ver anexo: ${esc(a.nome||'arquivo')}</button>
-              ${isAdmin ? `<button type="button" class="anexo-remover" title="Remover este anexo do pedido" onclick="removerAnexoPedidoNota(${p.id},'${a.path}')">✕</button>` : ''}
+              ${podeEditarPedido ? `<button type="button" class="anexo-remover" title="Remover este anexo do pedido" onclick="removerAnexoPedidoNota(${p.id},'${a.path}')">✕</button>` : ''}
             </div>`; }).join('')}</div>` : ''}
-          <div class="divisao-explica">Pedido em ${new Date(p.criadoEm).toLocaleDateString('pt-BR')}.${isAdmin ? '' : ' Pra corrigir algum desses dados, peça pra administração.'}</div>
+          <div class="divisao-explica">Pedido em ${new Date(p.criadoEm).toLocaleDateString('pt-BR')}.${podeEditarPedido ? '' : ' Pra corrigir algum desses dados, peça pra administração.'}</div>
           <div class="modal-actions">
             <button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button>
           </div>
@@ -10548,7 +10552,7 @@ const PEDIDO_NOTA_CAMPOS_DB = {
   dataMinimaEmissao:'data_minima_emissao', observacoes:'observacoes',
 };
 async function updatePedidoNotaCampo(pedidoId, campoJs, valorBruto){
-  if(!isAdmin) return;
+  if(!isAdmin && !isSolicitante) return;
   const campoDb = PEDIDO_NOTA_CAMPOS_DB[campoJs];
   const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
   if(!campoDb || !pedido) return;
@@ -10593,7 +10597,7 @@ async function verAnexoPedidoNota(pedidoId, path){
   }
 }
 function removerAnexoPedidoNota(pedidoId, path){
-  if(!isAdmin) return;
+  if(!isAdmin && !isSolicitante) return;
   const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
   if(!pedido || !pedido.anexos || !pedido.anexos.length) return;
   const alvo = pedido.anexos.find(function(a){ return a.path === path; });
