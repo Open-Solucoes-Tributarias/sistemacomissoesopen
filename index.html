@@ -2008,7 +2008,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-10-22-01';
+const APP_BUILD = '2026-10-29-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -2233,7 +2233,7 @@ function renderSolicitarNotaScreen(){
           : `<div class="table-scroll" style="margin-top:10px;"><table class="table-plain">
               <thead><tr><th>Solicitante</th><th>Cliente</th><th>Pedido em</th><th>Situação</th></tr></thead>
               <tbody>${resultadosBusca.map(function(p){ return `
-                <tr>
+                <tr style="cursor:pointer;" title="Ver dados deste pedido" onclick="abrirDadosPedidoPorBusca(${p.id})">
                   <td>${esc(p.solicitanteNome) || '—'}</td>
                   <td>${esc(p.cliente)}</td>
                   <td>${new Date(p.criadoEm).toLocaleDateString('pt-BR')}</td>
@@ -2332,6 +2332,7 @@ function renderSolicitarNotaScreen(){
         </div>
       </div>
     </div>
+    ${renderModal()}
   `;
 }
 
@@ -10481,6 +10482,17 @@ function anexoNotaCelulaHtml(tabela, id, entKey, notaArquivoPath, notaArquivoNom
 function abrirDadosPedidoVinculado(tabela, id){
   if(!isAdmin && !isFinanceiro) return;
   const pedido = pedidoVinculadoDe(tabela, id);
+  if(!pedido) return;
+  modalState = { type:'dados-pedido-vinculado', pedido: pedido };
+  render();
+}
+/* Mesma modal de cima, mas abrindo a partir do resultado de "Já pedi essa
+   nota?" — ali a pessoa já tem o pedido na mão (não precisa procurar pelo
+   lançamento vinculado pra achá-lo de novo). Sem gate de admin/financeiro
+   pra abrir: a própria modal já decide o que cada um pode editar — quem
+   não é admin só vê os dados, sem campo pra mexer. */
+function abrirDadosPedidoPorBusca(pedidoId){
+  const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
   if(!pedido) return;
   modalState = { type:'dados-pedido-vinculado', pedido: pedido };
   render();
