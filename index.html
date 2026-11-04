@@ -2008,7 +2008,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-10-29-03';
+const APP_BUILD = '2026-11-04-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -11223,6 +11223,44 @@ function duplicateEntityRow(key, id){
   render();
 }
 
+/* "Duplicar para o ano seguinte" — diferente do ⎘ "Duplicar" de cima:
+   aqui é pra já nascer o contrato de Órgão Público do ano que vem, não
+   uma cópia solta pra editar na hora. Por isso zera pagamento/nota (o
+   ano novo começa do zero) e marca como renovação — é o mesmo cliente
+   continuando, não um contrato novo. */
+function duplicarParaAnoSeguinte(key, id){
+  if(!isAdmin) return;
+  const st = state[key];
+  const r = st.rows.find(r => r.id === id);
+  if(!r) return;
+  const mainField = ENTITIES[key].fields[0].key;
+  const nome = r[mainField] || 'este lançamento';
+  const anoOrigem = r.ano || 2026;
+  const anoDestino = anoOrigem + 1;
+  showConfirm(
+    'Duplicar "' + nome + '" pra ' + anoDestino + ', mantendo o mesmo valor (' + fmtMoney(r.valorContrato) + ') e mês? ' +
+    'A cópia nasce com pagamento e nota zerados — o ano novo começa do zero.',
+    function(){
+      const copy = {
+        ...r, id: st.nextId++, ano: anoDestino,
+        pago: false, mesPagamento: null, pagoEm: null, fechamentoMes: null,
+        notaEmitida: false, notaEmitidaEm: null, podeEmitir: false, podeEmitirEm: null,
+        notaArquivoPath: null, notaArquivoNome: null, dataMinimaEmissao: null,
+        renovacao: true, upgrade: false, inCompany: false,
+        extraVendedores: (r.extraVendedores || []).map(function(ev){ return {...ev, id: Date.now() + Math.random()}; }),
+      };
+      st.rows.unshift(copy);
+      if(anoDestino !== 2026 && extraYears.indexOf(anoDestino) === -1){
+        extraYears.push(anoDestino);
+        persistExtraYears();
+      }
+      persistEntityRows(key);
+      render();
+    },
+    'Duplicar pra ' + anoDestino
+  );
+}
+
 function parcelarEntityRow(key, id){
   const st = state[key];
   const r = st.rows.find(r => r.id === id);
@@ -11816,6 +11854,7 @@ function renderEntitySection(key){
             ${key === 'cursos' ? `<button class="action-btn${row.inCompany?' ativo-incompany':''}" title="${row.inCompany?'Curso In Company — clique para desmarcar':'Marcar como curso In Company (entra no ranking)'}" onclick="toggleCursoInCompany(${row.id})">🏢</button>` : ''}
             <button class="action-btn" title="Adicionar mais um vendedor" onclick="addExtraVendedorSlot('${key}',${row.id})">➕</button>
             <button class="action-btn" title="Duplicar" onclick="duplicateEntityRow('${key}',${row.id})">⎘</button>
+            ${key === 'publicos' ? `<button class="action-btn" title="Duplicar pra ${(row.ano||2026)+1} — já nasce como lançamento de verdade lá, não como previsão" onclick="duplicarParaAnoSeguinte('${key}',${row.id})">📅+1</button>` : ''}
             <button class="action-btn" title="Parcelar em vários meses" onclick="parcelarEntityRow('${key}',${row.id})">🧩</button>
             <button class="action-btn" title="Repetir até dezembro (assinatura mensal)" onclick="repeatEntityRowForYear('${key}',${row.id})">🔁</button>
             <button class="action-btn${row.upgrade ? ' ativo-upgrade' : ''}" title="${row.upgrade ? 'É um upgrade — clique para desmarcar' : 'Marcar como upgrade (cliente que subiu de plano)'}" onclick="toggleEntityUpgrade('${key}',${row.id})">⬆️</button>
