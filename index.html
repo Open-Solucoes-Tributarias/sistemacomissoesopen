@@ -2008,7 +2008,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-11-04-01';
+const APP_BUILD = '2026-11-05-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5847,6 +5847,13 @@ function renderModal(){
               <button type="button" class="modal-btn modal-btn-ghost" style="flex:1;" onclick="verAnexoPedidoNota(${p.id},'${a.path}')">📎 Ver anexo: ${esc(a.nome||'arquivo')}</button>
               ${podeEditarPedido ? `<button type="button" class="anexo-remover" title="Remover este anexo do pedido" onclick="removerAnexoPedidoNota(${p.id},'${a.path}')">✕</button>` : ''}
             </div>`; }).join('')}</div>` : ''}
+          ${p.status !== 'vinculado' ? `<div class="notas-pendentes">Ainda não foi vinculado a um lançamento — a administração confere e vincula antes de emitir a nota.</div>`
+            : !p.statusNotaCarregado ? `<div class="divisao-explica">Consultando se a nota fiscal já foi emitida…</div>`
+            : p.statusNotaErro ? `<div class="modal-error">Não consegui consultar a nota agora. <button type="button" class="modal-btn modal-btn-ghost" onclick="carregarStatusNotaPedido(${p.id})">Tentar de novo</button></div>`
+            : p.notaEmitida ? `<div class="notas-ok">✓ Nota fiscal emitida${p.notaEmitidaEm ? ' em ' + new Date(p.notaEmitidaEm).toLocaleDateString('pt-BR') : ''}.${
+                p.notaArquivoPath ? ` <button type="button" class="modal-btn modal-btn-ghost" onclick="verNotaDoPedido(${p.id})">📎 Ver a nota fiscal</button>` : ' O arquivo ainda não foi anexado pelo financeiro.'
+              }</div>`
+            : `<div class="notas-pendentes">Vinculado, mas a nota fiscal ainda não foi emitida pelo financeiro.</div>`}
           <div class="divisao-explica">Pedido em ${new Date(p.criadoEm).toLocaleDateString('pt-BR')}.${podeEditarPedido ? '' : ' Pra corrigir algum desses dados, peça pra administração.'}</div>
           <div class="modal-actions">
             <button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button>
@@ -10488,7 +10495,46 @@ function abrirDadosPedidoVinculado(tabela, id){
   const pedido = pedidoVinculadoDe(tabela, id);
   if(!pedido) return;
   modalState = { type:'dados-pedido-vinculado', pedido: pedido };
+  carregarStatusNotaPedido(pedido.id);
   render();
+}
+/* A modal só tem os dados do PEDIDO (o que a pessoa preencheu) — pra
+   saber se a nota de verdade já saiu, precisa ir no lançamento vinculado,
+   que mora numa tabela que a solicitante não tem acesso direto. Essa RPC
+   é a porta estreita: devolve só emitida/data/arquivo daquele lançamento
+   específico, e só pra quem criou o pedido (ou admin/financeiro). */
+async function carregarStatusNotaPedido(pedidoId){
+  const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
+  if(!pedido || pedido.status !== 'vinculado') return;
+  try{
+    const linhas = await sbRpc('status_nota_pedido', { p_pedido_id: pedidoId });
+    const d = linhas && linhas[0];
+    pedido.statusNotaCarregado = true;
+    pedido.statusNotaErro = false;
+    pedido.notaEmitida = d ? !!d.nota_emitida : false;
+    pedido.notaEmitidaEm = d ? d.nota_emitida_em : null;
+    pedido.notaArquivoPath = d ? d.nota_arquivo_path : null;
+    pedido.notaArquivoNome = d ? d.nota_arquivo_nome : null;
+  }catch(e){
+    console.error('Falha ao consultar status da nota', e);
+    pedido.statusNotaCarregado = true;
+    pedido.statusNotaErro = true;
+  }
+  if(modalState && modalState.type === 'dados-pedido-vinculado' && modalState.pedido && modalState.pedido.id === pedidoId) render();
+}
+async function verNotaDoPedido(pedidoId){
+  const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
+  if(!pedido || !pedido.notaArquivoPath) return;
+  const aba = window.open('', '_blank');
+  try{
+    const url = await sbSignedUrl('notas-fiscais', pedido.notaArquivoPath, 120);
+    if(aba) aba.location.href = url;
+    else window.open(url, '_blank');
+  }catch(e){
+    if(aba) aba.close();
+    console.error('Falha ao abrir a nota fiscal', e);
+    showAlert('Não consegui abrir o arquivo da nota. Tente de novo.');
+  }
 }
 /* Mesma modal de cima, mas abrindo a partir do resultado de "Já pedi essa
    nota?" — ali a pessoa já tem o pedido na mão (não precisa procurar pelo
@@ -10499,6 +10545,7 @@ function abrirDadosPedidoPorBusca(pedidoId){
   const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
   if(!pedido) return;
   modalState = { type:'dados-pedido-vinculado', pedido: pedido };
+  carregarStatusNotaPedido(pedido.id);
   render();
 }
 /* "Vinculado ✓" sozinho não dizia ONDE — a pessoa via o pedido resolvido
