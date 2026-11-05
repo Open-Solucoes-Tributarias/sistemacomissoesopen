@@ -2008,7 +2008,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-11-05-01';
+const APP_BUILD = '2026-11-05-02';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5854,7 +5854,11 @@ function renderModal(){
                 p.notaArquivoPath ? ` <button type="button" class="modal-btn modal-btn-ghost" onclick="verNotaDoPedido(${p.id})">📎 Ver a nota fiscal</button>` : ' O arquivo ainda não foi anexado pelo financeiro.'
               }</div>`
             : `<div class="notas-pendentes">Vinculado, mas a nota fiscal ainda não foi emitida pelo financeiro.</div>`}
-          <div class="divisao-explica">Pedido em ${new Date(p.criadoEm).toLocaleDateString('pt-BR')}.${podeEditarPedido ? '' : ' Pra corrigir algum desses dados, peça pra administração.'}</div>
+          <div class="divisao-explica">Pedido em ${new Date(p.criadoEm).toLocaleDateString('pt-BR')}.${
+            !podeEditarPedido ? ' Pra corrigir algum desses dados, peça pra administração.'
+            : p.status === 'vinculado' ? ' Corrigir aqui já atualiza o lançamento vinculado também.'
+            : ''
+          }</div>
           <div class="modal-actions">
             <button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button>
           </div>
@@ -10598,6 +10602,11 @@ const PEDIDO_NOTA_CAMPOS_DB = {
   email:'email', valor:'valor', produto:'produto', empenho:'empenho',
   dataMinimaEmissao:'data_minima_emissao', observacoes:'observacoes',
 };
+/* Campos do pedido que têm uma coluna correspondente no lançamento
+   vinculado (vendas/lancamentos/lancamento_empresas — a função no banco
+   sabe o nome certo em cada tabela). "Empenho" e "Produto" só existem no
+   pedido, não sincronizam. */
+const PEDIDO_CAMPO_SINCRONIZA = {cliente:true, cnpj:true, responsavel:true, telefone:true, email:true, valor:true, observacoes:true, dataMinimaEmissao:true};
 async function updatePedidoNotaCampo(pedidoId, campoJs, valorBruto){
   if(!isAdmin && !isSolicitante) return;
   const campoDb = PEDIDO_NOTA_CAMPOS_DB[campoJs];
@@ -10616,11 +10625,20 @@ async function updatePedidoNotaCampo(pedidoId, campoJs, valorBruto){
     await sb('/rest/v1/pedidos_nota?id=eq.'+pedidoId, {
       method:'PATCH', headers:{'Prefer':'return=minimal'}, body:{[campoDb]: novo},
     });
+    // Corrigir só o histórico do pedido e deixar o lançamento com o dado
+    // errado não resolve nada pra quem está conferindo — por isso a
+    // correção já sai sincronizada pro lançamento de verdade.
+    if(pedido.status === 'vinculado' && pedido.vinculadoTabela && pedido.vinculadoId && PEDIDO_CAMPO_SINCRONIZA[campoJs]){
+      await sbRpc('atualizar_campo_vinculado_do_pedido', {
+        p_pedido_id: pedidoId, p_campo_pedido: campoJs,
+        p_valor: (novo === null || novo === undefined) ? null : String(novo),
+      });
+    }
   }catch(e){
     console.error('Falha ao editar pedido de nota', e);
     pedido[campoJs] = anterior;
     render();
-    showAlert('Não consegui salvar essa edição. Confira a internet e tente de novo.');
+    showAlert(mensagemErroSupabase(e) || 'Não consegui salvar essa edição. Confira a internet e tente de novo.');
   }
 }
 /* Anexo do PEDIDO (ex: contrato, orçamento que a solicitante anexou),
