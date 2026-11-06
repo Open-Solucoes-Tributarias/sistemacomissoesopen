@@ -2015,7 +2015,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-11-06-01';
+const APP_BUILD = '2026-11-06-02';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5813,6 +5813,12 @@ function renderModal(){
     // nota?" — e a RLS de pedidos_nota já restringe o que ela vê ali aos
     // pedidos que ela mesma criou, então deixar editar aqui é seguro.
     const podeEditarPedido = isAdmin || isSolicitante;
+    // Só deixa desvincular enquanto a nota ainda não saiu — depois de
+    // emitida, o lançamento já virou contabilidade de verdade (comissão,
+    // fechamento de mês...) e desfazer o vínculo bagunçaria isso. Também
+    // precisa já ter confirmado isso com o banco (statusNotaCarregado),
+    // senão arriscaria liberar o botão sem saber se já foi emitida.
+    const podeDesvincular = podeEditarPedido && p.status === 'vinculado' && p.statusNotaCarregado && !p.statusNotaErro && !p.notaEmitida;
     const campo = function(rotulo, campoJs, valorAtual, tipo){
       if(!podeEditarPedido) return `<label class="meta-field"><span>${rotulo}</span><div class="meta-field-valor">${valorAtual || '—'}</div></label>`;
       const valorInput = campoJs === 'cnpj' ? formatCnpj(p.cnpj)
@@ -5846,6 +5852,18 @@ function renderModal(){
             ${campo('Empenho', 'empenho', esc(p.empenho))}
             ${campo('Não emitir antes de', 'dataMinimaEmissao', p.dataMinimaEmissao ? formatarDataIso(p.dataMinimaEmissao) : '—', 'data')}
           </div>
+          ${podeEditarPedido ? `<div class="meta-form-grid">
+            <label class="meta-field"><span>Produto</span>
+              <select class="fin-empresa-campo" onchange="updatePedidoNotaCampo(${p.id},'produto',this.value)">
+                <option value="" ${!p.produto?'selected':''}>— não sei / outro —</option>
+                <option value="Sistema" ${p.produto==='Sistema'?'selected':''}>Sistema</option>
+                <option value="Consultoria" ${p.produto==='Consultoria'?'selected':''}>Consultoria</option>
+                <option value="Órgãos Públicos" ${p.produto==='Órgãos Públicos'?'selected':''}>Órgãos Públicos</option>
+                <option value="Cursos" ${p.produto==='Cursos'?'selected':''}>Cursos</option>
+                <option value="GTAP" ${p.produto==='GTAP'?'selected':''}>GTAP</option>
+              </select>
+            </label>
+          </div>` : (p.produto ? `<label class="meta-field"><span>Produto</span><div class="meta-field-valor">${esc(p.produto)}</div></label>` : '')}
           ${(p.observacoes || podeEditarPedido) ? `<label class="meta-field"><span>Observações</span>${podeEditarPedido
             ? `<textarea class="fin-empresa-campo" rows="3" onchange="updatePedidoNotaCampo(${p.id},'observacoes',this.value)">${esc(p.observacoes)}</textarea>`
             : `<div class="meta-field-valor">${esc(p.observacoes)}</div>`}</label>` : ''}
@@ -5861,6 +5879,7 @@ function renderModal(){
                 p.notaArquivoPath ? ` <button type="button" class="modal-btn modal-btn-ghost" onclick="verNotaDoPedido(${p.id})">📎 Ver a nota fiscal</button>` : ' O arquivo ainda não foi anexado pelo financeiro.'
               }</div>`
             : `<div class="notas-pendentes">Vinculado, mas a nota fiscal ainda não foi emitida pelo financeiro.</div>`}
+          ${podeDesvincular ? `<div class="divisao-explica">Vinculou no lançamento errado? <button type="button" class="modal-btn modal-btn-ghost" onclick="desvincularPedido(${p.id})">🔗✕ Desvincular</button></div>` : ''}
           <div class="divisao-explica">Pedido em ${new Date(p.criadoEm).toLocaleDateString('pt-BR')}.${
             !podeEditarPedido ? ' Pra corrigir algum desses dados, peça pra administração.'
             : p.status === 'vinculado' ? ' Corrigir aqui já atualiza o lançamento vinculado também.'
@@ -10646,6 +10665,49 @@ async function updatePedidoNotaCampo(pedidoId, campoJs, valorBruto){
     pedido[campoJs] = anterior;
     render();
     showAlert(mensagemErroSupabase(e) || 'Não consegui salvar essa edição. Confira a internet e tente de novo.');
+  }
+}
+/* "Vinculei no lançamento errado" — desfaz só o VÍNCULO (volta o pedido
+   pra fila de pendentes), sem tocar no lançamento em si: não apaga a
+   empresa criada nem desfaz o CNPJ/data mínima copiados pra ele. Quem
+   vinculou errado escolhe de novo em "Vincular" (admin) depois de
+   corrigir o Produto aqui, se for o caso. Só libera enquanto a nota
+   ainda não foi emitida (ver podeDesvincular, na modal). */
+function desvincularPedido(pedidoId){
+  if(!isAdmin && !isSolicitante) return;
+  const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
+  if(!pedido || pedido.status !== 'vinculado') return;
+  if(pedido.notaEmitida){
+    showAlert('Essa nota já foi emitida — não dá mais pra desvincular. Peça pra administração corrigir na mão.');
+    return;
+  }
+  showConfirm(
+    'Desvincular este pedido? Ele volta pra fila de "Pedidos de Nota" como pendente, pra ser vinculado ao lançamento certo. O lançamento atual não é alterado nem apagado.',
+    function(){ confirmarDesvincularPedido(pedidoId); },
+    'Desvincular'
+  );
+}
+async function confirmarDesvincularPedido(pedidoId){
+  const pedido = (pedidosNota||[]).find(function(p){ return p.id === pedidoId; });
+  if(!pedido) return;
+  const anterior = { status: pedido.status, vinculadoTabela: pedido.vinculadoTabela, vinculadoId: pedido.vinculadoId };
+  pedido.status = 'pendente';
+  pedido.vinculadoTabela = null; pedido.vinculadoId = null;
+  pedido.statusNotaCarregado = false; pedido.statusNotaErro = false;
+  pedido.notaEmitida = false; pedido.notaEmitidaEm = null;
+  pedido.notaArquivoPath = null; pedido.notaArquivoNome = null;
+  closeModal();
+  render();
+  try{
+    await sb('/rest/v1/pedidos_nota?id=eq.'+pedidoId, {
+      method:'PATCH', headers:{'Prefer':'return=minimal'},
+      body:{ status:'pendente', vinculado_tabela:null, vinculado_id:null, vinculado_em:null, vinculado_por:null },
+    });
+  }catch(e){
+    console.error('Falha ao desvincular pedido', e);
+    pedido.status = anterior.status; pedido.vinculadoTabela = anterior.vinculadoTabela; pedido.vinculadoId = anterior.vinculadoId;
+    render();
+    showAlert(mensagemErroSupabase(e) || 'Não consegui desvincular esse pedido. Tente de novo.');
   }
 }
 /* Anexo do PEDIDO (ex: contrato, orçamento que a solicitante anexou),
