@@ -703,6 +703,13 @@
      nome. O piso empurra o resto para a rolagem horizontal, que já existe. */
   .col-nome{min-width:290px;}
   .col-nome input{min-width:270px;}
+  /* Tabela larga rolando pro lado: ao rolar até "Pagamento"/"Nota fiscal",
+     lá na direita, perdia de vista QUAL linha/cliente era aquela — trava
+     o nome na borda esquerda, o resto da linha continua rolando por baixo. */
+  td.col-nome{position:sticky;left:0;z-index:2;background:var(--surface);box-shadow:2px 0 6px -3px rgba(15,23,42,.18);}
+  thead th.col-nome{position:sticky;left:0;z-index:3;background:linear-gradient(180deg,#FCFDFF 0%,#F4F8FD 100%);box-shadow:2px 0 6px -3px rgba(15,23,42,.18);}
+  tbody tr:hover td.col-nome{background:#F7FAFE;}
+  tr.row-pending td.col-nome, tr.row-locked td.col-nome, tr.row-duplicate td.col-nome{background:inherit;}
   /* Tráfego pago tem 17 colunas — sem piso, a tabela auto-layout espreme a
      coluna Conta a quase nada e "Foco Tributário" corta pra uma letra. */
   .col-conta{min-width:150px;}
@@ -2008,7 +2015,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-11-05-02';
+const APP_BUILD = '2026-11-06-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -11013,7 +11020,7 @@ function renderVendasSection(){
           ${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}
           ${isVendasRowDuplicate(row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo cliente, mês e valor — confira se não é duplicado">🔁 Duplicado</span>` : ''}
         </td>
-        <td class="cliente"><input type="text" list="empresas-datalist" data-id="${row.id}" data-field="cliente" value="${esc(row.cliente)}" placeholder="Cliente" oninput="onTextInput(this)" onchange="onClienteVendaEscolhido(this)" />${row.renovacao ? '<span class="selo-renovacao" title="Renovação: vale comissão, mas não conta no ranking de desempenho">♻️ Renovação</span>' : (row.novoContrato ? '<span class="selo-novo" title="Contrato novo: conta no ranking e nas comissões como qualquer venda">✨ Contrato novo</span>' : (row.upgrade ? '<span class="selo-upgrade" title="Upgrade: cliente que subiu de plano. É receita nova e conta no ranking">⬆️ Upgrade</span>' : ''))}${(isAdmin||isFinanceiro) && pedidoVinculadoDe('vendas', row.id) ? `<button type="button" class="selo-empresas" title="Ver CNPJ/responsável/telefone/e-mail/empenho do pedido de nota" onclick="abrirDadosPedidoVinculado('vendas',${row.id})">📋 Dados do pedido</button>` : ''}</td>
+        <td class="cliente col-nome"><input type="text" list="empresas-datalist" data-id="${row.id}" data-field="cliente" value="${esc(row.cliente)}" placeholder="Cliente" oninput="onTextInput(this)" onchange="onClienteVendaEscolhido(this)" />${row.renovacao ? '<span class="selo-renovacao" title="Renovação: vale comissão, mas não conta no ranking de desempenho">♻️ Renovação</span>' : (row.novoContrato ? '<span class="selo-novo" title="Contrato novo: conta no ranking e nas comissões como qualquer venda">✨ Contrato novo</span>' : (row.upgrade ? '<span class="selo-upgrade" title="Upgrade: cliente que subiu de plano. É receita nova e conta no ranking">⬆️ Upgrade</span>' : ''))}${(isAdmin||isFinanceiro) && pedidoVinculadoDe('vendas', row.id) ? `<button type="button" class="selo-empresas" title="Ver CNPJ/responsável/telefone/e-mail/empenho do pedido de nota" onclick="abrirDadosPedidoVinculado('vendas',${row.id})">📋 Dados do pedido</button>` : ''}</td>
         <td class="venda">
           <select data-id="${row.id}" onchange="onVendaSelect(this)">
             <option value="">—</option>
