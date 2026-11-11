@@ -597,7 +597,7 @@
 
   /* Month / vendor pills */
   .filters-row{
-    display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;align-items:center;
+    display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;align-items:center;
   }
   .months{
     display:flex;gap:4px;flex-wrap:wrap;
@@ -611,7 +611,7 @@
     color:#fff;box-shadow:0 8px 18px -8px rgba(18,51,94,.7);
   }
 
-  .search-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+  .search-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
   .search-input{
     font-family:var(--font);font-size:13px;font-weight:500;
     padding:9px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);
@@ -671,7 +671,7 @@
     background:linear-gradient(180deg,#FCFDFF 0%,#F4F8FD 100%);
     color:var(--ink-faint);
     font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.13em;
-    text-align:left;padding:12px 10px 10px;white-space:nowrap;
+    text-align:left;padding:8px 10px 7px;white-space:nowrap;
     border-bottom:1px solid var(--border);
   }
   thead th.num{text-align:right;}
@@ -683,7 +683,7 @@
   tbody td input, tbody td select{
     width:100%;border:none;background:transparent;
     font-family:var(--font);font-size:12.5px;color:var(--ink);font-weight:500;
-    padding:8px 8px;outline:none;border-radius:0;
+    padding:6px 8px;outline:none;border-radius:0;
   }
   tbody td select{font-weight:600;cursor:pointer;color:var(--primary);}
   tbody td input.num{text-align:right;font-variant-numeric:tabular-nums;}
@@ -732,6 +732,9 @@
   .com-cell.por-pct .pct-wrap input.pct-mini{color:var(--primary);font-weight:800;}
   .com-cell.por-pct input[data-field]{color:var(--primary);font-weight:700;}
   .col-pct{width:110px;}
+  /* A coluna "Nota" (DM/Open) encolhia até cortar "Open" pela metade —
+     o cabeçalho é curto demais pra empurrar a largura sozinho. */
+  td select[data-field="nota"]{min-width:88px;}
   .extra-vendedores-btn{
     background:var(--primary-soft);border:1px solid var(--ring);color:var(--primary);
     font-family:var(--font);font-weight:700;font-size:11.5px;
@@ -914,7 +917,7 @@
   .panel{
     background:var(--surface);border:1px solid var(--border);
     border-radius:var(--radius-md);box-shadow:var(--shadow-sm);
-    margin-bottom:18px;overflow:hidden;
+    margin-bottom:12px;overflow:hidden;
     transition:box-shadow .22s var(--ease), border-color .22s;
   }
   /* filete do topo em degradê, no lugar da borda chapada */
@@ -925,7 +928,7 @@
   .panel:hover{box-shadow:var(--shadow-md);border-color:var(--ring);}
   .panel-head{
     display:flex;align-items:center;justify-content:space-between;gap:14px;
-    padding:13px 16px;border-bottom:1px solid var(--border-soft);
+    padding:10px 16px;border-bottom:1px solid var(--border-soft);
     transition:border-color .18s, background .15s;
   }
   .panel-head:hover{background:#FAFCFF;}
@@ -1617,13 +1620,20 @@ const ENTITIES = {
       {key:"tipo", label:"Tipo de contrato", type:"select", options:["Recuperação","Mensal","Plano Premium","Personalizado"]},
       {key:"parceiro", label:"Parceiro", type:"text"},
       {key:"participacao", label:"Participação (%)", type:"text"},
-      {key:"formaPagamento", label:"Forma de Pagamento", type:"text"},
-      {key:"colaborador", label:"Colaborador Envolvido", type:"text"},
+      // "Forma de Pagamento" e "Colaborador Envolvido" saíram daqui a
+      // pedido da Soraya (mesa cheia de colunas que ninguém olhava) —
+      // entram no lugar de "Nota": qual empresa emitiu, DM ou Open.
+      {key:"nota", label:"Nota", type:"select", options:["DM","Open"]},
       {key:"observacoes", label:"Observações", type:"text"},
     ],
     commissionLabel: "Valor da Comissão",
     defaultVendors: ["Soraya","Angela","Rios","Uilma","Luciana"],
     hasPagamento: true,
+    // A coluna "Pagamento" nasce colada em "Forma de Pagamento" — como a
+    // Consultoria não tem mais esse campo, ela entra logo depois de
+    // "Nota" (ver pagamentoAposCampo nos outros produtos, que continuam
+    // com "formaPagamento").
+    pagamentoAposCampo: "nota",
     // Um contrato de consultoria pode ter várias empresas dentro (grupo
     // econômico, por exemplo), cada uma com sua própria nota fiscal.
     hasEmpresas: true,
@@ -1647,6 +1657,7 @@ const ENTITIES = {
     commissionLabel: "Valor da Comissão",
     defaultVendors: ["Soraya","Angela","Rios","Uilma","Luciana"],
     hasPagamento: true,
+    pagamentoAposCampo: "formaPagamento",
     hasVendedorResponsavel: true,
     // Um órgão pode ter várias entidades/empresas dentro do mesmo
     // contrato, cada uma com sua própria nota fiscal.
@@ -2026,7 +2037,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-11-11-02';
+const APP_BUILD = '2026-11-11-03';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -2897,7 +2908,7 @@ function lancamentoParaDb(key, r){
     parcela_label: r.parcelaLabel || null,
     nome:'', valor_contrato:null, tipo:null,
     parceiro: r.parceiro||'', participacao: numOrNull(r.participacao),
-    forma_pagamento:'', colaborador:'', observacoes:'',
+    forma_pagamento:'', colaborador:'', observacoes:'', nota_tipo:null,
     pago:false, mes_pagamento:null, pago_em: timestampValidoOuNull(r.pagoEm), fechamento_mes: r.fechamentoMes || null,
     // nota_emitida/pode_emitir (e seus "_em") ficam de fora deste
     // payload de propósito — mesmo motivo do persist() de vendas
@@ -2916,6 +2927,7 @@ function lancamentoParaDb(key, r){
     else if(f.key === 'formaPagamento') row.forma_pagamento = r.formaPagamento||'';
     else if(f.key === 'colaborador') row.colaborador = r.colaborador||'';
     else if(f.key === 'observacoes') row.observacoes = r.observacoes||'';
+    else if(f.key === 'nota') row.nota_tipo = r.nota||null;
     else row.nome = r[f.key] || '';
   });
   if(cfg.hasPagamento){ row.pago = !!r.pago; row.mes_pagamento = r.mesPagamento||null; }
@@ -3109,6 +3121,7 @@ async function tryLoadEntityFromStorageAsync(key){
           else if(f.key === 'formaPagamento') r.formaPagamento = d.forma_pagamento||'';
           else if(f.key === 'colaborador') r.colaborador = d.colaborador||'';
           else if(f.key === 'observacoes') r.observacoes = d.observacoes||'';
+          else if(f.key === 'nota') r.nota = d.nota_tipo||null;
           else r[f.key] = d.nome||'';
         });
         return r;
@@ -11951,19 +11964,22 @@ function renderEntitySection(key){
               ? `<button type="button" class="selo-prazo${prazoRow?(prazoRow.avista?' selo-prazo-avista':''):' selo-prazo-vazio'}" title="${prazoRow ? (prazoRow.avista ? 'Pago à vista — sem nota recorrente pra emitir. Clique pra mudar' : 'Lembrete de emissão todo dia '+prazoRow.dia+' — clique pra mudar') : 'Combinar um dia fixo do mês pra emitir a nota (Mensal/Plano Premium)'}" onclick="definirPrazoEmissaoNota('${key}','${escJs(row[f.key])}')">${prazoRow && prazoRow.avista ? '💰 à vista' : '📅 ' + (prazoRow ? 'dia '+prazoRow.dia : 'definir dia')}</button>`
               : '';
             cells += `<td${fi===0?' class="col-nome"':''}><input type="text" ${fi===0?'list="empresas-datalist"':''} data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}${seloNovo}${seloRenovacao}${seloUpgrade}${seloEmpresas}${seloPrazo}</td>`;
-            if(f.key === "formaPagamento" && cfg.hasPagamento){
-              cells += `<td class="pagamento-cell">
-                <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" data-pagamento="1" onchange="onPagamentoToggle(this,'${key}')" /><span>${row.pago?'Pago':'Pendente'}</span></label>
-                ${row.pago ? `<select class="${pagoEmOutroMes(row) ? 'sel-pgto-outro-mes' : ''}" data-id="${row.id}" data-pagamento="1"
-                        title="${pagoEmOutroMes(row) ? 'Nota de ' + esc(row.mes) + ' paga em ' + esc(row.mesPagamento) + ' — a comissão libera em ' + esc(row.mesPagamento) : 'Mês em que o cliente pagou'}"
-                        onchange="onPagamentoMesSelect(this,'${key}')">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>` : ''}
-              </td>`;
-            }
           } else if(f.type === "number"){
             const isValor = f.key === "valorContrato" || f.key === "honorarioProfessor" || f.key === "honorarioProfessor2";
             cells += `<td${isValor?' class="col-valor"':''}>${isValor?'<div class="currency-wrap"><span class="currency-prefix">R$</span>'+entityNumInputHtml(key,row,f.key)+'</div>':entityNumInputHtml(key,row,f.key)}</td>`;
           } else if(f.type === "select"){
             cells += `<td><select data-entity="${key}" data-id="${row.id}" data-field="${f.key}" onchange="onEntitySelectField(this)">${f.options.map(o => `<option value="${o}" ${row[f.key]===o?'selected':''}>${o||'—'}</option>`).join('')}</select></td>`;
+          }
+          // A coluna "Pagamento" fica colada ao field marcado em
+          // pagamentoAposCampo, seja ele texto ou select (Consultoria usa
+          // "nota", um select, desde que "Forma de Pagamento" saiu dali).
+          if(f.key === cfg.pagamentoAposCampo && cfg.hasPagamento){
+            cells += `<td class="pagamento-cell">
+              <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" data-pagamento="1" onchange="onPagamentoToggle(this,'${key}')" /><span>${row.pago?'Pago':'Pendente'}</span></label>
+              ${row.pago ? `<select class="${pagoEmOutroMes(row) ? 'sel-pgto-outro-mes' : ''}" data-id="${row.id}" data-pagamento="1"
+                      title="${pagoEmOutroMes(row) ? 'Nota de ' + esc(row.mes) + ' paga em ' + esc(row.mesPagamento) + ' — a comissão libera em ' + esc(row.mesPagamento) : 'Mês em que o cliente pagou'}"
+                      onchange="onPagamentoMesSelect(this,'${key}')">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>` : ''}
+            </td>`;
           }
         });
         if(!isFinanceiro){
@@ -12045,7 +12061,7 @@ function renderEntitySection(key){
     <div class="search-row">
       <input id="search-${key}-main" class="search-input" type="text" placeholder="🔍 Buscar ${cfg.fields[0].label.toLowerCase()}..." value="${esc(st.search.main)}" oninput="onEntitySearchInput(this,'${key}','main')" />
       <input id="search-${key}-parceiro" class="search-input" type="text" placeholder="🔍 Buscar parceiro..." value="${esc(st.search.parceiro)}" oninput="onEntitySearchInput(this,'${key}','parceiro')" />
-      <input id="search-${key}-colaborador" class="search-input" type="text" placeholder="🔍 Buscar colaborador..." value="${esc(st.search.colaborador)}" oninput="onEntitySearchInput(this,'${key}','colaborador')" />
+      ${cfg.fields.some(f => f.key === 'colaborador') ? `<input id="search-${key}-colaborador" class="search-input" type="text" placeholder="🔍 Buscar colaborador..." value="${esc(st.search.colaborador)}" oninput="onEntitySearchInput(this,'${key}','colaborador')" />` : ''}
     </div>
 
     ${panel('entity-'+key, esc(cfg.tabLabel), `
@@ -12054,7 +12070,7 @@ function renderEntitySection(key){
           <thead>
             <tr>
               <th class="col-mes">Mês</th>
-              ${cfg.fields.map((f,fi) => `<th${f.key==='valorContrato'?' class="num col-valor" title="Valor do Contrato"':(f.key==='participacao'?' class="num col-pct"':(f.type==='number'?' class="num"':(fi===0?' class="col-nome"':'')))}>${f.key==='valorContrato'?'Valor':f.label}</th>${fi===0&&cfg.hasVendasPorVendedor&&!isFinanceiro?('<th style="width:150px">'+(isAdmin?'Vendas por vendedora':'Sua venda')+'</th>'):''}${fi===0&&cfg.hasVendedorResponsavel&&!isFinanceiro?'<th style="width:150px">Quem vendeu?</th>':''}${f.key==='formaPagamento'&&cfg.hasPagamento?'<th style="width:110px">Pagamento</th>':''}`).join('')}
+              ${cfg.fields.map((f,fi) => `<th${f.key==='valorContrato'?' class="num col-valor" title="Valor do Contrato"':(f.key==='participacao'?' class="num col-pct"':(f.type==='number'?' class="num"':(fi===0?' class="col-nome"':'')))}>${f.key==='valorContrato'?'Valor':f.label}</th>${fi===0&&cfg.hasVendasPorVendedor&&!isFinanceiro?('<th style="width:150px">'+(isAdmin?'Vendas por vendedora':'Sua venda')+'</th>'):''}${fi===0&&cfg.hasVendedorResponsavel&&!isFinanceiro?'<th style="width:150px">Quem vendeu?</th>':''}${f.key===cfg.pagamentoAposCampo&&cfg.hasPagamento?'<th style="width:110px">Pagamento</th>':''}`).join('')}
               ${isFinanceiro ? '' : `
               <th class="num">% Comissão</th>
               <th>Vendedor</th>
