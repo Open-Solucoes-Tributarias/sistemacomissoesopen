@@ -1580,10 +1580,13 @@ let SELLERS = [
   {key:"luciana", label:"Luciana", color:"#9333EA"},
 ];
 /* Pra quem o plano premium (lançado em Órgãos Públicos) conta no total de
-   Sistema. É uma lista fixa, não a SELLERS: SELLERS vem do banco e hoje
+   Sistema — confirmado pela Soraya duas vezes (a primeira tentativa de
+   unificar tudo em Órgãos Públicos, pra todo mundo, foi desfeita a pedido
+   dela). É uma lista fixa, não a SELLERS: SELLERS vem do banco e hoje
    inclui todo mundo que já apareceu numa venda de Sistema — inclusive
-   Gustavo, Arick e Matheus Costa, que são justamente quem NÃO deve entrar
-   aqui. */
+   Gustavo, Arick, Matheus Costa e Davidson, que são justamente quem NÃO
+   deve entrar aqui (pra esses, plano premium conta em Órgãos Públicos
+   mesmo). */
 const VENDEDORAS_SISTEMA_PARA_PREMIUM = ["Rios","Angela","Soraya","Luciana","Uilma"];
 function ehVendedorDeSistema(nome){
   return VENDEDORAS_SISTEMA_PARA_PREMIUM.indexOf(nome) !== -1;
@@ -2015,7 +2018,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-11-09-01';
+const APP_BUILD = '2026-11-11-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
