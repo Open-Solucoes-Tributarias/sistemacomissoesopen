@@ -2029,7 +2029,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-11-12-01';
+const APP_BUILD = '2026-11-12-02';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -11086,7 +11086,7 @@ function renderVendasSection(){
     : `Nenhuma venda neste mês ainda. Clique em "+ Nova venda" para lançar a primeira.`;
   const podeVisar = isAdmin || isFinanceiro;
   const rowsHtml = visible.length === 0
-    ? `<tr class="empty-row"><td colspan="${13+visibleSellers.length}"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
+    ? `<tr class="empty-row"><td colspan="${10+visibleSellers.length}"><span class="empty-icon">◌</span>${emptyMsg}</td></tr>`
     : visible.map(row => `
       <tr id="venda-row-${row.id}" class="${isVendasRowPending(row) ? 'row-pending' : ''}${isMonthClosedFor('vendas',row.ano||2026,row.mes) ? ' row-locked' : ''}${isVendasRowDuplicate(row) ? ' row-duplicate' : ''}">
         <td>
@@ -11115,12 +11115,6 @@ function renderVendasSection(){
           </select>
         </td>
         <td class="col-valor"><div class="currency-wrap"><span class="currency-prefix">R$</span>${numInputHtml(row,'valor')}</div></td>
-        <td><select data-id="${row.id}" onchange="onParceiroSelect(this)">${partnerOptionsHtml(row.parceiro)}</select></td>
-        <td class="col-pct">
-          <div class="pct-wrap"><input class="num" type="number" step="0.1" min="0" placeholder="0" value="${row.participacao===null||row.participacao===undefined?'':row.participacao}" data-id="${row.id}" data-field="participacao" oninput="onNumInput(this)" /><span class="pct-suffix">%</span></div>
-          ${row.parceiro ? `<div class="calc-value" id="calcParceiro-${row.id}">${fmtMoney((Number(row.valor)||0) * (parsePercent(row.participacao)/100))}</div>` : ''}
-        </td>
-        <td><input type="text" data-id="${row.id}" data-field="formaPagamento" value="${esc(row.formaPagamento)}" placeholder="Forma de pagamento" oninput="onTextInput(this)" /></td>
         <td class="pagamento-cell">
           <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" data-pagamento="1" onchange="onPagamentoToggle(this)" /><span>${row.pago?'Pago':'Pendente'}</span></label>
           ${row.pago ? `<select class="${pagoEmOutroMes(row) ? 'sel-pgto-outro-mes' : ''}" data-id="${row.id}" data-pagamento="1"
@@ -11183,7 +11177,6 @@ function renderVendasSection(){
 
     <div class="search-row">
       <input id="search-vendas-cliente" class="search-input" type="text" placeholder="🔍 Buscar cliente..." value="${esc(searchCliente)}" oninput="onVendasSearchInput(this,'cliente')" />
-      <input id="search-vendas-parceiro" class="search-input" type="text" placeholder="🔍 Buscar parceiro..." value="${esc(searchParceiro)}" oninput="onVendasSearchInput(this,'parceiro')" />
       <input id="search-vendas-colaborador" class="search-input" type="text" placeholder="🔍 Buscar colaborador..." value="${esc(searchColaborador)}" oninput="onVendasSearchInput(this,'colaborador')" />
     </div>
 
@@ -11197,9 +11190,6 @@ function renderVendasSection(){
               <th>Venda</th>
               <th style="width:140px">Quem vendeu</th>
               <th class="num col-valor" title="Valor do Contrato">Valor</th>
-              <th>Parceiro</th>
-              <th>Participação</th>
-              <th>Forma de Pagamento</th>
               <th style="width:110px">Pagamento</th>
               <th>Nota fiscal</th>
               <th>Anexo</th>
