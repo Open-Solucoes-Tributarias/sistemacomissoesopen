@@ -1351,6 +1351,14 @@
     padding:2px 7px;border-radius:999px;background:#DCFCE7;border:1px solid #86EFAC;color:#15803D;
   }
   .action-btn.ativo{background:#DCFCE7;color:#15803D;}
+  /* "Processo avançado" é só sinalização manual, sem efeito em comissão
+     nem ranking — por isso fica num tom próprio (laranja/vermelho, por
+     causa do 🔥), independente das outras tags de natureza da venda. */
+  .selo-avancado{
+    margin-left:6px;font-size:10px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
+    padding:2px 7px;border-radius:999px;background:#FFE4E0;border:1px solid #FECACA;color:#C0351C;
+  }
+  .action-btn.ativo-avancado{background:#FFE4E0;color:#C0351C;}
   .selo-novo{
     margin-left:6px;font-size:10px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
     padding:2px 7px;border-radius:999px;background:var(--primary-soft);border:1px solid var(--ring);color:var(--primary);
@@ -2029,7 +2037,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-11-12-02';
+const APP_BUILD = '2026-11-12-03';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -2787,7 +2795,7 @@ function persist(){
             id: r.id, ano: r.ano||2026, mes: r.mes, cliente: r.cliente||'', venda: r.venda||'', cnpj: cnpjDigitos(r.cnpj),
             valor: numOrNull(r.valor), parceiro: r.parceiro||'', participacao: numOrNull(r.participacao),
             forma_pagamento: r.formaPagamento||'', colaborador: r.colaborador||'', observacoes: r.observacoes||'',
-            renovacao: !!r.renovacao, novo_contrato: !!r.novoContrato, upgrade: !!r.upgrade,
+            renovacao: !!r.renovacao, novo_contrato: !!r.novoContrato, upgrade: !!r.upgrade, avancado: !!r.avancado,
             vendedor2: r.vendedor2||'', vendedor3: r.vendedor3||'', pago: !!r.pago, mes_pagamento: r.mesPagamento||null,
             pago_em: timestampValidoOuNull(r.pagoEm), fechamento_mes: r.fechamentoMes || null,
             parcela_label: r.parcelaLabel || null,
@@ -2855,7 +2863,7 @@ async function tryLoadFromStorageAsync(){
           id: d.id, ano: d.ano, mes: d.mes, cliente: d.cliente||'', venda: d.venda||'', cnpj: d.cnpj||'',
           valor: d.valor, parceiro: d.parceiro||'', participacao: d.participacao,
           formaPagamento: d.forma_pagamento||'', colaborador: d.colaborador||'', observacoes: d.observacoes||'',
-          renovacao: !!d.renovacao, novoContrato: !!d.novo_contrato, upgrade: !!d.upgrade,
+          renovacao: !!d.renovacao, novoContrato: !!d.novo_contrato, upgrade: !!d.upgrade, avancado: !!d.avancado,
           vendedor2: d.vendedor2||'', vendedor3: d.vendedor3||'', pago: d.pago, mesPagamento: d.mes_pagamento,
           pagoEm: d.pago_em || null, fechamentoMes: d.fechamento_mes || null,
           parcelaLabel: d.parcela_label,
@@ -9392,7 +9400,7 @@ function addRow(){
     showAlert("Este mês está fechado para novos lançamentos. Reabra em Resumo Geral para poder editar.");
     return;
   }
-  const newRow = {id: nextId++, mes, ano: yearFilter, cliente:"", venda:"", valor:null, renovacao:false, novoContrato:false, upgrade:false,
+  const newRow = {id: nextId++, mes, ano: yearFilter, cliente:"", venda:"", valor:null, renovacao:false, novoContrato:false, upgrade:false, avancado:false,
                    parceiro:"", participacao:null, formaPagamento:"", colaborador:"", vendedor2:"", vendedor3:"",
                    vendedorResponsavel: sellerFilter !== "Todas" ? ((SELLERS.find(x => x.key === sellerFilter)||{}).label || "") : "",
                    pago:false, mesPagamento:null, observacoes:"",
@@ -9432,6 +9440,23 @@ function marcarNaturezaVenda(id, campo){
   persist();
   render();
   if(campo === 'renovacao' || !ligar) setTimeout(tryLoadPainelTotaisAsync, 900);
+}
+
+/* "Processo avançado" é só um sinalizador manual da Soraya, pra marcar
+   visualmente quais negociações estão mais encaminhadas — sem efeito
+   nenhum em comissão, ranking ou fechamento. Por isso é independente das
+   tags de natureza acima (renovação/upgrade/contrato novo): marcar uma
+   não desmarca a outra. */
+function toggleVendaAvancado(id){
+  const r = rows.find(function(x){ return x.id === id; });
+  if(!r) return;
+  if(isMonthClosedFor('vendas', r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    return;
+  }
+  r.avancado = !r.avancado;
+  persist();
+  render();
 }
 
 function deleteRow(id){
@@ -11098,7 +11123,7 @@ function renderVendasSection(){
           ${row.parcelaLabel ? `<span class="parcela-badge" title="Parcela ${row.parcelaLabel} deste contrato">🧩 ${row.parcelaLabel}</span>` : ''}
           ${isVendasRowDuplicate(row) ? `<span class="dup-badge" title="Já existe outro lançamento com o mesmo cliente, mês e valor — confira se não é duplicado">🔁 Duplicado</span>` : ''}
         </td>
-        <td class="cliente col-nome"><input type="text" list="empresas-datalist" data-id="${row.id}" data-field="cliente" value="${esc(row.cliente)}" placeholder="Cliente" oninput="onTextInput(this)" onchange="onClienteVendaEscolhido(this)" />${row.renovacao ? '<span class="selo-renovacao" title="Renovação: vale comissão, mas não conta no ranking de desempenho">♻️ Renovação</span>' : (row.novoContrato ? '<span class="selo-novo" title="Contrato novo: conta no ranking e nas comissões como qualquer venda">✨ Contrato novo</span>' : (row.upgrade ? '<span class="selo-upgrade" title="Upgrade: cliente que subiu de plano. É receita nova e conta no ranking">⬆️ Upgrade</span>' : ''))}${(isAdmin||isFinanceiro) && pedidoVinculadoDe('vendas', row.id) ? `<button type="button" class="selo-empresas" title="Ver CNPJ/responsável/telefone/e-mail/empenho do pedido de nota" onclick="abrirDadosPedidoVinculado('vendas',${row.id})">📋 Dados do pedido</button>` : ''}</td>
+        <td class="cliente col-nome"><input type="text" list="empresas-datalist" data-id="${row.id}" data-field="cliente" value="${esc(row.cliente)}" placeholder="Cliente" oninput="onTextInput(this)" onchange="onClienteVendaEscolhido(this)" />${row.avancado ? '<span class="selo-avancado" title="Processo avançado — sinalização manual, não mexe em comissão nem ranking">🔥 Avançado</span>' : ''}${row.renovacao ? '<span class="selo-renovacao" title="Renovação: vale comissão, mas não conta no ranking de desempenho">♻️ Renovação</span>' : (row.novoContrato ? '<span class="selo-novo" title="Contrato novo: conta no ranking e nas comissões como qualquer venda">✨ Contrato novo</span>' : (row.upgrade ? '<span class="selo-upgrade" title="Upgrade: cliente que subiu de plano. É receita nova e conta no ranking">⬆️ Upgrade</span>' : ''))}${(isAdmin||isFinanceiro) && pedidoVinculadoDe('vendas', row.id) ? `<button type="button" class="selo-empresas" title="Ver CNPJ/responsável/telefone/e-mail/empenho do pedido de nota" onclick="abrirDadosPedidoVinculado('vendas',${row.id})">📋 Dados do pedido</button>` : ''}</td>
         <td class="venda">
           <select data-id="${row.id}" onchange="onVendaSelect(this)">
             <option value="">—</option>
@@ -11137,6 +11162,7 @@ function renderVendasSection(){
         }).join('')}
         <td class="del-cell">
           <div class="row-actions">
+            <button class="action-btn${row.avancado ? ' ativo-avancado' : ''}" title="${row.avancado ? 'Processo avançado — clique para desmarcar' : 'Marcar como processo avançado (só pra você sinalizar, não mexe em comissão nem ranking)'}" onclick="toggleVendaAvancado(${row.id})">🔥</button>
             <button class="action-btn${row.novoContrato ? ' ativo-novo' : ''}" title="${row.novoContrato ? 'Marcada como contrato novo — clique para desmarcar' : 'Marcar como contrato novo (conta normalmente no ranking)'}" onclick="toggleVendaNova(${row.id})">✨</button>
             <button class="action-btn${row.upgrade ? ' ativo-upgrade' : ''}" title="${row.upgrade ? 'Marcada como upgrade — clique para desmarcar' : 'Marcar como upgrade (cliente que subiu de plano; conta normalmente no ranking)'}" onclick="toggleVendaUpgrade(${row.id})">⬆️</button>
             <button class="action-btn${row.renovacao ? ' ativo' : ''}" title="${row.renovacao ? 'É uma renovação — clique para voltar a contar como venda nova' : 'Marcar como renovação (vale comissão, mas não conta no ranking)'}" onclick="toggleVendaRenovacao(${row.id})">♻️</button>
