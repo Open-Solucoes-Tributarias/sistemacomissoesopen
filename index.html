@@ -1594,14 +1594,6 @@ const VENDEDORAS_SISTEMA_PARA_PREMIUM = ["Rios","Angela","Soraya","Luciana","Uil
 function ehVendedorDeSistema(nome){
   return VENDEDORAS_SISTEMA_PARA_PREMIUM.indexOf(nome) !== -1;
 }
-/* Pedido da Soraya, só pra ela: Órgãos Públicos deve pagar junto com a
-   Consultoria, no dia 15, em vez de entrar no ciclo do dia 05 com
-   Sistema/Cursos/Bônus. É uma preferência pessoal dela sobre QUANDO
-   recebe — não tem nada a ver com a regra de QUEM libera sem esperar o
-   cliente pagar (ehVendedorDeSistema, acima). Ver totalDoDia15. */
-function juntaPublicosNoDiaDaConsultoria(nome){
-  return name_matches_client(nome, 'Soraya');
-}
 const STORAGE_KEY = "vendas";
 const VENDOR_PALETTE = ["#5046E5","#0D9488","#D97706","#E11D48","#9333EA","#2563EB","#059669","#DC2626","#7C3AED","#EA580C"];
 
@@ -2037,7 +2029,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-11-11-03';
+const APP_BUILD = '2026-11-12-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -4879,16 +4871,10 @@ function removerParcelaDivisao(id){
 }
 /* A Consultoria paga no dia 15 do mesmo mês, num ciclo à parte do resto
    da folha (que só sai no dia 05 do mês seguinte) — "Total a pagar" bruto
-   mistura os dois. Pra Soraya, Órgãos Públicos entra nesse mesmo ciclo do
-   dia 15 (ver juntaPublicosNoDiaDaConsultoria). */
-function totalDoDia15(linha){
-  if(!linha) return 0;
-  return linha.consultoria + (juntaPublicosNoDiaDaConsultoria(linha.pessoa) ? linha.publicos : 0);
-}
-/* A divisão CLT/nota PJ é sempre sobre o que sai no dia 05, nunca sobre o
-   que já saiu pelo ciclo do dia 15 (totalDoDia15). */
+   mistura os dois. A divisão CLT/nota PJ é sempre sobre esse resto (dia
+   05), nunca sobre a Consultoria, que já saiu por outro caminho. */
 function totalParaDividir(linha){
-  return linha ? linha.aPagar - totalDoDia15(linha) : 0;
+  return linha ? linha.aPagar - linha.consultoria : 0;
 }
 function exportDivisaoFechamentoCSV(pessoa, mes){
   try{
@@ -5615,8 +5601,6 @@ function renderModal(){
     const pessoa = m.pessoa, mes = m.mes;
     const linha = fechamentoPagamentos(mes).find(function(l){ return l.pessoa === pessoa; });
     const totalPagar = totalParaDividir(linha);
-    const dia15Valor = totalDoDia15(linha);
-    const dia15Texto = linha && juntaPublicosNoDiaDaConsultoria(linha.pessoa) ? 'a Consultoria e Órgãos Públicos, que pagam' : 'a Consultoria, que paga';
     const parcelas = parcelasDivisao(pessoa, yearFilter, mes);
     const somaParcelas = parcelas.reduce(function(a,p){ return a + (Number(p.valor)||0); }, 0);
     const diferenca = totalPagar - somaParcelas;
@@ -5639,7 +5623,7 @@ function renderModal(){
         <div class="modal-box modal-box-xwide">
           <div class="modal-msg">Divisão do pagamento — ${esc(pessoa)}</div>
           <div class="divisao-explica">
-            A dividir em ${esc(mes)}/${yearFilter}: <b>${fmtMoney(totalPagar)}</b>${dia15Valor ? ' (o total a pagar já sem '+dia15Texto+' à parte no dia 15/'+esc(mes).slice(0,3)+')' : ''}. Registre aqui como esse
+            A dividir em ${esc(mes)}/${yearFilter}: <b>${fmtMoney(totalPagar)}</b>${linha && linha.consultoria ? ' (o total a pagar já sem a Consultoria, que paga à parte no dia 15/'+esc(mes).slice(0,3)+')' : ''}. Registre aqui como esse
             valor vai sair de fato — parte na folha, parte em nota fiscal PJ, cada uma com sua data — pra gerar
             o relatório pra encaminhar ao financeiro.
           </div>
@@ -9009,16 +8993,14 @@ function renderParceirosSection(){
   const fechamento = fechamentoPagamentos(partnerMonthFilter);
   const fechamentoSomaCols = {sistema:0, publicos:0, cursos:0, bonus:0, salario:0, aPagar:0, consultoria:0, pendente:0};
   fechamento.forEach(l => { Object.keys(fechamentoSomaCols).forEach(k => { fechamentoSomaCols[k] += l[k]; }); });
-  const fechamentoSomaDia15 = fechamento.reduce((acc, l) => acc + totalDoDia15(l), 0);
   /* Consultoria paga em data própria (dia 15 do mesmo mês), separada do
      resto da folha (dia 05 do mês seguinte) — sem isso "Total a pagar"
      misturava as duas datas num número só, escondendo que uma parte já
-     saiu antes e o resto ainda espera o próximo ciclo. Pra Soraya, Órgãos
-     Públicos entra junto no ciclo do dia 15 (ver totalDoDia15). */
+     saiu antes e o resto ainda espera o próximo ciclo. */
   const fechamentoProximoMes = partnerMonthFilter !== "Todos" ? MONTHS[(MONTHS.indexOf(partnerMonthFilter) + 1) % 12] : null;
-  const datasFechamentoHtml = function(dia15, aPagar){
-    if(partnerMonthFilter === "Todos" || !dia15) return '';
-    return `<div class="fechamento-datas">dia 15/${partnerMonthFilter.slice(0,3)}: ${maskOr(dia15)} · dia 05/${fechamentoProximoMes.slice(0,3)}: ${maskOr(aPagar - dia15)}</div>`;
+  const datasFechamentoHtml = function(consultoria, aPagar){
+    if(partnerMonthFilter === "Todos" || !consultoria) return '';
+    return `<div class="fechamento-datas">dia 15/${partnerMonthFilter.slice(0,3)}: ${maskOr(consultoria)} · dia 05/${fechamentoProximoMes.slice(0,3)}: ${maskOr(aPagar - consultoria)}</div>`;
   };
   const fechamentoRowsHtml = fechamento.map(l => `
       <tr>
@@ -9029,7 +9011,7 @@ function renderParceirosSection(){
         ${celulaFechamento(l.pessoa, 'bonus', 'Bônus', l.bonus, partnerMonthFilter, maskOr(l.bonus), null, partnersValuesRevealed)}
         ${celulaFechamento(l.pessoa, 'salario', 'Salário fixo', l.salario, partnerMonthFilter, maskOr(l.salario), null, partnersValuesRevealed)}
         ${celulaFechamento(l.pessoa, 'consultoria', 'Consultoria', l.consultoria, partnerMonthFilter, maskOr(l.consultoria), 'col-apoio', partnersValuesRevealed)}
-        <td class="num" style="font-weight:800;">${maskOr(l.aPagar)}${datasFechamentoHtml(totalDoDia15(l), l.aPagar)}</td>
+        <td class="num" style="font-weight:800;">${maskOr(l.aPagar)}${datasFechamentoHtml(l.consultoria, l.aPagar)}</td>
         <td class="num col-apoio" title="Já ganhou, mas ainda espera o cliente pagar">${maskOr(l.pendente)}</td>
         <td class="del-cell">${partnerMonthFilter!=="Todos" ? `
           ${isAdmin ? `<button class="action-btn" title="Dividir esse pagamento entre folha (CLT) e nota(s) fiscal(is) PJ" onclick="abrirDivisaoFechamento('${escJs(l.pessoa)}','${escJs(partnerMonthFilter)}')">💰</button>` : ''}
@@ -9168,7 +9150,7 @@ function renderParceirosSection(){
             <td class="num">${maskOr(fechamentoSomaCols.bonus)}</td>
             <td class="num">${maskOr(fechamentoSomaCols.salario)}</td>
             <td class="num col-apoio">${maskOr(fechamentoSomaCols.consultoria)}</td>
-            <td class="num">${maskOr(fechamentoSomaCols.aPagar)}${datasFechamentoHtml(fechamentoSomaDia15, fechamentoSomaCols.aPagar)}</td>
+            <td class="num">${maskOr(fechamentoSomaCols.aPagar)}${datasFechamentoHtml(fechamentoSomaCols.consultoria, fechamentoSomaCols.aPagar)}</td>
             <td class="num col-apoio">${maskOr(fechamentoSomaCols.pendente)}</td>
             <td></td>
           </tr></tfoot>` : ''}
@@ -9182,8 +9164,7 @@ function renderParceirosSection(){
         fechamento do mês corrente enquanto ele estiver aberto — tudo que for pago desde o último
         <b>🔒 Fechar</b> até agora. <b>Pendente</b> é o que já foi ganho mas ainda aguarda esse pagamento. Use
         <b>🔒 Fechar</b> depois de mandar pagar, pra esse mês virar definitivo — o que for pago depois já entra
-        automaticamente no próximo. Consultoria paga à parte, no dia 15 — e só pra Soraya, Órgãos Públicos entra
-        junto nesse mesmo dia 15, em vez do dia 05 com o resto.
+        automaticamente no próximo.
       </div>
     `, {flush: true, meta: `${partnerMonthFilter !== "Todos" ? "em <b>"+esc(partnerMonthFilter)+"</b>" : "no ano de <b>"+yearFilter+"</b>"}${fechamento.length ? ' · a pagar <b>'+(partnersValuesRevealed ? fmtMoney(fechamentoSomaCols.aPagar) : '••••')+'</b>' : ''}`,
       actions: `${fechamentoActionButtonHtml(partnerMonthFilter)}<button class="eye-toggle" onclick="exportFechamentoCSV('${escJs(partnerMonthFilter)}')">📊 Baixar CSV</button>`})}
@@ -14474,15 +14455,10 @@ function montarComprovanteFechamento(pessoa, mes){
   // Como esse total vai sair de fato — parte na folha (CLT), parte em
   // nota(s) fiscal(is) PJ com data — só aparece quando alguém já
   // preencheu essa divisão em "💰 Dividir pagamento". A conferência é
-  // contra o total SEM o que já paga no dia 15 (Consultoria, e Órgãos
-  // Públicos também pra Soraya) — mesma regra de totalParaDividir().
+  // contra o total SEM a Consultoria (ela paga à parte, dia 15) — mesma
+  // regra de totalParaDividir().
   const linhaPessoa = fechamentoPagamentos(mes).find(function(l){ return l.pessoa === pessoa; });
   const totalDividir = totalParaDividir(linhaPessoa);
-  const dia15Valor = totalDoDia15(linhaPessoa);
-  const dia15Junta = linhaPessoa && juntaPublicosNoDiaDaConsultoria(linhaPessoa.pessoa);
-  const dia15Texto = dia15Junta
-    ? 'Consultoria e Órgãos Públicos ('+fmtMoney(dia15Valor)+') pagam'
-    : 'A Consultoria ('+fmtMoney(dia15Valor)+') paga';
   const parcelas = parcelasDivisao(pessoa, ano, mes);
   const somaParcelas = parcelas.reduce(function(a,p){ return a + (Number(p.valor)||0); }, 0);
   const divisaoHtml = parcelas.length ? `
@@ -14496,7 +14472,7 @@ function montarComprovanteFechamento(pessoa, mes){
             <td class="num destaque">${fmtMoney(Number(p.valor)||0)}</td>
             <td>${esc(p.observacoes) || '—'}</td></tr>`;
         }), '')}
-      <p class="rel-nota">Somado: ${fmtMoney(somaParcelas)} de ${fmtMoney(totalDividir)}${Math.abs(totalDividir-somaParcelas)<0.005 ? ' — confere.' : (totalDividir-somaParcelas>0 ? ' — falta '+fmtMoney(totalDividir-somaParcelas)+'.' : ' — '+fmtMoney(somaParcelas-totalDividir)+' a mais.')}${dia15Valor ? ' '+dia15Texto+' à parte, no dia 15/'+esc(mes).slice(0,3)+', e não '+(dia15Junta?'entram':'entra')+' nessa divisão.' : ''}</p>
+      <p class="rel-nota">Somado: ${fmtMoney(somaParcelas)} de ${fmtMoney(totalDividir)}${Math.abs(totalDividir-somaParcelas)<0.005 ? ' — confere.' : (totalDividir-somaParcelas>0 ? ' — falta '+fmtMoney(totalDividir-somaParcelas)+'.' : ' — '+fmtMoney(somaParcelas-totalDividir)+' a mais.')}${linhaPessoa && linhaPessoa.consultoria ? ' A Consultoria ('+fmtMoney(linhaPessoa.consultoria)+') paga à parte, no dia 15/'+esc(mes).slice(0,3)+', e não entra nessa divisão.' : ''}</p>
     </section>
   ` : '';
 
