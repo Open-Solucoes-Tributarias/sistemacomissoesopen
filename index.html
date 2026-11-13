@@ -1373,6 +1373,20 @@
     margin-left:6px;font-size:10px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
     padding:2px 7px;border-radius:999px;background:#E0E7FF;border:1px solid #C7D2FE;color:#4338CA;
   }
+  /* Acordo de renegociação (Consultoria): tom roxo, pra não confundir com
+     as outras tags de natureza da venda. O selo de "renegociado" é um
+     botão de verdade (leva pro lançamento do acordo). */
+  .selo-acordo{
+    margin-left:6px;font-size:10px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
+    padding:2px 7px;border-radius:999px;background:#F3E8FF;border:1px solid #D8B4FE;color:#7E22CE;
+  }
+  button.selo-acordo-link{cursor:pointer;}
+  button.selo-acordo-link:hover{background:#E9D5FF;}
+  .action-btn.ativo-acordo{background:#F3E8FF;color:#7E22CE;}
+  tr.row-destaque-acordo{animation:destaqueAcordo 1.8s ease-out;}
+  @keyframes destaqueAcordo{
+    0%{background:#F3E8FF;} 100%{background:transparent;}
+  }
   .action-btn.ativo-incompany{background:#E0E7FF;color:#4338CA;}
   .selo-empresas{
     margin-left:6px;font-size:10px;font-weight:800;letter-spacing:.04em;white-space:nowrap;
@@ -2037,7 +2051,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-11-12-03';
+const APP_BUILD = '2026-11-13-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -2916,6 +2930,7 @@ function lancamentoParaDb(key, r){
     // marcar_nota_emitida/marcar_pode_emitir, na hora do clique;
     // mandar de novo aqui cria corrida com esse autosave em lote.
     in_company: !!r.inCompany, renovacao: !!r.renovacao, upgrade: !!r.upgrade, novo_contrato: !!r.novoContrato,
+    acordo: !!r.acordo, renegociado_em_acordo_id: r.renegociadoEmAcordoId || null,
     vendedor_responsavel: cfg.hasVendedorResponsavel ? (r.vendedorResponsavel || '') : null,
     professor: r.professor||'', honorario_professor: numOrNull(r.honorarioProfessor),
     professor2: r.professor2||'', honorario_professor2: numOrNull(r.honorarioProfessor2),
@@ -2975,6 +2990,21 @@ function persistEntityRows(key){
             });
           });
           if(extraParceiroRows.length) await sbUpsert('lancamentos_extra_parceiros', extraParceiroRows, 'id');
+
+          // Parcelas de Acordo (renegociação que junta notas de vários
+          // meses numa só) — mesmo padrão de apagar e reinserir.
+          await sbDeleteAll('lancamento_parcelas_acordo', 'lancamento_id=in.(' + localIds.join(',') + ')');
+          const parcelaAcordoRows = [];
+          state[key].rows.forEach(function(r){
+            (r.parcelasAcordo||[]).forEach(function(p){
+              parcelaAcordoRows.push({
+                id: p.id, lancamento_id: r.id, valor: numOrNull(p.valor),
+                data_prevista: p.dataPrevista || null, pago: !!p.pago,
+                pago_em: timestampValidoOuNull(p.pagoEm),
+              });
+            });
+          });
+          if(parcelaAcordoRows.length) await sbUpsert('lancamento_parcelas_acordo', parcelaAcordoRows, 'id');
         }
 
         // Divisão do faturamento por vendedora (hoje só a aba Cursos usa)
@@ -3057,6 +3087,12 @@ async function tryLoadEntityFromStorageAsync(key){
     const extrasParceiros = key === 'consultoria'
       ? await sbSelectOpcional('lancamentos_extra_parceiros', 'select=*&order=id.asc', [])
       : [];
+    // Parcelas de Acordo: só Consultoria usa (acordo de renegociação que
+    // junta notas de vários meses) — tabela é admin-only, então pra
+    // quem mais não é a consulta volta vazia, não é erro.
+    const parcelasAcordoDb = key === 'consultoria'
+      ? await sbSelectOpcional('lancamento_parcelas_acordo', 'select=*&order=data_prevista.asc', [])
+      : [];
     // Empresas por curso: RLS só devolve linha pra admin/financeiro —
     // pra quem mais não é, a consulta volta vazia (não é erro).
     const empresasDb = cfg.hasEmpresas
@@ -3079,6 +3115,14 @@ async function tryLoadEntityFromStorageAsync(key){
       (extrasParceiros||[]).forEach(function(p){
         if(!extrasParceirosByLanc[p.lancamento_id]) extrasParceirosByLanc[p.lancamento_id] = [];
         extrasParceirosByLanc[p.lancamento_id].push({id: p.id, parceiro: p.parceiro||'', percent: p.percent});
+      });
+      const parcelasAcordoByLanc = {};
+      (parcelasAcordoDb||[]).forEach(function(p){
+        if(!parcelasAcordoByLanc[p.lancamento_id]) parcelasAcordoByLanc[p.lancamento_id] = [];
+        parcelasAcordoByLanc[p.lancamento_id].push({
+          id: p.id, valor: p.valor, dataPrevista: p.data_prevista || null,
+          pago: !!p.pago, pagoEm: p.pago_em || null,
+        });
       });
       const empresasByLanc = {};
       (empresasDb||[]).forEach(function(e){
@@ -3105,8 +3149,10 @@ async function tryLoadEntityFromStorageAsync(key){
           podeEmitir: !!d.pode_emitir, podeEmitirEm: d.pode_emitir_em || null,
           notaArquivoPath: d.nota_arquivo_path || null, notaArquivoNome: d.nota_arquivo_nome || null,
           inCompany: !!d.in_company, renovacao: !!d.renovacao, upgrade: !!d.upgrade, novoContrato: !!d.novo_contrato,
+          acordo: !!d.acordo, renegociadoEmAcordoId: d.renegociado_em_acordo_id || null,
           parceiro: d.parceiro||'', participacao: d.participacao,
           extraParceiros: extrasParceirosByLanc[d.id] || [],
+          parcelasAcordo: parcelasAcordoByLanc[d.id] || [],
           professor: d.professor||'', honorarioProfessor: d.honorario_professor,
           professor2: d.professor2||'', honorarioProfessor2: d.honorario_professor2,
         };
@@ -5475,6 +5521,93 @@ function renderModal(){
       </div>
     `;
   }
+  if(m.type === 'parcelas-acordo'){
+    const r = state[m.key] && state[m.key].rows.find(function(x){ return x.id === m.id; });
+    if(!r) return '';
+    const cfg = ENTITIES[m.key];
+    const nome = r[cfg.fields[0].key] || 'este acordo';
+    const parcelas = Array.isArray(r.parcelasAcordo) ? r.parcelasAcordo : [];
+    const somaParcelas = parcelas.reduce(function(a,p){ return a + (Number(p.valor)||0); }, 0);
+    const somaPagas = parcelas.filter(function(p){ return p.pago; }).reduce(function(a,p){ return a + (Number(p.valor)||0); }, 0);
+    const totalAcordo = Number(r.valorContrato)||0;
+    const fecha = Math.abs(somaParcelas - totalAcordo) < 0.005;
+    const linhas = parcelas.length ? parcelas.map(function(p){
+      return `
+        <div class="divisao-linha">
+          <input type="date" value="${esc(p.dataPrevista||'')}" title="Data prevista" onchange="updateParcelaAcordoCampo('${m.key}',${r.id},${p.id},'dataPrevista',this.value)" />
+          <div class="divisao-money">
+            <span class="currency-prefix">R$</span>
+            <input class="num" type="number" step="0.01" min="0" placeholder="0,00"
+                   value="${p.valor===null||p.valor===undefined?'':p.valor}"
+                   oninput="updateParcelaAcordoCampo('${m.key}',${r.id},${p.id},'valor',this.value)" />
+          </div>
+          <label class="pay-toggle"><input type="checkbox" ${p.pago?'checked':''} onchange="toggleParcelaAcordoPago('${m.key}',${r.id},${p.id})" /><span>${p.pago?'Paga':'Pendente'}</span></label>
+          ${p.pago && p.pagoEm ? `<span class="meta-field-valor" style="font-size:11px;">em ${new Date(p.pagoEm).toLocaleDateString('pt-BR')}</span>` : ''}
+          <button class="action-btn danger" title="Remover parcela" onclick="removerParcelaAcordo('${m.key}',${r.id},${p.id})">✕</button>
+        </div>`;
+    }).join('') : `<div class="divisao-vazio">Nenhuma parcela ainda. Adicione uma abaixo pra cada parcela combinada no acordo.</div>`;
+
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-wide">
+          <div class="modal-msg">🤝 Parcelas do Acordo — ${esc(nome)}</div>
+          <div class="divisao-explica">
+            Valor total do acordo: <b>${fmtMoney(totalAcordo)}</b>. Cada parcela marcada como <b>Paga</b> libera, na
+            hora, a fatia correspondente da comissão — não precisa esperar o acordo inteiro ser quitado. O valor
+            deste lançamento não entra no faturamento de novo: as notas originais que ele renegocia já faturaram.
+          </div>
+          <div class="divisao-lista">${linhas}</div>
+          <button class="modal-btn modal-btn-ghost" style="width:100%;margin-top:10px;" onclick="addParcelaAcordo('${m.key}',${r.id})">+ Adicionar parcela</button>
+          <div class="divisao-conferencia ${fecha?'ok':''}">
+            Parcelado: <b>${fmtMoney(somaParcelas)}</b> de <b>${fmtMoney(totalAcordo)}</b>${fecha ? ' — confere.' : (somaParcelas < totalAcordo ? ' — falta '+fmtMoney(totalAcordo-somaParcelas)+'.' : ' — '+fmtMoney(somaParcelas-totalAcordo)+' a mais.')}
+            · Já pago: <b>${fmtMoney(somaPagas)}</b>
+          </div>
+          <div class="modal-actions"><button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button></div>
+        </div>
+      </div>
+    `;
+  }
+  if(m.type === 'vincular-notas-acordo'){
+    const acordo = state.consultoria.rows.find(function(x){ return x.id === m.acordoId; });
+    if(!acordo) return '';
+    const termo = String(m.busca||'').trim().toLowerCase();
+    const candidatos = state.consultoria.rows.filter(function(r){
+      if(r.id === m.acordoId || r.acordo) return false;
+      if(!termo) return true;
+      return String(r.empresa||'').toLowerCase().indexOf(termo) !== -1;
+    }).slice(0, 60);
+    const vinculadas = state.consultoria.rows.filter(function(r){ return r.renegociadoEmAcordoId === m.acordoId; });
+    return `
+      <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+        <div class="modal-box modal-box-wide">
+          <div class="modal-msg">🔗 Vincular notas antigas — ${esc(acordo.empresa||'este acordo')}</div>
+          <div class="divisao-explica">
+            Marque as notas que esse acordo renegocia. Elas continuam no histórico exatamente como estão (não mudam
+            de valor nem de mês) — só ganham o selo "renegociado" e travam o Pago, porque quem cuida do pagamento
+            delas agora é este acordo.
+          </div>
+          ${vinculadas.length ? `<div class="divisao-explica"><b>${vinculadas.length}</b> nota${vinculadas.length===1?'':'s'} já vinculada${vinculadas.length===1?'':'s'}: ${vinculadas.map(function(r){ return esc(r.mes)+'/'+(r.ano||2026); }).join(', ')}</div>` : ''}
+          <input id="vincular-acordo-busca" class="search-input" type="text" placeholder="🔍 Buscar empresa..." value="${esc(m.busca)}" oninput="onVincularNotasAcordoBuscaInput(this)" style="width:100%;margin:8px 0;" />
+          <div class="table-scroll" style="max-height:360px;">
+            <table class="table-plain">
+              <thead><tr><th></th><th>Mês</th><th>Empresa</th><th class="num">Valor</th></tr></thead>
+              <tbody>${candidatos.length ? candidatos.map(function(r){
+                const vinculada = r.renegociadoEmAcordoId === m.acordoId;
+                const vinculadaOutro = r.renegociadoEmAcordoId && !vinculada;
+                return `<tr style="cursor:${vinculadaOutro?'default':'pointer'};${vinculadaOutro?'opacity:.5;':''}" title="${vinculadaOutro?'Já renegociada em outro acordo':'Clique pra vincular/desvincular'}" ${vinculadaOutro?'':`onclick="toggleNotaVinculadaAcordo(${r.id})"`}>
+                  <td>${vinculada ? '✅' : (vinculadaOutro ? '🔗' : '—')}</td>
+                  <td>${esc(r.mes)}/${r.ano||2026}</td>
+                  <td>${esc(r.empresa)}</td>
+                  <td class="num">${fmtMoney(r.valorContrato)}</td>
+                </tr>`;
+              }).join('') : `<tr><td colspan="4" style="text-align:center;color:var(--ink-faint);padding:16px;">Nada encontrado.</td></tr>`}</tbody>
+            </table>
+          </div>
+          <div class="modal-actions"><button class="modal-btn modal-btn-primary" onclick="closeModal()">Fechar</button></div>
+        </div>
+      </div>
+    `;
+  }
   if(m.type === 'empresas-curso'){
     const r = empresasRowAtual();
     if(!r) return '';
@@ -7710,6 +7843,7 @@ function faturamentoDaOrigem(origem, ano, mes){
     if(origem !== 'todas' && origem !== key) return;
     state[key].rows.forEach(r => {
       if((r.ano||2026) !== ano || r.mes !== mes) return;
+      if(r.acordo) return;   // acordo não é faturamento novo — as notas originais já faturaram
       total += Number(r.valorContrato)||0;
     });
   });
@@ -8451,11 +8585,17 @@ function getSellerReceivable(mes){
       const contaComoSistema = premium || r.upgrade;
       getRowSellerAssignments(r).forEach(a => {
         const deSistema = ehVendedorDeSistema(a.vendedor);
-        const liberaSemPagar = deSistema && key !== 'consultoria';
-        const ok = liberaSemPagar ? noPeriodoLancamento(r) : elegivelNoFechamento(r, mes);
-        if(!ok) return;
+        let valor;
+        if(r.acordo){
+          valor = base * (a.percent/100) * fracaoRecebidaAcordoNoMes(r, mes);
+          if(!valor) return;
+        } else {
+          const liberaSemPagar = deSistema && key !== 'consultoria';
+          const ok = liberaSemPagar ? noPeriodoLancamento(r) : elegivelNoFechamento(r, mes);
+          if(!ok) return;
+          valor = base * (a.percent/100);
+        }
         ensure(a.vendedor);
-        const valor = base * (a.percent/100);
         const destino = (contaComoSistema && deSistema) ? 'sistema' : key;
         by[a.vendedor][destino] += valor;
       });
@@ -8545,6 +8685,21 @@ function detalheFechamento(pessoa, origem, mes){
       const base = entityRemainingAfterPartner(r);
       getRowSellerAssignments(r).forEach(function(a){
         if(a.vendedor !== pessoa) return;
+        if(r.acordo){
+          // Acordo não tem um pago/não-pago único: cada parcela paga é a
+          // própria linha do detalhe, no mês em que ela foi paga.
+          (r.parcelasAcordo||[]).forEach(function(p){
+            if(!p.pago) return;
+            if(mes !== 'Todos' && mes && (!p.pagoEm || !dentroDoPeriodoDeFechamento(p.pagoEm, mes, yearFilter))) return;
+            const fracaoParcela = (Number(p.valor)||0) / (Number(r.valorContrato)||1);
+            linhas.push({ origemLabel: ENTITIES[key].tabLabel + ' · acordo',
+              mes: (mes && mes !== 'Todos') ? mes : (p.pagoEm ? MONTHS[new Date(p.pagoEm).getMonth()] : r.mes),
+              cliente: (r[mainField] || '—') + ' — parcela ' + fmtMoney(p.valor),
+              valorContrato: Number(p.valor)||0, percent: a.percent,
+              comissao: base*(a.percent/100)*fracaoParcela, pago: true, mesPagamento: null });
+          });
+          return;
+        }
         const liberaSemPagar = deSistema && key !== 'consultoria';
         const ok = liberaSemPagar ? noPeriodoLancamento(r) : elegivelNoFechamento(r, mes);
         if(!ok) return;
@@ -11362,6 +11517,114 @@ function toggleEntityNovo(key, id){ marcarNaturezaEntity(key, id, 'novoContrato'
 function toggleEntityRenovacao(key, id){ marcarNaturezaEntity(key, id, 'renovacao'); }
 function toggleEntityUpgrade(key, id){ marcarNaturezaEntity(key, id, 'upgrade'); }
 
+/* ---------------- Acordo de renegociação (só Consultoria) ----------------
+   Quando um cliente inadimplente fecha um acordo que junta notas de
+   VÁRIOS meses numa dívida só, parcelada: as notas antigas já faturaram
+   (ficam intocadas, só viram histórico, "renegociadas"). O acordo é um
+   lançamento NOVO, à parte, que não conta faturamento de novo — ele só
+   existe pra carregar a comissão e as parcelas de recebimento. A
+   comissão libera aos poucos, conforme cada parcela é paga (ver
+   fracaoRecebidaAcordo/fracaoRecebidaAcordoNoMes). */
+function toggleEntityAcordo(key, id){
+  if(!isAdmin || key !== 'consultoria') return;
+  const r = state[key].rows.find(function(r){ return r.id === id; });
+  if(!r) return;
+  if(isMonthClosedFor(key, r.ano||2026, r.mes)){
+    showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
+    return;
+  }
+  r.acordo = !r.acordo;
+  persistEntityRows(key);
+  render();
+}
+function abrirParcelasAcordo(key, id){
+  if(!isAdmin) return;
+  const r = state[key].rows.find(function(r){ return r.id === id; });
+  if(!r) return;
+  modalState = { type:'parcelas-acordo', key:key, id:id };
+  render();
+}
+function addParcelaAcordo(key, id){
+  const r = state[key].rows.find(function(r){ return r.id === id; });
+  if(!r) return;
+  if(!Array.isArray(r.parcelasAcordo)) r.parcelasAcordo = [];
+  r.parcelasAcordo.push({ id: Date.now()+r.parcelasAcordo.length, valor:null, dataPrevista:null, pago:false, pagoEm:null });
+  persistEntityRows(key);
+  render();
+}
+function updateParcelaAcordoCampo(key, id, parcelaId, campo, valor){
+  const r = state[key].rows.find(function(r){ return r.id === id; });
+  if(!r) return;
+  const p = (r.parcelasAcordo||[]).find(function(x){ return x.id === parcelaId; });
+  if(!p) return;
+  if(campo === 'valor') p.valor = numOrNull(valor);
+  else if(campo === 'dataPrevista') p.dataPrevista = valor || null;
+  persistEntityRows(key);
+  render();
+}
+function toggleParcelaAcordoPago(key, id, parcelaId){
+  const r = state[key].rows.find(function(r){ return r.id === id; });
+  if(!r) return;
+  const p = (r.parcelasAcordo||[]).find(function(x){ return x.id === parcelaId; });
+  if(!p) return;
+  p.pago = !p.pago;
+  p.pagoEm = p.pago ? new Date().toISOString() : null;
+  persistEntityRows(key);
+  render();
+}
+function removerParcelaAcordo(key, id, parcelaId){
+  const r = state[key].rows.find(function(r){ return r.id === id; });
+  if(!r) return;
+  showConfirm("Remover esta parcela do acordo?", function(){
+    r.parcelasAcordo = (r.parcelasAcordo||[]).filter(function(x){ return x.id !== parcelaId; });
+    persistEntityRows(key);
+    render();
+  });
+}
+/* "Vincular notas antigas" — marca quais notas (já lançadas, de meses
+   passados) esse acordo está cobrindo. Não soma nada nelas: só grava
+   renegociadoEmAcordoId, que trava o Pago delas e mostra o selo "ver
+   Acordo". Lista só as notas de Consultoria que ainda não têm dono (não
+   são elas próprias um acordo, nem já apontam pra outro). */
+function abrirVincularNotasAcordo(key, id){
+  if(!isAdmin || key !== 'consultoria') return;
+  modalState = { type:'vincular-notas-acordo', acordoId:id, busca:'' };
+  render();
+}
+function onVincularNotasAcordoBuscaInput(el){
+  const pos = el.selectionStart;
+  modalState.busca = el.value;
+  render();
+  const novo = document.getElementById('vincular-acordo-busca');
+  if(novo){ novo.focus(); try{ novo.setSelectionRange(pos, pos); }catch(e){} }
+}
+function toggleNotaVinculadaAcordo(notaId){
+  const m = modalState;
+  if(!m || m.type !== 'vincular-notas-acordo') return;
+  const r = state.consultoria.rows.find(function(x){ return x.id === notaId; });
+  if(!r) return;
+  r.renegociadoEmAcordoId = (r.renegociadoEmAcordoId === m.acordoId) ? null : m.acordoId;
+  persistEntityRows('consultoria');
+  render();
+}
+/* Leva da nota renegociada direto pro lançamento do acordo que a cobre
+   — pisca a linha pra achar fácil numa tabela cheia. */
+function irParaAcordo(key, acordoId){
+  closeModal();
+  activeTab = key;
+  const colapsoId = 'entity-'+key;
+  if(collapsedSections[colapsoId]) collapsedSections[colapsoId] = false;
+  render();
+  setTimeout(function(){
+    const linhas = document.querySelectorAll('tr[data-acordo-id="'+acordoId+'"]');
+    linhas.forEach(function(tr){
+      tr.scrollIntoView({behavior:'smooth', block:'center'});
+      tr.classList.add('row-destaque-acordo');
+      setTimeout(function(){ tr.classList.remove('row-destaque-acordo'); }, 1900);
+    });
+  }, 150);
+}
+
 function deleteEntityRow(key, id){
   const r = state[key].rows.find(r => r.id === id);
   if(r && isMonthClosedFor(key, r.ano||2026, r.mes)){
@@ -11380,6 +11643,14 @@ function duplicateEntityRow(key, id){
   const r = st.rows.find(r => r.id === id);
   if(!r) return;
   const copy = {...r, id: st.nextId++};
+  // Acordo e o vínculo de notas renegociadas são coisas de UM lançamento
+  // só — sem isso, a cópia "roubaria" as mesmas parcelas (mesmos ids) do
+  // original na hora de salvar, porque persistEntityRows grava por id.
+  if(key === 'consultoria'){
+    copy.acordo = false;
+    copy.parcelasAcordo = [];
+    copy.renegociadoEmAcordoId = null;
+  }
   st.rows.unshift(copy);
   persistEntityRows(key);
   render();
@@ -11433,6 +11704,10 @@ function parcelarEntityRow(key, id){
   }
   if(!r.valorContrato || Number(r.valorContrato) <= 0){
     showAlert("Preencha o Valor do Contrato antes de parcelar.");
+    return;
+  }
+  if(r.acordo){
+    showAlert("Este é um lançamento de Acordo — ele já tem o próprio jeito de parcelar (🧾, na coluna Pagamento), que não mexe no valor do contrato. Use aquele em vez deste.");
     return;
   }
   showPrompt("Em quantas parcelas mensais? (2 a 24)", (val) => {
@@ -11638,6 +11913,33 @@ function getRowSellerAssignments(r){
   return list;
 }
 
+/* Acordo (renegociação de Consultoria que junta notas de vários meses
+   numa só) não entra em faturamento de novo — as notas originais já
+   faturaram. A comissão dele libera aos poucos, conforme as parcelas
+   são pagas, em vez de um pago/não-pago único pro contrato inteiro. */
+function fracaoRecebidaAcordo(row){
+  if(!Array.isArray(row.parcelasAcordo) || !row.parcelasAcordo.length) return 0;
+  const total = Number(row.valorContrato)||0;
+  if(total <= 0) return 0;
+  const recebido = row.parcelasAcordo.reduce(function(a,p){ return a + (p.pago ? (Number(p.valor)||0) : 0); }, 0);
+  return Math.min(1, recebido / total);
+}
+/* Mesma ideia, mas só conta a parcela se ela foi paga DENTRO do período
+   de fechamento pedido (um mês específico) — cada parcela libera no seu
+   próprio mês, igual um pagamento comum (elegivelNoFechamento). mes
+   "Todos" conta tudo que já foi pago, sem filtrar por período. */
+function fracaoRecebidaAcordoNoMes(row, mes){
+  if(!Array.isArray(row.parcelasAcordo) || !row.parcelasAcordo.length) return 0;
+  const total = Number(row.valorContrato)||0;
+  if(total <= 0) return 0;
+  const recebido = row.parcelasAcordo.reduce(function(a,p){
+    if(!p.pago) return a;
+    if(mes === 'Todos' || !mes) return a + (Number(p.valor)||0);
+    if(!p.pagoEm || !dentroDoPeriodoDeFechamento(p.pagoEm, mes, yearFilter)) return a;
+    return a + (Number(p.valor)||0);
+  }, 0);
+  return Math.min(1, recebido / total);
+}
 function computeEntityTotals(key, visible){
   const st = state[key];
   const cfg = ENTITIES[key];
@@ -11645,7 +11947,7 @@ function computeEntityTotals(key, visible){
   st.vendors.forEach(v => t.byVendor[v] = 0);
   visible.forEach(r => {
     const valorContrato = Number(r.valorContrato)||0;
-    t.contrato += valorContrato;
+    if(!r.acordo) t.contrato += valorContrato;
     const baseAposParceiro = entityRemainingAfterPartner(r);
     getRowSellerAssignments(r).forEach(a => {
       const commission = baseAposParceiro * (a.percent/100);
@@ -11655,7 +11957,16 @@ function computeEntityTotals(key, visible){
          dinheiro já é dela antes da hora, e ninguém pode confiar nele
          pra se planejar. Vendedora de Sistema continua vendo tudo, como
          sempre foi. */
-      if(cfg.hasPagamento && !ehVendedorDeSistema(a.vendedor) && !r.pago) return;
+      if(cfg.hasPagamento && !ehVendedorDeSistema(a.vendedor)){
+        if(r.acordo){
+          const liberado = commission * fracaoRecebidaAcordo(r);
+          if(liberado <= 0) return;
+          if(t.byVendor[a.vendedor] === undefined) t.byVendor[a.vendedor] = 0;
+          t.byVendor[a.vendedor] += liberado;
+          return;
+        }
+        if(!r.pago) return;
+      }
       if(t.byVendor[a.vendedor] === undefined) t.byVendor[a.vendedor] = 0;
       t.byVendor[a.vendedor] += commission;
     });
@@ -11943,6 +12254,8 @@ function renderEntitySection(key){
             const seloRenovacao = (fi === 0 && row.renovacao) ? '<span class="selo-renovacao" title="Renovação: vale comissão, mas não é contrato novo">♻️ Renovação</span>' : '';
             const seloUpgrade = (fi === 0 && row.upgrade) ? '<span class="selo-upgrade" title="Upgrade: cliente que subiu de plano">⬆️ Upgrade</span>' : '';
             const seloNovo = (fi === 0 && row.novoContrato) ? `<span class="selo-novo" title="Contrato novo${key==='publicos' ? ': conta no ranking da equipe' : ''}">✨ Contrato novo</span>` : '';
+            const seloAcordo = (key === 'consultoria' && fi === 0 && row.acordo) ? `<span class="selo-acordo" title="Acordo de renegociação — o valor não entra no faturamento de novo, a comissão libera conforme as parcelas são pagas">🤝 Acordo</span>` : '';
+            const seloRenegociado = (key === 'consultoria' && fi === 0 && row.renegociadoEmAcordoId) ? `<button type="button" class="selo-acordo selo-acordo-link" title="Essa nota foi renegociada — clique pra ver o lançamento do acordo que a cobre" onclick="irParaAcordo('${key}',${row.renegociadoEmAcordoId})">🔗 Renegociado — ver Acordo</button>` : '';
             const temEmpresas = row.empresas && row.empresas.length;
             const dEmp = (cfg.hasEmpresas && fi === 0 && temEmpresas) ? resumoEmpresas(row) : null;
             // Fica verde quando TODAS as empresas do lançamento já têm a
@@ -11960,7 +12273,7 @@ function renderEntitySection(key){
             const seloPrazo = mostraPrazo
               ? `<button type="button" class="selo-prazo${prazoRow?(prazoRow.avista?' selo-prazo-avista':''):' selo-prazo-vazio'}" title="${prazoRow ? (prazoRow.avista ? 'Pago à vista — sem nota recorrente pra emitir. Clique pra mudar' : 'Lembrete de emissão todo dia '+prazoRow.dia+' — clique pra mudar') : 'Combinar um dia fixo do mês pra emitir a nota (Mensal/Plano Premium)'}" onclick="definirPrazoEmissaoNota('${key}','${escJs(row[f.key])}')">${prazoRow && prazoRow.avista ? '💰 à vista' : '📅 ' + (prazoRow ? 'dia '+prazoRow.dia : 'definir dia')}</button>`
               : '';
-            cells += `<td${fi===0?' class="col-nome"':''}><input type="text" ${fi===0?'list="empresas-datalist"':''} data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}${seloNovo}${seloRenovacao}${seloUpgrade}${seloEmpresas}${seloPrazo}</td>`;
+            cells += `<td${fi===0?' class="col-nome"':''}><input type="text" ${fi===0?'list="empresas-datalist"':''} data-entity="${key}" data-id="${row.id}" data-field="${f.key}" value="${esc(row[f.key])}" placeholder="${f.label}" oninput="onEntityTextInput(this)" />${seloInCompany}${seloAcordo}${seloRenegociado}${seloNovo}${seloRenovacao}${seloUpgrade}${seloEmpresas}${seloPrazo}</td>`;
           } else if(f.type === "number"){
             const isValor = f.key === "valorContrato" || f.key === "honorarioProfessor" || f.key === "honorarioProfessor2";
             cells += `<td${isValor?' class="col-valor"':''}>${isValor?'<div class="currency-wrap"><span class="currency-prefix">R$</span>'+entityNumInputHtml(key,row,f.key)+'</div>':entityNumInputHtml(key,row,f.key)}</td>`;
@@ -11971,12 +12284,27 @@ function renderEntitySection(key){
           // pagamentoAposCampo, seja ele texto ou select (Consultoria usa
           // "nota", um select, desde que "Forma de Pagamento" saiu dali).
           if(f.key === cfg.pagamentoAposCampo && cfg.hasPagamento){
-            cells += `<td class="pagamento-cell">
-              <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" data-pagamento="1" onchange="onPagamentoToggle(this,'${key}')" /><span>${row.pago?'Pago':'Pendente'}</span></label>
-              ${row.pago ? `<select class="${pagoEmOutroMes(row) ? 'sel-pgto-outro-mes' : ''}" data-id="${row.id}" data-pagamento="1"
-                      title="${pagoEmOutroMes(row) ? 'Nota de ' + esc(row.mes) + ' paga em ' + esc(row.mesPagamento) + ' — a comissão libera em ' + esc(row.mesPagamento) : 'Mês em que o cliente pagou'}"
-                      onchange="onPagamentoMesSelect(this,'${key}')">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>` : ''}
-            </td>`;
+            if(key === 'consultoria' && row.acordo){
+              const parcelas = Array.isArray(row.parcelasAcordo) ? row.parcelasAcordo : [];
+              const pagas = parcelas.filter(function(p){ return p.pago; }).length;
+              const rotuloParcelas = `🧾 ${pagas} de ${parcelas.length} parcela${parcelas.length===1?'':'s'} paga${pagas===1?'':'s'}`;
+              cells += `<td class="pagamento-cell">
+                ${isAdmin
+                  ? `<button type="button" class="modal-btn modal-btn-ghost" title="Gerenciar as parcelas deste acordo" onclick="abrirParcelasAcordo('${key}',${row.id})">${rotuloParcelas}</button>`
+                  : `<span class="meta-field-valor" title="Só a administração gerencia as parcelas deste acordo">${rotuloParcelas}</span>`}
+              </td>`;
+            } else if(key === 'consultoria' && row.renegociadoEmAcordoId){
+              cells += `<td class="pagamento-cell">
+                <label class="pay-toggle" title="Essa nota foi renegociada — o pagamento é controlado pelo Acordo, não aqui"><input type="checkbox" disabled /><span>Renegociada</span></label>
+              </td>`;
+            } else {
+              cells += `<td class="pagamento-cell">
+                <label class="pay-toggle"><input type="checkbox" ${row.pago?'checked':''} data-id="${row.id}" data-pagamento="1" onchange="onPagamentoToggle(this,'${key}')" /><span>${row.pago?'Pago':'Pendente'}</span></label>
+                ${row.pago ? `<select class="${pagoEmOutroMes(row) ? 'sel-pgto-outro-mes' : ''}" data-id="${row.id}" data-pagamento="1"
+                        title="${pagoEmOutroMes(row) ? 'Nota de ' + esc(row.mes) + ' paga em ' + esc(row.mesPagamento) + ' — a comissão libera em ' + esc(row.mesPagamento) : 'Mês em que o cliente pagou'}"
+                        onchange="onPagamentoMesSelect(this,'${key}')">${MONTHS.map(m => `<option value="${m}" ${row.mesPagamento===m?'selected':''}>${monthShort(m)}</option>`).join('')}</select>` : ''}
+              </td>`;
+            }
           }
         });
         if(!isFinanceiro){
@@ -12026,10 +12354,12 @@ function renderEntitySection(key){
             ${key === 'publicos' ? `<button class="action-btn${row.novoContrato ? ' ativo-novo' : ''}" title="${row.novoContrato ? 'Marcado como contrato novo — clique para desmarcar' : 'Marcar como contrato novo (conta no ranking da equipe)'}" onclick="toggleEntityNovo('${key}',${row.id})">✨</button>` : ''}
             <button class="action-btn${row.upgrade ? ' ativo-upgrade' : ''}" title="${row.upgrade ? 'É um upgrade — clique para desmarcar' : 'Marcar como upgrade (cliente que subiu de plano)'}" onclick="toggleEntityUpgrade('${key}',${row.id})">⬆️</button>
             <button class="action-btn${row.renovacao ? ' ativo' : ''}" title="${row.renovacao ? 'É uma renovação — clique para desmarcar' : 'Marcar como renovação (vale comissão, mas não é contrato novo)'}" onclick="toggleEntityRenovacao('${key}',${row.id})">♻️</button>
+            ${key === 'consultoria' ? `<button class="action-btn${row.acordo ? ' ativo-acordo' : ''}" title="${row.acordo ? 'É um Acordo de renegociação — clique para desmarcar' : 'Marcar como Acordo: renegociação que junta notas de vários meses — o valor não conta faturamento, a comissão libera por parcela'}" onclick="toggleEntityAcordo('${key}',${row.id})">🤝</button>` : ''}
+            ${key === 'consultoria' && row.acordo ? `<button class="action-btn" title="Vincular as notas antigas que esse acordo renegocia" onclick="abrirVincularNotasAcordo('${key}',${row.id})">🔗</button>` : ''}
             <button class="action-btn danger" title="Excluir" onclick="deleteEntityRow('${key}',${row.id})">✕</button>
           </div>
         </td>`;
-        return `<tr class="${isEntityRowPending(row) ? 'row-pending' : ''}${isMonthClosedFor(key,row.ano||2026,row.mes) ? ' row-locked' : ''}${isEntityRowDuplicate(key,row) ? ' row-duplicate' : ''}">${cells}</tr>`;
+        return `<tr${key==='consultoria'&&row.acordo?` data-acordo-id="${row.id}"`:''} class="${isEntityRowPending(row) ? 'row-pending' : ''}${isMonthClosedFor(key,row.ano||2026,row.mes) ? ' row-locked' : ''}${isEntityRowDuplicate(key,row) ? ' row-duplicate' : ''}">${cells}</tr>`;
       }).join('');
 
   const semDivEnt = isAdmin ? entityRowsSemDivisao(key) : [];
