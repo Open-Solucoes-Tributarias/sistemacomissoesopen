@@ -2051,7 +2051,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-11-13-01';
+const APP_BUILD = '2026-11-13-02';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -11533,9 +11533,28 @@ function toggleEntityAcordo(key, id){
     showAlert("Este mês está fechado para edição. Reabra em Resumo Geral para poder editar.");
     return;
   }
-  r.acordo = !r.acordo;
-  persistEntityRows(key);
-  render();
+  if(r.acordo){
+    // Desligar não precisa de aviso — só some o selo e volta a ser uma
+    // nota comum (as parcelas que já tinha continuam guardadas).
+    r.acordo = false;
+    persistEntityRows(key);
+    render();
+    return;
+  }
+  // Ligar precisa de aviso: "Acordo" é pra um lançamento NOVO que vai
+  // carregar o valor TOTAL renegociado — nunca pra marcar uma nota que
+  // já faturou, senão o faturamento dela fica fora de lugar (mesmo sem
+  // somar de novo, ela deixa de contar no mês/ano em que já faturou).
+  showConfirm(
+    'Marcar ESTE lançamento como Acordo? Isso só faz sentido se ele for o lançamento NOVO, criado à parte, com o valor TOTAL que foi renegociado (a soma de todas as notas antigas). ' +
+    'Se as notas antigas já existem na tabela, não marque elas — crie um lançamento novo pra isso, marque ele como Acordo, e depois use "🔗 Vincular notas antigas" nele pra apontar pras notas antigas (elas continuam intocadas, só ganham o selo "Renegociado").',
+    function(){
+      r.acordo = true;
+      persistEntityRows(key);
+      render();
+    },
+    'Marcar como Acordo'
+  );
 }
 function abrirParcelasAcordo(key, id){
   if(!isAdmin) return;
