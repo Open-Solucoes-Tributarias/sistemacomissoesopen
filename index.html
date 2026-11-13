@@ -2051,7 +2051,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-11-13-02';
+const APP_BUILD = '2026-11-13-03';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -5558,7 +5558,7 @@ function renderModal(){
           </div>
           <div class="divisao-lista">${linhas}</div>
           <button class="modal-btn modal-btn-ghost" style="width:100%;margin-top:10px;" onclick="addParcelaAcordo('${m.key}',${r.id})">+ Adicionar parcela</button>
-          <div class="divisao-conferencia ${fecha?'ok':''}">
+          <div class="divisao-conferencia ${fecha?'ok':''}" id="parcelas-acordo-conferencia">
             Parcelado: <b>${fmtMoney(somaParcelas)}</b> de <b>${fmtMoney(totalAcordo)}</b>${fecha ? ' — confere.' : (somaParcelas < totalAcordo ? ' — falta '+fmtMoney(totalAcordo-somaParcelas)+'.' : ' — '+fmtMoney(somaParcelas-totalAcordo)+' a mais.')}
             · Já pago: <b>${fmtMoney(somaPagas)}</b>
           </div>
@@ -11571,6 +11571,11 @@ function addParcelaAcordo(key, id){
   persistEntityRows(key);
   render();
 }
+/* O valor digita letra por letra (oninput) — chamar render() a cada
+   tecla reconstrói a modal inteira e derruba o foco/cursor do campo no
+   meio da digitação (era exatamente isso que fazia o valor "sempre
+   voltar"). Em vez de render(), só atualiza o rodapé de conferência na
+   mão, igual onDivisaoValorInput já faz pra divisão de vendas. */
 function updateParcelaAcordoCampo(key, id, parcelaId, campo, valor){
   const r = state[key].rows.find(function(r){ return r.id === id; });
   if(!r) return;
@@ -11579,7 +11584,18 @@ function updateParcelaAcordoCampo(key, id, parcelaId, campo, valor){
   if(campo === 'valor') p.valor = numOrNull(valor);
   else if(campo === 'dataPrevista') p.dataPrevista = valor || null;
   persistEntityRows(key);
-  render();
+  const parcelas = Array.isArray(r.parcelasAcordo) ? r.parcelasAcordo : [];
+  const somaParcelas = parcelas.reduce(function(a,x){ return a + (Number(x.valor)||0); }, 0);
+  const somaPagas = parcelas.filter(function(x){ return x.pago; }).reduce(function(a,x){ return a + (Number(x.valor)||0); }, 0);
+  const totalAcordo = Number(r.valorContrato)||0;
+  const fecha = Math.abs(somaParcelas - totalAcordo) < 0.005;
+  const alvo = document.getElementById('parcelas-acordo-conferencia');
+  if(alvo){
+    alvo.className = 'divisao-conferencia' + (fecha ? ' ok' : '');
+    alvo.innerHTML = 'Parcelado: <b>' + fmtMoney(somaParcelas) + '</b> de <b>' + fmtMoney(totalAcordo) + '</b>'
+      + (fecha ? ' — confere.' : (somaParcelas < totalAcordo ? ' — falta ' + fmtMoney(totalAcordo-somaParcelas) + '.' : ' — ' + fmtMoney(somaParcelas-totalAcordo) + ' a mais.'))
+      + ' · Já pago: <b>' + fmtMoney(somaPagas) + '</b>';
+  }
 }
 function toggleParcelaAcordoPago(key, id, parcelaId){
   const r = state[key].rows.find(function(r){ return r.id === id; });
