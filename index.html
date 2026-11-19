@@ -1568,6 +1568,7 @@
     border-top:1.5px solid var(--border);background:var(--border-soft);
   }
   table.table-plain tfoot td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  table.table-plain td.num.celula-melhor-mes{font-weight:800;color:var(--primary);background:var(--primary-soft);border-radius:6px;}
 
   .app-loading{min-height:70vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--ink-soft);font-weight:600;font-size:14px;}
   .spinner{width:30px;height:30px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--primary);animation:auth-spin .8s linear infinite;}
@@ -2051,7 +2052,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    quando há uma versão mais nova, em vez de confiar na pessoa lembrar de
    recarregar. Uma aba do Chrome deixada aberta por dias, sem nunca dar
    F5, não busca HTML novo sozinha — só JS que roda ali dentro pode notar. */
-const APP_BUILD = '2026-11-13-03';
+const APP_BUILD = '2026-11-19-01';
 
 /* ---------------- Autenticação (Supabase Auth) ----------------
    O sistema agora exige login: o banco só aceita leitura/escrita de
@@ -15564,6 +15565,47 @@ function graficoLinhaPainel(vends, opts){
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" style="display:block;overflow:visible;">${grade}${rotulos}${linhas}</svg>`;
 }
 
+/* Tabela mês × vendedora pra um indicador de quantidade (qtdSistemas /
+   qtdPublicos) — o gráfico de linha já mostra a tendência, mas pra
+   comparar o número exato de cada mês (e achar o melhor mês de cada
+   pessoa) uma tabela é mais direta que ficar passando o mouse em cima
+   de bolinha de gráfico. Destaca em negrito o(s) mês(es) de maior
+   valor de cada vendedora (ignora quando todo mundo ficou em zero). */
+function tabelaMensalQtdPorVendedor(vends, metricKey, titulo){
+  const linhas = MONTHS.map(function(mes){
+    return { mes: mes, valores: vends.map(function(v){ return valorMetrica(v, mes, metricKey); }) };
+  });
+  const maxPorVendedor = vends.map(function(_, i){
+    return Math.max(0, ...linhas.map(function(l){ return l.valores[i]; }));
+  });
+  const totalPorVendedor = vends.map(function(_, i){
+    return linhas.reduce(function(a, l){ return a + l.valores[i]; }, 0);
+  });
+  return panel('painel-qtd-' + metricKey, titulo, `
+    <div class="table-scroll">
+      <table class="table-plain">
+        <thead>
+          <tr><th>Mês</th>${vends.map(v => `<th class="num">${esc(v)}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+          ${linhas.map(function(l){
+            return `<tr>
+              <td>${esc(l.mes)}</td>
+              ${l.valores.map(function(val, i){
+                const melhor = val > 0 && val === maxPorVendedor[i];
+                return `<td class="num${melhor ? ' celula-melhor-mes' : ''}"${melhor ? ` title="Melhor mês de ${esc(vends[i])}"` : ''}>${val.toLocaleString('pt-BR')}</td>`;
+              }).join('')}
+            </tr>`;
+          }).join('')}
+        </tbody>
+        <tfoot>
+          <tr><td>Total no ano</td>${totalPorVendedor.map(t => `<td class="num">${t.toLocaleString('pt-BR')}</td>`).join('')}</tr>
+        </tfoot>
+      </table>
+    </div>
+  `, { flush: true });
+}
+
 /* Gráfico de evolução do Marketing: barras agrupadas por mês (Open e
    Foco Tributário lado a lado), 12 meses do ano do filtro. Era um
    gráfico de linha, mas com só 1 ou 2 meses lançados a linha virava um
@@ -16403,9 +16445,12 @@ function renderPainelDashboard(vends){
     </div>
   `, { flush: true });
 
+  const qtdSistemaTabela = tabelaMensalQtdPorVendedor(vends, 'qtdSistemas', 'Qtd. de vendas de Sistema por mês · ' + yearFilter);
+  const qtdPublicosTabela = tabelaMensalQtdPorVendedor(vends, 'qtdPublicos', 'Qtd. de vendas de Órgãos Públicos por mês · ' + yearFilter);
+
   // O ranking é o que essa aba tem de mais importante: quem foi melhor em
   // cada quesito. Vem primeiro e com destaque, antes de qualquer número.
-  return seletorPeriodo + sectionsToolbarHtml() + ranking + cartoes + barras + linha + tabela;
+  return seletorPeriodo + sectionsToolbarHtml() + ranking + cartoes + barras + linha + qtdSistemaTabela + qtdPublicosTabela + tabela;
 }
 
 /* ================= Usuários e acessos =================
